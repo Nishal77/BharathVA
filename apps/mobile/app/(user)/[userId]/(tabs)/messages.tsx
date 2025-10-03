@@ -57,6 +57,47 @@ export default function MessagesScreen() {
       unread: 2,
       avatar: '🚌',
     },
+    // Additional news messages
+    {
+      id: 6,
+      name: 'Breaking News',
+      lastMessage: 'Major economic reforms passed in parliament',
+      time: '5m ago',
+      unread: 5,
+      avatar: '📰',
+    },
+    {
+      id: 7,
+      name: 'Weather Alerts',
+      lastMessage: 'Heavy rainfall expected in your region tomorrow',
+      time: '30m ago',
+      unread: 0,
+      avatar: '🌧️',
+    },
+    {
+      id: 8,
+      name: 'Sports News',
+      lastMessage: 'National team wins championship finals',
+      time: '45m ago',
+      unread: 1,
+      avatar: '🏆',
+    },
+    {
+      id: 9,
+      name: 'Tech Updates',
+      lastMessage: 'New smartphone model released today',
+      time: '1h ago',
+      unread: 0,
+      avatar: '📱',
+    },
+    {
+      id: 10,
+      name: 'Local News',
+      lastMessage: 'Community park renovation completed',
+      time: '2h ago',
+      unread: 0,
+      avatar: '🏞️',
+    },
   ];
 
   return (

@@ -12,13 +12,13 @@ export default function UserIdLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
+          header: () => null,
           gestureEnabled: true,
           gestureDirection: 'horizontal',
           animation: 'slide_from_right',
         }}
       >
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="(modals)" />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false, header: () => null }} />
       </Stack>
     </SidebarProvider>
   );
