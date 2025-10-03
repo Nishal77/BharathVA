@@ -1,0 +1,12 @@
+{
+  "name": "bharathx",
+  "private": true,
+  "version": "0.0.0",
+  
+  "scripts": {
+    "dev:mobile": "pnpm --filter mobile start",
+    "dev:web": "pnpm --filter web dev",
+    "dev:backend": "cd backend && ./gradlew bootRun",
+    "dev:infra": "cd infra && docker-compose up -d"
+  }
+}

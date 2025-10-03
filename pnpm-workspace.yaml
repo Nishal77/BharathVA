@@ -1,0 +1,6 @@
+packages:
+  - apps/*
+  - libs/*
+  - backend/*
+
+nodeLinker: hoisted
