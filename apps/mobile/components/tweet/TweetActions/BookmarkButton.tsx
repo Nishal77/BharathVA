@@ -30,25 +30,17 @@ export default function BookmarkButton({ bookmarks = 0, onPress }: BookmarkButto
   };
 
   return (
-    <Pressable
-      onPress={handleBookmark}
-      className="flex-row items-center p-1 rounded-lg"
-      style={({ pressed }) => ({
-        opacity: pressed ? 0.7 : 1,
-        backgroundColor: pressed ? 'rgba(168, 85, 247, 0.1)' : 'transparent',
-        transform: [{ scale: pressed ? 0.95 : 1 }],
-      })}
-    >
+    <Pressable onPress={handleBookmark} className="flex-row items-center">
       <Animated.View style={{ transform: [{ scale: bookmarkScale }] }}>
         <Bookmark
-          size={18}
-          color={isBookmarked ? "#A855F7" : "#6B7280"}
+          size={16}
+          color={isBookmarked ? "#A855F7" : "#546471"}
           strokeWidth={2}
           fill={isBookmarked ? "#A855F7" : "transparent"}
         />
       </Animated.View>
       {bookmarks > 0 && (
-        <Text className="text-xs text-gray-500 ml-1.5 font-medium">
+        <Text className="text-xs font-normal ml-1.5" style={{ color: isBookmarked ? '#A855F7' : '#151515' }}>
           {bookmarks}
         </Text>
       )}

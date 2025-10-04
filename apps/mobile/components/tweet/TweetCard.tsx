@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable } from 'react-native';
+import { Dimensions, Pressable, View } from 'react-native';
+import { useTabStyles } from '../../hooks/useTabStyles';
 import TweetActions from './TweetActions';
 import TweetContent from './TweetContent';
 import TweetHeader from './TweetHeader';
@@ -56,11 +57,22 @@ export default function TweetCard({
   onShare,
   onTweetPress
 }: TweetCardProps) {
+  const tabStyles = useTabStyles();
+  const { width } = Dimensions.get('window');
+  
+  // Calculate device-based margins
+  const deviceMargin = width < 375 ? 12 : width < 414 ? 16 : 20; // Smaller margins for smaller devices
+
   return (
     <Pressable
       onPress={onPress}
-      className="bg-white border-b border-gray-100 px-4 py-4"
       style={({ pressed }) => ({
+        backgroundColor: tabStyles.card.backgroundColor,
+        paddingHorizontal: 28, // Increased external padding for better content spacing
+        paddingVertical: 20, // Increased vertical padding
+        marginHorizontal: deviceMargin, // Device-based external margin from screen edges
+        marginBottom: 12, // Reduced margin between cards (mb-3 equivalent)
+        borderRadius: 12, // Add subtle border radius
         opacity: pressed ? 0.98 : 1,
       })}
     >
@@ -107,6 +119,14 @@ export default function TweetCard({
         onBookmark={onBookmark}
         onShare={onShare}
       />
+
+      {/* Border below actions with proper spacing */}
+      <View style={{
+        borderBottomWidth: 1,
+        borderBottomColor: tabStyles.border.card,
+        marginTop: 16, // Proper spacing below actions
+        marginBottom: 4, // Small spacing below border
+      }} />
     </Pressable>
   );
 }

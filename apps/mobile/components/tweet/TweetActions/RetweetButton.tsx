@@ -30,20 +30,12 @@ export default function RetweetButton({ retweets = 0, onPress }: RetweetButtonPr
   };
 
   return (
-    <Pressable
-      onPress={handleRetweet}
-      className="flex-row items-center p-1 rounded-lg"
-      style={({ pressed }) => ({
-        opacity: pressed ? 0.7 : 1,
-        backgroundColor: pressed ? 'rgba(34, 197, 94, 0.1)' : 'transparent',
-        transform: [{ scale: pressed ? 0.95 : 1 }],
-      })}
-    >
+    <Pressable onPress={handleRetweet} className="flex-row items-center">
       <Animated.View style={{ transform: [{ scale: retweetScale }] }}>
-        <Repeat2 size={18} color={isRetweeted ? "#22C55E" : "#6B7280"} strokeWidth={2} />
+        <Repeat2 size={16} color={isRetweeted ? "#22C55E" : "#546471"} strokeWidth={2} />
       </Animated.View>
       {retweets > 0 && (
-        <Text className="text-xs text-gray-500 ml-1.5 font-medium">
+        <Text className="text-xs font-normal ml-1.5" style={{ color: isRetweeted ? '#22C55E' : '#151515' }}>
           {retweets}
         </Text>
       )}

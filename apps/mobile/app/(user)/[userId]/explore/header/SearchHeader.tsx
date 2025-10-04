@@ -1,44 +1,47 @@
 import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
-import { Languages } from 'lucide-react-native';
-import React, { useState } from 'react';
+import { Languages, Search } from 'lucide-react-native';
+import React from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { useTabStyles } from '../../../../../hooks/useTabStyles';
 
 interface SearchHeaderProps {
-  onProfilePress: () => void;
-  onSettingsPress: () => void;
-  onTabPress: (tab: string) => void;
   activeTab: string;
+  onTabPress: (tab: string) => void;
+  onProfilePress: () => void;
+  tabs: string[];
+  searchValue?: string;
+  onSearchChange?: (text: string) => void;
 }
 
 export default function SearchHeader({ 
-  onProfilePress, 
-  onSettingsPress, 
+  activeTab, 
   onTabPress, 
-  activeTab 
+  onProfilePress, 
+  tabs,
+  searchValue = '',
+  onSearchChange = () => {}
 }: SearchHeaderProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const tabs = ['For You', 'Trending India', 'News', 'Sports', 'Entertainment', 'Tech', 'Local Buzz', 'Voices'];
+  const tabStyles = useTabStyles();
 
   return (
     <BlurView
-      intensity={50}
-      tint="light"
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 50,
-        paddingTop: 48,
-        paddingBottom: 13,
-        paddingHorizontal: 24,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(0,0,0,0.1)',
-        // Shadow removed
-      }}
-    >
+        intensity={50}
+        tint={tabStyles.container.backgroundColor === '#000000' ? 'dark' : 'light'}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 50,
+          paddingTop: 48,
+          paddingBottom: 8,
+          paddingHorizontal: 24,
+          borderBottomWidth: 1,
+          borderBottomColor: tabStyles.border.bottom,
+          // Shadow removed
+        }}
+      >
       {/* Primary Glassmorphism Background Layer */}
       <View 
         style={{
@@ -47,11 +50,9 @@ export default function SearchHeader({
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: 'rgba(255, 255, 255, 0.35)',
-          borderBottomLeftRadius: 28,
-          borderBottomRightRadius: 28,
+          backgroundColor: tabStyles.background.primary,
           borderWidth: 1,
-          borderColor: 'rgba(255, 255, 255, 0.5)',
+          borderColor: tabStyles.border.color,
           borderBottomWidth: 0,
         }}
       />
@@ -64,11 +65,9 @@ export default function SearchHeader({
           right: 0,
           top: 0,
           height: 72,
-          backgroundColor: 'rgba(255, 255, 255, 0.25)',
-          borderBottomLeftRadius: 20,
-          borderBottomRightRadius: 20,
+          backgroundColor: tabStyles.background.secondary,
           borderWidth: 1,
-          borderColor: 'rgba(255, 255, 255, 0.4)',
+          borderColor: tabStyles.border.color,
           borderBottomWidth: 0,
         }}
       />
@@ -81,28 +80,22 @@ export default function SearchHeader({
           right: 0,
           top: 0,
           height: 40,
-          backgroundColor: 'rgba(255, 255, 255, 0.4)',
-          borderBottomLeftRadius: 12,
-          borderBottomRightRadius: 12,
+          backgroundColor: tabStyles.background.tertiary,
         }}
       />
+      
       
       {/* Header Content */}
       <View style={{ position: 'relative', zIndex: 10 }}>
         {/* Top Row - Profile, Search Bar, Settings */}
-        <View style={{ 
-          flexDirection: 'row', 
-          alignItems: 'center', 
-          justifyContent: 'space-between',
-          marginBottom: 4 
-        }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, marginTop: 8 }}>
           {/* Profile Button - Left with Glassmorphism */}
           <Pressable
             onPress={onProfilePress}
             style={({ pressed }) => ({
-              width: 48,
-              height: 48,
-              borderRadius: 24,
+              width: 40,
+              height: 40,
+              borderRadius: 20,
               alignItems: 'center',
               justifyContent: 'center',
               opacity: pressed ? 0.8 : 1,
@@ -119,89 +112,79 @@ export default function SearchHeader({
             {/* Glassmorphism Border for Profile */}
             <View 
               style={{
-                width: 48,
-                height: 48,
-                borderRadius: 24,
-                backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: tabStyles.profile.backgroundColor,
                 borderWidth: 2,
-                borderColor: 'rgba(255, 255, 255, 0.5)',
+                borderColor: tabStyles.profile.borderColor,
                 justifyContent: 'center',
                 alignItems: 'center',
                 overflow: 'hidden',
-                position: 'relative',
               }}
             >
               <Image
                 source={{ uri: 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=facearea&w=256&h=256&facepad=2' }}
-                style={{ width: 44, height: 44, borderRadius: 22 }}
+                style={{ width: 36, height: 36, borderRadius: 18 }}
                 contentFit="cover"
                 placeholder={{ uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==' }}
                 onError={() => console.log('Profile image failed to load')}
                 accessibilityLabel="Profile picture"
               />
-              {/* Notification Dot */}
-              <View 
-                style={{
-                  position: 'absolute',
-                  top: -2,
-                  right: -2,
-                  width: 12,
-                  height: 12,
-                  borderRadius: 6,
-                  backgroundColor: '#3B82F6',
-                  borderWidth: 2,
-                  borderColor: 'white',
-                }}
-              />
             </View>
           </Pressable>
 
-          {/* Search Bar - Center */}
-          <View 
+          {/* Amazing Search Bar - Center with Premium Design */}
+          <View
+            className="flex-1 flex-row items-center rounded-full bg-gray-100"
             style={{
-              flex: 1,
-              marginHorizontal: 16,
-              backgroundColor: '#F3F4F6',
+              height: 44, // Increased to match home header better
               paddingHorizontal: 16,
-              paddingVertical: 12,
-              flexDirection: 'row',
-              alignItems: 'center',
+              marginHorizontal: 12,
+              marginTop: 4, // Added top margin for better spacing
             }}
           >
-            <Image
-              source={{ uri: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTE3LjUgMTcuNUwxMy44NzUgMTMuODc1TTE1LjgzMzMgOC45MTY2N0MxNS44MzMzIDEyLjU5MzcgMTIuNTkzNyAxNS44MzMzIDguOTE2NjcgMTUuODMzM0M1LjIzOTU4IDE1LjgzMzMgMiAxMi41OTM3IDIgOC45MTY2N0MyIDUuMjM5NTggNS4yMzk1OCAyIDguOTE2NjcgMkMxMi41OTM3IDIgMTUuODMzMyA1LjIzOTU4IDE1LjgzMzMgOC45MTY2N1oiIHN0cm9rZT0iIzZCNzI4MCIgc3Ryb2tlLXdpZHRoPSIxLjY2NjY3IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+' }}
-              style={{ width: 20, height: 20, marginRight: 8 }}
-              contentFit="contain"
+            {/* Search Icon */}
+            <Search
+              size={20} // Adjusted back to 20 for better proportion with 44px height
+              color={tabStyles.text.inactive}
+              style={{ marginRight: 12 }}
             />
+
+            {/* Search Input */}
             <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search"
-              placeholderTextColor="#6B7280"
+              value={searchValue}
+              onChangeText={onSearchChange}
+              placeholder="Search..."
+              placeholderTextColor={tabStyles.text.inactive}
+              className="flex-1 text-base font-medium"
               style={{
-                flex: 1,
-                fontSize: 16,
-                color: '#1F2937',
+                color: tabStyles.text.active,
+                height: '100%',
               }}
+              accessibilityLabel="Search input"
             />
           </View>
 
-          {/* Settings Button - Right */}
+          {/* Languages Icon - Right */}
           <Pressable
-            onPress={onSettingsPress}
             style={({ pressed }) => ({
               width: 48,
               height: 48,
               borderRadius: 24,
               alignItems: 'center',
               justifyContent: 'center',
-              opacity: pressed ? 0.8 : 1,
+              opacity: pressed ? 0.7 : 1,
               transform: [{ scale: pressed ? 0.95 : 1 }],
+              backgroundColor: 'rgba(0, 0, 0, 0.05)',
             })}
-            accessibilityLabel="Open settings"
+            accessibilityLabel="Change language"
             accessibilityRole="button"
           >
-            <Languages size={24} color="#6B7280" strokeWidth={2} />
+            <Languages 
+              size={24} 
+              color={tabStyles.text.active} 
+            />
           </Pressable>
         </View>
 
@@ -215,7 +198,7 @@ export default function SearchHeader({
             alignItems: 'center'
           }}
         >
-          <View style={{ flexDirection: 'row', gap: 24 }}>
+          <View style={{ flexDirection: 'row', gap: 17 }}>
             {tabs.map((tab, index) => (
               <Pressable
                 key={tab}
@@ -223,7 +206,7 @@ export default function SearchHeader({
                 style={({ pressed }) => ({
                   position: 'relative',
                   paddingVertical: 8,
-                  paddingHorizontal: 4,
+                  paddingHorizontal: 16,
                   marginLeft: index === 0 ? 0 : 0,
                   opacity: pressed ? 0.7 : 1,
                   transform: [{ scale: pressed ? 0.95 : 1 }],
@@ -232,8 +215,8 @@ export default function SearchHeader({
                 <Text
                   style={{
                     fontSize: 14,
-                    fontWeight: activeTab === tab ? '700' : '500',
-                    color: activeTab === tab ? '#000000' : '#6B7280',
+                    fontWeight: '600',
+                    color: activeTab === tab ? tabStyles.text.active : tabStyles.text.inactive,
                   }}
                 >
                   {tab}

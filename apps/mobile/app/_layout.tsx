@@ -4,11 +4,13 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { StatusBar } from 'react-native';
+import { ThemeProvider as AppThemeProvider, useTheme } from '../contexts/ThemeContext';
 import '../global.css';
 
 export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary
+    // Catch any errors thrown by the Layout component.
+    ErrorBoundary
 } from 'expo-router';
 
 export const unstable_settings = {
@@ -45,16 +47,34 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   return (
-    <ThemeProvider value={DefaultTheme}>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          header: () => null,
-        }}>
-        <Stack.Screen name="index" options={{ headerShown: false, header: () => null }} />
-        <Stack.Screen name="(user)" options={{ headerShown: false, header: () => null }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false, header: () => null }} />
-      </Stack>
-    </ThemeProvider>
+    <AppThemeProvider>
+      <ThemedRootLayout />
+    </AppThemeProvider>
+  );
+}
+
+function ThemedRootLayout() {
+  const { isDark } = useTheme();
+
+  return (
+    <>
+      {/* Centralized StatusBar Management */}
+      <StatusBar 
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor="transparent"
+        translucent={true}
+      />
+      <ThemeProvider value={DefaultTheme}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            header: () => null,
+          }}>
+          <Stack.Screen name="index" options={{ headerShown: false, header: () => null }} />
+          <Stack.Screen name="(user)" options={{ headerShown: false, header: () => null }} />
+          <Stack.Screen name="(auth)" options={{ headerShown: false, header: () => null }} />
+        </Stack>
+      </ThemeProvider>
+    </>
   );
 }

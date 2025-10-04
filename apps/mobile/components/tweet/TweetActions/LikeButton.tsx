@@ -30,25 +30,17 @@ export default function LikeButton({ likes = 0, onPress }: LikeButtonProps) {
   };
 
   return (
-    <Pressable
-      onPress={handleLike}
-      className="flex-row items-center p-1 rounded-lg"
-      style={({ pressed }) => ({
-        opacity: pressed ? 0.7 : 1,
-        backgroundColor: pressed ? 'rgba(239, 68, 68, 0.1)' : 'transparent',
-        transform: [{ scale: pressed ? 0.95 : 1 }],
-      })}
-    >
+    <Pressable onPress={handleLike} className="flex-row items-center">
       <Animated.View style={{ transform: [{ scale: likeScale }] }}>
         <Heart
-          size={18}
-          color={isLiked ? "#EF4444" : "#6B7280"}
+          size={16}
+          color={isLiked ? "#EF4444" : "#546471"}
           strokeWidth={2}
           fill={isLiked ? "#EF4444" : "transparent"}
         />
       </Animated.View>
       {likes > 0 && (
-        <Text className={`text-xs ml-1.5 font-semibold ${isLiked ? 'text-red-500' : 'text-gray-500'}`}>
+        <Text className="text-xs font-normal ml-1.5" style={{ color: isLiked ? '#EF4444' : '#151515' }}>
           {likes}
         </Text>
       )}

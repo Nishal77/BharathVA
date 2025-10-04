@@ -23,7 +23,7 @@ export default function TweetMedia({ type, items }: TweetMediaProps) {
   const renderGridItem = (item: MediaItem, index: number) => {
     if (item.type === 'image') {
       return (
-        <View key={item.id} className="bg-white rounded-xl overflow-hidden shadow-sm">
+        <View key={item.id} className="rounded-xl overflow-hidden">
           <Image
             source={{ uri: item.image }}
             style={{ 
@@ -49,7 +49,7 @@ export default function TweetMedia({ type, items }: TweetMediaProps) {
 
     if (item.type === 'profile') {
       return (
-        <View key={item.id} className="bg-white rounded-xl p-3 shadow-sm">
+        <View key={item.id} className="rounded-xl p-3">
           <View className="flex-row items-center mb-2">
             <Image
               source={{ uri: item.image }}
@@ -71,7 +71,7 @@ export default function TweetMedia({ type, items }: TweetMediaProps) {
 
     if (item.type === 'text') {
       return (
-        <View key={item.id} className="bg-white rounded-xl p-3 shadow-sm">
+        <View key={item.id} className="rounded-xl p-3">
           {item.title && (
             <Text className="text-sm font-semibold text-black mb-2">{item.title}</Text>
           )}
@@ -82,7 +82,7 @@ export default function TweetMedia({ type, items }: TweetMediaProps) {
 
     if (item.type === 'card') {
       return (
-        <View key={item.id} className="bg-white rounded-xl p-3 shadow-sm">
+        <View key={item.id} className="rounded-xl p-3">
           {item.title && (
             <View className="flex-row items-center mb-2">
               <View className="w-6 h-6 bg-purple-500 rounded-full mr-2" />
@@ -109,9 +109,9 @@ export default function TweetMedia({ type, items }: TweetMediaProps) {
 
   if (type === 'single') {
     return (
-      <View className="mb-4 ml-[52px] mr-4">
+      <View style={{ marginBottom: 16, marginLeft: 60, marginRight: 12 }}>
         {items.map((item, index) => (
-          <View key={item.id} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+          <View key={item.id} className="rounded-2xl overflow-hidden">
             <Image
               source={{ uri: item.image }}
               style={{ 

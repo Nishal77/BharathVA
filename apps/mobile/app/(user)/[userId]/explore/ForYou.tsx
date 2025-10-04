@@ -10,6 +10,8 @@ import {
   View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { useTabStyles } from '../../../../hooks/useTabStyles';
+import TodaysNew from './TodaysNew';
 
 const { width, height } = Dimensions.get('window');
 
@@ -19,6 +21,7 @@ interface ForYouProps {
 
 export default function ForYou({ onVideoPress }: ForYouProps) {
   const [isMuted, setIsMuted] = useState(true);
+  const tabStyles = useTabStyles();
 
   const toggleMute = () => {
     setIsMuted(!isMuted);
@@ -136,12 +139,12 @@ export default function ForYou({ onVideoPress }: ForYouProps) {
 
   return (
     <ScrollView 
-      style={{ flex: 1, backgroundColor: '#FFFFFF' }}
+      style={{ flex: 1, backgroundColor: tabStyles.screen.backgroundColor }}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{ paddingBottom: 100 }}
     >
       {/* Main Video Section */}
-      <View style={{ position: 'relative', backgroundColor: '#FFFFFF' }}>
+      <View style={{ position: 'relative', backgroundColor: tabStyles.screen.backgroundColor }}>
         {/* Video Player */}
         <Pressable
           onPress={handleVideoPress}
@@ -278,92 +281,14 @@ export default function ForYou({ onVideoPress }: ForYouProps) {
             Retry
           </Text>
         </Pressable>
-        
-        {/* LIVE Badge and Conference Title - Below Video */}
-        <View 
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: 20,
-            paddingVertical: 12,
-            backgroundColor: '#FFFFFF',
-          }}
-        >
-          {/* LIVE Badge */}
-          <View 
-            style={{
-              backgroundColor: '#FF0000',
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-              borderRadius: 16,
-              marginRight: 12,
-            }}
-          >
-            <Text 
-              style={{
-                color: 'white',
-                fontSize: 12,
-                fontWeight: '700',
-                letterSpacing: 1,
-              }}
-            >
-              LIVE
-            </Text>
-          </View>
-          
-          {/* Conference Title */}
-          <Text 
-            style={{
-              color: '#1F2937',
-              fontSize: 16,
-              fontWeight: '600',
-              flex: 1,
-            }}
-          >
-            Network State Conference
-          </Text>
-        </View>
       </View>
       
-      {/* Additional Content Section */}
-      <View style={{ backgroundColor: '#FFFFFF', padding: 20 }}>
-        <Text style={{ fontSize: 24, fontWeight: '700', color: '#1F2937', marginBottom: 16 }}>
-          Trending Now
-        </Text>
-        
-        {/* Sample content cards */}
-        {[1, 2, 3, 4, 5].map((item) => (
-          <View 
-            key={item}
-            style={{
-              backgroundColor: '#F9FAFB',
-              borderRadius: 12,
-              padding: 16,
-              marginBottom: 12,
-              borderWidth: 1,
-              borderColor: '#E5E7EB',
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 1 },
-              shadowOpacity: 0.05,
-              shadowRadius: 2,
-              elevation: 1,
-            }}
-          >
-            <Text style={{ fontSize: 16, fontWeight: '600', color: '#1F2937', marginBottom: 8 }}>
-              Trending Topic {item}
-            </Text>
-            <Text style={{ fontSize: 14, color: '#6B7280', lineHeight: 20 }}>
-              This is a sample trending topic description that provides context about what's happening in the Network State Conference.
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981', marginRight: 6 }} />
-              <Text style={{ fontSize: 12, color: '#10B981', fontWeight: '500' }}>
-                Live Now
-              </Text>
-            </View>
-          </View>
-        ))}
-      </View>
+      {/* Today's News Section */}
+      <TodaysNew 
+        onNewsPress={(newsItem) => {
+          console.log('News item pressed:', newsItem.title);
+        }}
+      />
     </ScrollView>
   );
 }

@@ -1,7 +1,7 @@
 import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, List, Minus, Search, Settings, SquarePen } from 'lucide-react-native';
+import { List, Minus, Search, Settings, SquarePen } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
   Dimensions,
@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useTabStyles } from '../../../../hooks/useTabStyles';
 import StorySection from './components/StorySection';
 
 const { width, height } = Dimensions.get('window');
@@ -19,6 +20,7 @@ export default function MessagesIndexScreen() {
   const { userId } = useLocalSearchParams();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
+  const tabStyles = useTabStyles();
 
   // Sample conversation data based on the image
   const conversations = [
@@ -139,57 +141,90 @@ export default function MessagesIndexScreen() {
   };
 
   return (
-    <View className="flex-1 bg-white">
+    <View style={{ flex: 1, backgroundColor: tabStyles.screen.backgroundColor }}>
       {/* Fixed Header with Enhanced Glassmorphism */}
       <BlurView
         intensity={80}
-        tint="light"
-        className="absolute top-0 left-0 right-0 z-50 pt-16 pb-6 px-6"
+        tint={tabStyles.container.backgroundColor === '#000000' ? 'dark' : 'light'}
         style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 50,
+          paddingTop: 64,
+          paddingBottom: 24,
+          paddingHorizontal: 24,
           borderBottomWidth: 1,
-          borderBottomColor: 'rgba(255, 255, 255, 0.2)',
+          borderBottomColor: tabStyles.border.bottom,
         }}
       >
-        <View className="flex-row items-center justify-between mb-4 mt-4">
-          <View className="flex-row items-center">
-  
-            <Text className="text-3xl font-bold text-black ml-2">
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, marginTop: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ 
+              fontSize: 30, 
+              fontWeight: 'bold', 
+              color: tabStyles.text.primary,
+              marginLeft: 8
+            }}>
               Chats
             </Text>
           </View>
-          <View className="flex-row items-center space-x-3">
-          <Pressable
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Pressable
               onPress={handleNewMessage}
-              className="w-10 h-10 rounded-full items-center justify-center"
               style={({ pressed }) => ({
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                alignItems: 'center',
+                justifyContent: 'center',
                 opacity: pressed ? 0.7 : 1,
                 transform: [{ scale: pressed ? 0.95 : 1 }],
               })}
             >
-              <Settings size={20} color="#000" strokeWidth={2} />
+              <Settings size={20} color={tabStyles.text.primary} strokeWidth={2} />
             </Pressable>
             <Pressable
               onPress={handleNewMessage}
-              className="w-10 h-10 rounded-full items-center justify-center"
               style={({ pressed }) => ({
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                alignItems: 'center',
+                justifyContent: 'center',
                 opacity: pressed ? 0.7 : 1,
                 transform: [{ scale: pressed ? 0.95 : 1 }],
               })}
             >
-              <SquarePen size={20} color="#000" strokeWidth={2} />
+              <SquarePen size={20} color={tabStyles.text.primary} strokeWidth={2} />
             </Pressable>
           </View>
         </View>
 
         {/* Enhanced Search Bar with Glassmorphism */}
-        <View className="flex-row items-center rounded-2xl px-5 py-3 border border-black/10 shadow-lg shadow-black/10">
-          <Search size={20} color="#9CA3AF" strokeWidth={2} />
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          borderRadius: 16,
+          paddingHorizontal: 20,
+          paddingVertical: 12,
+          borderWidth: 1,
+          borderColor: tabStyles.border.color,
+          backgroundColor: tabStyles.search.backgroundColor,
+        }}>
+          <Search size={20} color={tabStyles.search.placeholderColor} strokeWidth={2} />
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search"
-            placeholderTextColor="#9CA3AF"
-            className="flex-1 ml-3 text-white text-base"
+            placeholderTextColor={tabStyles.search.placeholderColor}
+            style={{
+              flex: 1,
+              marginLeft: 12,
+              fontSize: 16,
+              color: tabStyles.search.textColor,
+            }}
           />
         </View>
       </BlurView>

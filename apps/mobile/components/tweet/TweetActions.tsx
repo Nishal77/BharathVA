@@ -12,6 +12,7 @@ interface TweetActionsProps {
   retweets?: number;
   likes?: number;
   bookmarks?: number;
+  views?: number;
   onReply?: () => void;
   onRetweet?: () => void;
   onLike?: () => void;
@@ -25,6 +26,7 @@ export default function TweetActions({
   retweets = 0,
   likes = 0,
   bookmarks = 0,
+  views = 0,
   onReply,
   onRetweet,
   onLike,
@@ -34,12 +36,12 @@ export default function TweetActions({
 }: TweetActionsProps) {
 
   return (
-    <View className="flex-row items-center justify-between ml-[52px] mr-4">
+    <View className="flex-row items-center justify-between" style={{ marginLeft: 60, marginRight: 12 }}>
       <CommentButton replies={replies} onPress={onReply} />
       <RetweetButton retweets={retweets} onPress={onRetweet} />
       <LikeButton likes={likes} onPress={onLike} />
       <BookmarkButton bookmarks={bookmarks} onPress={onBookmark} />
-      <ViewCount onPress={onViewAnalytics} />
+      <ViewCount views={views} onPress={onViewAnalytics} />
       <ShareButton onPress={onShare} />
     </View>
   );

@@ -10,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useTabStyles } from '../../../../../hooks/useTabStyles';
 
 interface Story {
   id: string | number;
@@ -29,6 +30,7 @@ export default function StorySection({
   onAddStoryPress,
   userProfileImage = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&h=300&q=80'
 }: StorySectionProps) {
+  const tabStyles = useTabStyles();
   // Mock story data with Indian names and live Unsplash images
   const stories: Story[] = [
     {
@@ -164,8 +166,8 @@ export default function StorySection({
                   height: 80,
                   borderRadius: 40,
                   borderWidth: 3,
-                  borderColor: '#D1D5DB',
-                  backgroundColor: 'white',
+                  borderColor: tabStyles.story.addStoryBorder,
+                  backgroundColor: tabStyles.story.addStoryBackground,
                   padding: 2,
                   overflow: 'hidden',
                 }}
@@ -193,7 +195,7 @@ export default function StorySection({
                   alignItems: 'center',
                   justifyContent: 'center',
                   borderWidth: 2,
-                  borderColor: 'white',
+                  borderColor: tabStyles.story.addStoryBackground,
                   shadowColor: '#000',
                   shadowOffset: { width: 0, height: 2 },
                   shadowOpacity: 0.3,
@@ -228,7 +230,7 @@ export default function StorySection({
                   height: 72,
                   borderRadius: 36,
                   overflow: 'hidden',
-                  backgroundColor: 'white',
+                  backgroundColor: tabStyles.story.addStoryBackground,
                   padding: 3, // Add padding for white space between gradient and image
                 }}
               >
@@ -247,7 +249,14 @@ export default function StorySection({
         </View>
         
         {/* Name Label */}
-        <Text className="text-xs font-medium text-gray-900 mt-2 text-center max-w-16" numberOfLines={1}>
+        <Text style={{
+          fontSize: 12,
+          fontWeight: '500',
+          color: tabStyles.story.nameText,
+          marginTop: 8,
+          textAlign: 'center',
+          maxWidth: 64,
+        }} numberOfLines={1}>
           {story.name}
         </Text>
       </Pressable>
@@ -255,7 +264,7 @@ export default function StorySection({
   };
 
   return (
-    <View className="bg-white py-2">
+    <View style={{ backgroundColor: tabStyles.story.backgroundColor, paddingVertical: 8 }}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -263,7 +272,7 @@ export default function StorySection({
           paddingHorizontal: 16,
           paddingVertical: 4,
         }}
-        className="flex-row"
+        style={{ flexDirection: 'row' }}
       >
         {stories.map((story, index) => renderStoryItem(story, index))}
       </ScrollView>

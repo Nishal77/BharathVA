@@ -12,6 +12,7 @@ import HomeHeader from '../../../../components/HomeHeader';
 import TweetCard from '../../../../components/tweet/TweetCard';
 import { Sidebar } from '../../../../components/ui';
 import { useSidebar } from '../../../../contexts/SidebarContext';
+import { useTabStyles } from '../../../../hooks/useTabStyles';
 
 const { width, height } = Dimensions.get('window');
 
@@ -24,6 +25,7 @@ export default function HomeScreen() {
   const slideAnim = useRef(new Animated.Value(-sidebarWidth)).current;
   const [activeTab, setActiveTab] = useState('For you');
   const [refreshing, setRefreshing] = useState(false);
+  const tabStyles = useTabStyles();
 
   const tabs = ['For you', 'Following', 'Trending India', 'Local', 'Communities', 'Shorts/Video', 'Space(Live)'];
 
@@ -188,7 +190,7 @@ export default function HomeScreen() {
 
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <View style={{ flex: 1, backgroundColor: tabStyles.screen.backgroundColor }}>
       {/* Home Header Component */}
       <HomeHeader
         activeTab={activeTab}
@@ -198,13 +200,13 @@ export default function HomeScreen() {
       />
       
       {/* Main Content Container with Header Spacing */}
-      <View className="flex-1" style={{ paddingTop: 130 }}>
+      <View style={{ flex: 1, paddingTop: 130, backgroundColor: tabStyles.screen.backgroundColor }}>
 
          {/* Tweet Feed */}
          <ScrollView 
-           className="flex-1 bg-white" 
+           style={{ flex: 1, backgroundColor: tabStyles.content.backgroundColor }}
            showsVerticalScrollIndicator={false}
-           contentContainerStyle={{ paddingTop: 20, paddingBottom: 100 }}
+           contentContainerStyle={{ paddingTop: 32, paddingBottom: 100 }}
            refreshControl={
              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
            }
