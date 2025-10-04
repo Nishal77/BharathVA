@@ -1,18 +1,15 @@
 import { useLocalSearchParams } from 'expo-router';
-import {
-  Bell,
-  MessageCircle,
-  Search
-} from 'lucide-react-native';
-import React, { useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
-  Image,
   Pressable,
-  Text,
+  RefreshControl,
+  ScrollView,
   View
 } from 'react-native';
+import HomeHeader from '../../../../components/HomeHeader';
+import TweetCard from '../../../../components/tweet/TweetCard';
 import { Sidebar } from '../../../../components/ui';
 import { useSidebar } from '../../../../contexts/SidebarContext';
 
@@ -25,6 +22,110 @@ export default function HomeScreen() {
   const { userId } = useLocalSearchParams();
   const { sidebarVisible, setSidebarVisible, sidebarWidth } = useSidebar();
   const slideAnim = useRef(new Animated.Value(-sidebarWidth)).current;
+  const [activeTab, setActiveTab] = useState('For you');
+  const [refreshing, setRefreshing] = useState(false);
+
+  const tabs = ['For you', 'Following', 'Trending India', 'Local', 'Communities', 'Shorts/Video', 'Space(Live)'];
+
+  // Sample tweet data based on the reference image - Professional layout
+  const [sampleTweets, setSampleTweets] = useState([
+    {
+      id: '1',
+      name: 'Neerja Thakkar',
+      handle: 'neerjathakkar',
+      time: '1d',
+      avatar: 'https://picsum.photos/seed/profile/300/300?random=1',
+      verified: false,
+      content: "I've joined @GoogleDeepMind as a Student Researcher working on video models of animal motion in London",
+      emojis: ['🐆', '🇬🇧'],
+      media: {
+        type: 'single' as const,
+        items: [
+          {
+            id: '1',
+            type: 'image' as const,
+            image: 'https://picsum.photos/seed/google-office/800/600?random=1'
+          }
+        ]
+      },
+      replies: 24,
+      retweets: 12,
+      likes: 156,
+      bookmarks: 8
+    },
+    {
+      id: '2',
+      name: 'Alex Chen',
+      handle: 'alexchen_dev',
+      time: '3h',
+      avatar: 'https://picsum.photos/seed/alex/300/300?random=2',
+      verified: true,
+      content: "Just shipped a new feature for our React Native app! The performance improvements are incredible 🚀 Can't wait to see the user feedback.",
+      emojis: ['🚀', '💻'],
+      media: {
+        type: 'single' as const,
+        items: [
+          {
+            id: '2',
+            type: 'image' as const,
+            image: 'https://picsum.photos/seed/tech/800/600?random=2'
+          }
+        ]
+      },
+      replies: 42,
+      retweets: 28,
+      likes: 234,
+      bookmarks: 15
+    },
+    {
+      id: '3',
+      name: 'Sarah Johnson',
+      handle: 'sarah_j',
+      time: '6h',
+      avatar: 'https://picsum.photos/seed/sarah/300/300?random=3',
+      verified: false,
+      content: "Beautiful sunset from my balcony today 🌅 Sometimes you just need to pause and appreciate the little moments in life.",
+      emojis: ['🌅', '✨'],
+      media: {
+        type: 'single' as const,
+        items: [
+          {
+            id: '3',
+            type: 'image' as const,
+            image: 'https://picsum.photos/seed/sunset/800/600?random=3'
+          }
+        ]
+      },
+      replies: 18,
+      retweets: 35,
+      likes: 189,
+      bookmarks: 7
+    },
+    {
+      id: '4',
+      name: 'Marcus Rodriguez',
+      handle: 'marcus_r',
+      time: '12h',
+      avatar: 'https://picsum.photos/seed/marcus/300/300?random=4',
+      verified: false,
+      content: "Coffee and code - the perfect combination ☕️ Working on some exciting AI projects this weekend. The future is here!",
+      emojis: ['☕️', '🤖'],
+      media: {
+        type: 'single' as const,
+        items: [
+          {
+            id: '4',
+            type: 'image' as const,
+            image: 'https://picsum.photos/seed/coffee/800/600?random=4'
+          }
+        ]
+      },
+      replies: 31,
+      retweets: 19,
+      likes: 167,
+      bookmarks: 12
+    }
+  ]);
 
   const handleProfilePress = React.useCallback(() => {
     setSidebarVisible(true);
@@ -48,135 +149,91 @@ export default function HomeScreen() {
     });
   }, [slideAnim, sidebarWidth, setSidebarVisible]);
 
+  // Pull to refresh handler
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+
+    // Simulate API call - add new tweet to the top
+    setTimeout(() => {
+      const newTweet = {
+        id: Date.now().toString(),
+        name: 'New User',
+        handle: 'newuser_' + Math.floor(Math.random() * 1000),
+        time: 'now',
+        avatar: `https://picsum.photos/seed/new${Math.floor(Math.random() * 100)}/300/300`,
+        verified: Math.random() > 0.7,
+        content: "Fresh content just loaded! 🚀 This is a new tweet from the pull-to-refresh feature.",
+        emojis: ['🚀', '✨'],
+        media: {
+          type: 'single' as const,
+          items: [
+            {
+              id: Date.now().toString(),
+              type: 'image' as const,
+              image: `https://picsum.photos/seed/fresh${Math.floor(Math.random() * 100)}/800/600`
+            }
+          ]
+        },
+        replies: Math.floor(Math.random() * 50),
+        retweets: Math.floor(Math.random() * 30),
+        likes: Math.floor(Math.random() * 200),
+        bookmarks: Math.floor(Math.random() * 20)
+      };
+
+      // Add new tweet to the beginning of the array
+      setSampleTweets(prevTweets => [newTweet, ...prevTweets]);
+      setRefreshing(false);
+    }, 1500);
+  }, []);
+
 
   return (
     <View className="flex-1 bg-gray-50">
-      {/* Main Content Container - No transforms, pure overlay */}
-      <View className="flex-1">
-        {/* Header with Profile Button and India Image */}
-        <View className="pt-12 px-6 border-b border-gray-200 flex-row items-center justify-between">
-          {/* Profile Button - Left */}
-          <Pressable
-            onPress={handleProfilePress}
-            className="w-12 h-12 bg-white rounded-full items-center justify-center overflow-hidden"
-            style={({ pressed }) => ({
-              opacity: pressed ? 0.8 : 1,
-              transform: [{ scale: pressed ? 0.95 : 1 }],
-            })}
-            accessibilityLabel="Open profile menu"
-            accessibilityRole="button"
-          >
-            <View className="w-12 h-12 rounded-full overflow-hidden">
-              <Image
-                source={{ uri: 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=facearea&w=256&h=256&facepad=2' }}
-                className="w-12 h-12"
-                resizeMode="cover"
-                accessibilityLabel="Profile picture"
-              />
-            </View>
-          </Pressable>
+      {/* Home Header Component */}
+      <HomeHeader
+        activeTab={activeTab}
+        onTabPress={setActiveTab}
+        onProfilePress={handleProfilePress}
+        tabs={tabs}
+      />
+      
+      {/* Main Content Container with Header Spacing */}
+      <View className="flex-1" style={{ paddingTop: 130 }}>
 
-          {/* India Image - Center */}
-          <View className="w-20 h-20 rounded-full overflow-hidden justify-center items-center">
-            <Image
-              source={require('../../../../assets/images/india.png')}
-              className="w-16 h-16"
-              resizeMode="contain"
-              accessibilityLabel="BharathVA logo"
+         {/* Tweet Feed */}
+         <ScrollView 
+           className="flex-1 bg-white" 
+           showsVerticalScrollIndicator={false}
+           contentContainerStyle={{ paddingTop: 20, paddingBottom: 100 }}
+           refreshControl={
+             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+           }
+         >
+          {sampleTweets.map((tweet) => (
+            <TweetCard
+              key={tweet.id}
+              id={tweet.id}
+              name={tweet.name}
+              handle={tweet.handle}
+              time={tweet.time}
+              avatar={tweet.avatar}
+              verified={tweet.verified}
+              content={tweet.content}
+              emojis={tweet.emojis}
+              media={tweet.media}
+              replies={tweet.replies}
+              retweets={tweet.retweets}
+              likes={tweet.likes}
+              bookmarks={tweet.bookmarks}
+              onPress={() => console.log('Tweet pressed:', tweet.id)}
+              onReply={() => console.log('Reply to:', tweet.id)}
+              onRetweet={() => console.log('Retweet:', tweet.id)}
+              onLike={() => console.log('Like:', tweet.id)}
+              onBookmark={() => console.log('Bookmark:', tweet.id)}
+              onShare={() => console.log('Share:', tweet.id)}
             />
-          </View>
-
-          {/* Empty space for balance - Right */}
-          <View className="w-12 h-12" />
-        </View>
-
-        {/* Main Content Area */}
-        <View className="flex-1 p-4 sm:p-6">
-          {/* Hero Section */}
-          <View className="items-center mb-6 sm:mb-8">
-            <Text className="text-2xl sm:text-3xl font-bold text-black text-center mb-3 sm:mb-4 leading-tight px-2">
-              One Nation. Billion Voices.
-            </Text>
-            <Text className="text-base sm:text-lg text-gray-600 text-center leading-relaxed max-w-sm sm:max-w-md px-2">
-              Join the conversation that shapes our democracy. Your voice matters in building a better India.
-            </Text>
-          </View>
-
-          {/* Content Cards */}
-          <View className="space-y-3 sm:space-y-4">
-            {/* Quick Actions */}
-            <View className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm">
-              <Text className="text-lg sm:text-xl font-bold text-black mb-3 sm:mb-4">Quick Actions</Text>
-              <View className="flex-row justify-between">
-                <View className="items-center flex-1">
-                  <View className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-full items-center justify-center mb-2">
-                    <MessageCircle size={20} color="#3B82F6" strokeWidth={2} />
-                  </View>
-                  <Text className="text-xs sm:text-sm font-medium text-gray-700 text-center">Messages</Text>
-                </View>
-                <View className="items-center flex-1">
-                  <View className="w-10 h-10 sm:w-12 sm:h-12 bg-green-100 rounded-full items-center justify-center mb-2">
-                    <Bell size={20} color="#10B981" strokeWidth={2} />
-                  </View>
-                  <Text className="text-xs sm:text-sm font-medium text-gray-700 text-center">Notifications</Text>
-                </View>
-                <View className="items-center flex-1">
-                  <View className="w-10 h-10 sm:w-12 sm:h-12 bg-purple-100 rounded-full items-center justify-center mb-2">
-                    <Search size={20} color="#8B5CF6" strokeWidth={2} />
-                  </View>
-                  <Text className="text-xs sm:text-sm font-medium text-gray-700 text-center">Search</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Recent Activity */}
-            <View className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm">
-              <Text className="text-lg sm:text-xl font-bold text-black mb-3 sm:mb-4">Recent Activity</Text>
-              <View className="space-y-2 sm:space-y-3">
-                <View className="flex-row items-center">
-                  <View className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-200 rounded-full mr-2 sm:mr-3" />
-                  <View className="flex-1">
-                    <Text className="text-xs sm:text-sm font-medium text-gray-900">New discussion started</Text>
-                    <Text className="text-xs text-gray-500">2 hours ago</Text>
-                  </View>
-                </View>
-                <View className="flex-row items-center">
-                  <View className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-200 rounded-full mr-2 sm:mr-3" />
-                  <View className="flex-1">
-                    <Text className="text-xs sm:text-sm font-medium text-gray-900">Policy update shared</Text>
-                    <Text className="text-xs text-gray-500">5 hours ago</Text>
-                  </View>
-                </View>
-                <View className="flex-row items-center">
-                  <View className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-200 rounded-full mr-2 sm:mr-3" />
-                  <View className="flex-1">
-                    <Text className="text-xs sm:text-sm font-medium text-gray-900">Community poll created</Text>
-                    <Text className="text-xs text-gray-500">1 day ago</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            {/* Statistics */}
-            <View className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-4 sm:p-6">
-              <Text className="text-white text-lg sm:text-xl font-bold mb-3 sm:mb-4">Your Impact</Text>
-              <View className="flex-row justify-between">
-                <View className="items-center">
-                  <Text className="text-white text-xl sm:text-2xl font-bold">24</Text>
-                  <Text className="text-blue-100 text-xs sm:text-sm">Posts</Text>
-                </View>
-                <View className="items-center">
-                  <Text className="text-white text-xl sm:text-2xl font-bold">156</Text>
-                  <Text className="text-blue-100 text-xs sm:text-sm">Comments</Text>
-                </View>
-                <View className="items-center">
-                  <Text className="text-white text-xl sm:text-2xl font-bold">8</Text>
-                  <Text className="text-blue-100 text-xs sm:text-sm">Votes</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        </View>
+          ))}
+        </ScrollView>
       </View>
 
       {/* Backdrop when sidebar is open - Above main content, below sidebar */}

@@ -67,7 +67,7 @@ export default function PasswordScreen() {
     <View className="flex-1 bg-white">
       {/* Bottom Image - 20% Height */}
       <Image
-        source={require('../../assets/images/login.jpg')}
+        source={require('../../assets/images/redfort.jpg')}
         style={{
           position: 'absolute',
           bottom: 0,
