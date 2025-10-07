@@ -1,12 +1,15 @@
 import { useFonts } from 'expo-font';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { Dimensions, Image, Pressable, Text, View } from 'react-native';
+import { Dimensions, Image, Pressable, Text, View, useColorScheme } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
 export default function HeroScreen() {
   const router = useRouter();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
   // Load the Aclonica font
   const [fontsLoaded] = useFonts({
@@ -24,17 +27,17 @@ export default function HeroScreen() {
   // Don't render until fonts are loaded
   if (!fontsLoaded) {
     return (
-      <View className="flex-1 bg-white justify-center items-center">
-        <Text className="text-gray-600 text-xl">Loading...</Text>
+      <View className={`flex-1 ${isDark ? 'bg-black' : 'bg-white'} justify-center items-center`}>
+        <Text className={`${isDark ? 'text-gray-300' : 'text-gray-600'} text-xl`}>Loading...</Text>
       </View>
     );
   }
 
   return (
-    <View className="flex-1 relative bg-white">
+    <View className={`flex-1 relative ${isDark ? 'bg-black' : 'bg-white'}`}>
       {/* Hero Image - 60% Height from Top */}
       <Image
-        source={require('../assets/images/IndiaGate.png')}
+        source={require('../assets/images/india.jpeg')}
         style={{
           position: 'absolute',
           top: 0,
@@ -43,6 +46,22 @@ export default function HeroScreen() {
           height: height * 0.6,
         }}
         resizeMode="cover"
+      />
+      
+      {/* Gradient Fade Overlay - Creates smooth fade effect at bottom of image */}
+      <LinearGradient
+        colors={isDark 
+          ? ['rgba(0,0,0,0)', 'rgba(0,0,0,0.1)', 'rgba(0,0,0,0.25)', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.75)', 'rgba(0,0,0,0.95)', 'rgba(0,0,0,1)']
+          : ['rgba(255,255,255,0)', 'rgba(255,255,255,0.1)', 'rgba(255,255,255,0.25)', 'rgba(255,255,255,0.5)', 'rgba(255,255,255,0.75)', 'rgba(255,255,255,0.95)', 'rgba(255,255,255,1)']
+        }
+        locations={[0, 0.15, 0.3, 0.5, 0.7, 0.88, 1]}
+        style={{
+          position: 'absolute',
+          top: height * 0.15,
+          left: 0,
+          width: width,
+          height: height * 0.45,
+        }}
       />
       
       {/* Main Title - Over Image */}
@@ -55,33 +74,38 @@ export default function HeroScreen() {
         </Text>
       </View>
       
-      {/* Content Container - White Section */}
-      <View className="absolute bottom-0 left-0 right-0 bg-white px-8 pt-12 pb-8">
+      {/* Content Container - Theme-based Section */}
+      <View 
+        className={`absolute bottom-0 left-0 right-0 ${isDark ? 'bg-black' : 'bg-white'} px-8 pt-12`}
+        style={{
+          paddingBottom: height < 700 ? 48 : height < 800 ? 56 : 64,
+        }}
+      >
         {/* Main Subtitle */}
-        <Text className="text-3xl font-bold text-black text-center mb-4 leading-tight">
+        <Text className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-black'} text-center mb-4 leading-tight`}>
           One Nation. Billion Voices. Infinite Possibilities.
         </Text>
         
         {/* Additional Subtitle */}
-        <Text className="text-lg text-gray-600 text-center leading-relaxed mb-12">
-        Where every Indian voice shapes the nation’s story.        </Text>
+        <Text className={`text-lg ${isDark ? 'text-gray-300' : 'text-gray-600'} text-center leading-relaxed mb-12`}>
+        Where every Indian voice shapes the nation's story.        </Text>
       
         {/* Get Started Button */}
         <Pressable
           onPress={handleGetStarted}
-          className="bg-black py-4 px-8 rounded-3xl shadow-lg mb-6"
+          className={`${isDark ? 'bg-white' : 'bg-black'} py-4 px-8 rounded-3xl shadow-lg mb-6`}
           style={({ pressed }) => ({
             opacity: pressed ? 0.8 : 1,
             transform: [{ scale: pressed ? 0.98 : 1 }],
-            shadowColor: '#000',
+            shadowColor: isDark ? '#fff' : '#000',
             shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.2,
-            shadowRadius: 4,
-            elevation: 4,
+            shadowOpacity: isDark ? 0.3 : 0.2,
+            shadowRadius: isDark ? 6 : 4,
+            elevation: isDark ? 6 : 4,
           })}
         >
           <Text 
-            className="text-white text-lg font-semibold text-center"
+            className={`${isDark ? 'text-black' : 'text-white'} text-lg font-semibold text-center`}
           >
             Get Started
           </Text>
@@ -89,9 +113,9 @@ export default function HeroScreen() {
         
         {/* Login Text */}
         <View className="flex-row justify-center items-center">
-          <Text className="text-black text-base">Already have an account? </Text>
+          <Text className={`${isDark ? 'text-gray-300' : 'text-gray-600'} text-base`}>Already have an account? </Text>
           <Pressable onPress={handleLogin}>
-            <Text className="font-semibold text-blue-600 text-base">Login</Text>
+            <Text className={`font-semibold ${isDark ? 'text-white' : 'text-black'} text-base`}>Login</Text>
           </Pressable>
         </View>
       </View>

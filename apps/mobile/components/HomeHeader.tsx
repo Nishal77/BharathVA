@@ -26,7 +26,7 @@ export default function HomeHeader({
   return (
     <BlurView
         intensity={50}
-        tint={tabStyles.container.backgroundColor === '#000000' ? 'dark' : 'light'}
+        tint={isDark ? "dark" : "light"}
         style={{
           position: 'absolute',
           top: 0,
@@ -37,11 +37,12 @@ export default function HomeHeader({
           paddingBottom: 13,
           paddingHorizontal: 24,
           borderBottomWidth: 1,
-          borderBottomColor: tabStyles.border.bottom,
+          borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : tabStyles.border.bottom,
+          marginHorizontal: 0,
           // Shadow removed
         }}
       >
-      {/* Primary Glassmorphism Background Layer */}
+      {/* Primary Background Layer */}
       <View 
         style={{
           position: 'absolute',
@@ -50,11 +51,6 @@ export default function HomeHeader({
           right: 0,
           bottom: 0,
           backgroundColor: tabStyles.background.primary,
-          // borderBottomLeftRadius: 28,
-          // borderBottomRightRadius: 28,
-          borderWidth: 1,
-          borderColor: tabStyles.border.color,
-          borderBottomWidth: 0,
         }}
       />
       
@@ -67,11 +63,6 @@ export default function HomeHeader({
           top: 0,
           height: 72,
           backgroundColor: tabStyles.background.secondary,
-          // borderBottomLeftRadius: 20,
-          // borderBottomRightRadius: 20,
-          borderWidth: 1,
-          borderColor: tabStyles.border.color,
-          borderBottomWidth: 0,
         }}
       />
       
@@ -84,8 +75,6 @@ export default function HomeHeader({
           top: 0,
           height: 40,
           backgroundColor: tabStyles.background.tertiary,
-          // borderBottomLeftRadius: 12,
-          // borderBottomRightRadius: 12,
         }}
       />
       
@@ -114,15 +103,13 @@ export default function HomeHeader({
             accessibilityLabel="Open profile menu"
             accessibilityRole="button"
           >
-            {/* Glassmorphism Border for Profile */}
+            {/* Profile Container */}
             <View 
               style={{
                 width: 40,
                 height: 40,
                 borderRadius: 20,
                 backgroundColor: tabStyles.profile.backgroundColor,
-                borderWidth: 2,
-                borderColor: tabStyles.profile.borderColor,
                 justifyContent: 'center',
                 alignItems: 'center',
                 overflow: 'hidden',

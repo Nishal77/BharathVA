@@ -116,7 +116,7 @@ export default function RegisterScreen() {
         {/* Hero Image Section */}
         <View className="relative h-48 mx-6 mb-6">
           <Image
-            source={require('../../assets/images/IndiaGate.png')}
+            source={require('../../assets/images/india.jpeg')}
             className="w-full h-full rounded-3xl"
             resizeMode="cover"
           />
