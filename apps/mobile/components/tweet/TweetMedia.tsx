@@ -109,7 +109,7 @@ export default function TweetMedia({ type, items }: TweetMediaProps) {
 
   if (type === 'single') {
     return (
-      <View style={{ marginBottom: 16, marginLeft: 60, marginRight: 12 }}>
+      <View style={{ marginBottom: 8, marginLeft: 60, marginRight: 12 }}>
         {items.map((item, index) => (
           <View key={item.id} className="rounded-2xl overflow-hidden">
             <Image
@@ -128,7 +128,7 @@ export default function TweetMedia({ type, items }: TweetMediaProps) {
 
   if (type === 'grid') {
     return (
-      <View className="bg-gray-50 rounded-2xl p-3 mb-4">
+      <View className="bg-gray-50 rounded-2xl p-3 mb-2">
         <View style={{ 
           display: 'flex', 
           flexDirection: 'row', 

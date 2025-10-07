@@ -25,6 +25,7 @@ interface TweetCardProps {
   retweets?: number;
   likes?: number;
   bookmarks?: number;
+  views?: number;
   onPress?: () => void;
   onReply?: () => void;
   onRetweet?: () => void;
@@ -49,6 +50,7 @@ export default function TweetCard({
   retweets = 0,
   likes = 0,
   bookmarks = 0,
+  views = 0,
   onPress,
   onReply,
   onRetweet,
@@ -71,7 +73,7 @@ export default function TweetCard({
         paddingHorizontal: 28, // Increased external padding for better content spacing
         paddingVertical: 20, // Increased vertical padding
         marginHorizontal: deviceMargin, // Device-based external margin from screen edges
-        marginBottom: 12, // Reduced margin between cards (mb-3 equivalent)
+        marginBottom: 24, // Increased margin between cards for better visual separation
         borderRadius: 12, // Add subtle border radius
         opacity: pressed ? 0.98 : 1,
       })}
@@ -108,24 +110,27 @@ export default function TweetCard({
       )}
 
       {/* Tweet Actions */}
-      <TweetActions
-        replies={replies}
-        retweets={retweets}
-        likes={likes}
-        bookmarks={bookmarks}
-        onReply={onReply}
-        onRetweet={onRetweet}
-        onLike={onLike}
-        onBookmark={onBookmark}
-        onShare={onShare}
-      />
+      <View style={{ marginTop: 4, marginBottom: 8 }}>
+        <TweetActions
+          replies={replies}
+          retweets={retweets}
+          likes={likes}
+          bookmarks={bookmarks}
+          views={views}
+          onReply={onReply}
+          onRetweet={onRetweet}
+          onLike={onLike}
+          onBookmark={onBookmark}
+          onShare={onShare}
+        />
+      </View>
 
       {/* Border below actions with proper spacing */}
       <View style={{
         borderBottomWidth: 1,
         borderBottomColor: tabStyles.border.card,
-        marginTop: 16, // Proper spacing below actions
-        marginBottom: 4, // Small spacing below border
+        marginTop: 4, // Reduced spacing since actions now have their own margins
+        marginBottom: 8, // Spacing below border for cleaner separation
       }} />
     </Pressable>
   );

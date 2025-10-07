@@ -1,7 +1,7 @@
 import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 import { useTabStyles } from '../../../../hooks/useTabStyles';
 
@@ -30,13 +30,39 @@ const BellIcon = ({ size, color }: { size: number; color: string }) => (
   />
 );
 
-const MessageIcon = ({ size, color }: { size: number; color: string }) => (
+const ProfileIcon = ({ size, color }: { size: number; color: string }) => (
   <SvgXml
     width={size}
     height={size}
-    xml={`<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M21 15C21 15.5304 20.7893 16.0391 20.4142 16.4142C20.0391 16.7893 19.5304 17 19 17H7L3 21V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V15Z" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`}
+    xml={`<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 21V19C20 17.9391 19.5786 16.9217 18.8284 16.1716C18.0783 15.4214 17.0609 15 16 15H8C6.93913 15 5.92172 15.4214 5.17157 16.1716C4.42143 16.9217 4 17.9391 4 19V21" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="7" r="4" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`}
   />
 );
+
+const SquarePlusIcon = ({ size, color }: { size: number; color: string }) => (
+  <SvgXml
+    width={size}
+    height={size}
+    xml={`<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="8" x2="12" y2="16" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="8" y1="12" x2="16" y2="12" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`}
+  />
+);
+
+// Notification icon with badge
+function NotificationTabIcon({ size, color }: { size: number; color: string }) {
+  // For sample, let's use a realistic count
+  const notificationCount = 8;
+  return (
+    <View className="relative items-center justify-center">
+      <BellIcon size={size} color={color} />
+      {notificationCount > 0 && (
+        <View className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] bg-red-500 rounded-full border-2 border-white dark:border-black items-center justify-center px-1 shadow-md">
+          <Text className="text-white text-[10px] font-bold text-center leading-[12px]">
+            {notificationCount > 99 ? '99+' : notificationCount}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
 
 export default function TabLayout() {
   const tabStyles = useTabStyles();
@@ -62,7 +88,7 @@ export default function TabLayout() {
         },
         tabBarBackground: () => (
           <BlurView
-            intensity={60}
+            intensity={190}
             tint={tabStyles.container.backgroundColor === '#000000' ? 'dark' : 'light'}
             style={{
               flex: 1,
@@ -101,18 +127,26 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="notifications"
+        name="create"
         options={{
           tabBarIcon: ({ size }) => (
-            <BellIcon size={size} color={tabStyles.text.active} />
+            <SquarePlusIcon size={size} color={tabStyles.text.active} />
           ),
         }}
       />
       <Tabs.Screen
-        name="messages"
+        name="notifications"
         options={{
           tabBarIcon: ({ size }) => (
-            <MessageIcon size={size} color={tabStyles.text.active} />
+            <NotificationTabIcon size={size} color={tabStyles.text.active} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          tabBarIcon: ({ size }) => (
+            <ProfileIcon size={size} color={tabStyles.text.active} />
           ),
         }}
       />

@@ -38,10 +38,10 @@ export default function TweetActions({
   return (
     <View className="flex-row items-center justify-between" style={{ marginLeft: 60, marginRight: 12 }}>
       <CommentButton replies={replies} onPress={onReply} />
-      <RetweetButton retweets={retweets} onPress={onRetweet} />
       <LikeButton likes={likes} onPress={onLike} />
+      <RetweetButton retweets={retweets} onPress={onRetweet} />
       <BookmarkButton bookmarks={bookmarks} onPress={onBookmark} />
-      <ViewCount views={views} onPress={onViewAnalytics} />
+      <ViewCount views={views || 128} onPress={onViewAnalytics} />
       <ShareButton onPress={onShare} />
     </View>
   );

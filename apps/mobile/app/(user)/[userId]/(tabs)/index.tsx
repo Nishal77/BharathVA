@@ -3,12 +3,15 @@ import React, { useCallback, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
+  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
+  Text,
   View
 } from 'react-native';
 import HomeHeader from '../../../../components/HomeHeader';
+import MessagesScreen from '../../../../components/messages/MessagesScreen';
 import TweetCard from '../../../../components/tweet/TweetCard';
 import { Sidebar } from '../../../../components/ui';
 import { useSidebar } from '../../../../contexts/SidebarContext';
@@ -25,9 +28,11 @@ export default function HomeScreen() {
   const slideAnim = useRef(new Animated.Value(-sidebarWidth)).current;
   const [activeTab, setActiveTab] = useState('For you');
   const [refreshing, setRefreshing] = useState(false);
+  const [messagesVisible, setMessagesVisible] = useState(false);
+  const messagesSlideAnim = useRef(new Animated.Value(width)).current;
   const tabStyles = useTabStyles();
 
-  const tabs = ['For you', 'Following', 'Trending India', 'Local', 'Communities', 'Shorts/Video', 'Space(Live)'];
+  const tabs = ['For you', 'Following', 'Local', 'Communities', 'Shorts/Video', 'Space(Live)'];
 
   // Sample tweet data based on the reference image - Professional layout
   const [sampleTweets, setSampleTweets] = useState([
@@ -53,7 +58,8 @@ export default function HomeScreen() {
       replies: 24,
       retweets: 12,
       likes: 156,
-      bookmarks: 8
+      bookmarks: 8,
+      views: 128
     },
     {
       id: '2',
@@ -77,7 +83,8 @@ export default function HomeScreen() {
       replies: 42,
       retweets: 28,
       likes: 234,
-      bookmarks: 15
+      bookmarks: 15,
+      views: 128
     },
     {
       id: '3',
@@ -101,7 +108,8 @@ export default function HomeScreen() {
       replies: 18,
       retweets: 35,
       likes: 189,
-      bookmarks: 7
+      bookmarks: 7,
+      views: 128
     },
     {
       id: '4',
@@ -125,7 +133,8 @@ export default function HomeScreen() {
       replies: 31,
       retweets: 19,
       likes: 167,
-      bookmarks: 12
+      bookmarks: 12,
+      views: 128
     }
   ]);
 
@@ -150,6 +159,33 @@ export default function HomeScreen() {
       setSidebarVisible(false);
     });
   }, [slideAnim, sidebarWidth, setSidebarVisible]);
+
+  const handleMessagesPress = useCallback(() => {
+    // Set initial position off-screen to the right
+    messagesSlideAnim.setValue(width);
+    setMessagesVisible(true);
+    
+    // Small delay to ensure modal is rendered before animation starts
+    setTimeout(() => {
+      // Animate messages sliding in from right with smooth easing
+      Animated.timing(messagesSlideAnim, {
+        toValue: 0,
+        duration: 350,
+        useNativeDriver: true,
+      }).start();
+    }, 30);
+  }, [messagesSlideAnim, width]);
+
+  const handleCloseMessages = useCallback(() => {
+    // Animate messages sliding out to right with smooth easing
+    Animated.timing(messagesSlideAnim, {
+      toValue: width,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setMessagesVisible(false);
+    });
+  }, [messagesSlideAnim, width]);
 
   // Pull to refresh handler
   const onRefresh = useCallback(() => {
@@ -179,7 +215,8 @@ export default function HomeScreen() {
         replies: Math.floor(Math.random() * 50),
         retweets: Math.floor(Math.random() * 30),
         likes: Math.floor(Math.random() * 200),
-        bookmarks: Math.floor(Math.random() * 20)
+        bookmarks: Math.floor(Math.random() * 20),
+        views: 128
       };
 
       // Add new tweet to the beginning of the array
@@ -196,6 +233,7 @@ export default function HomeScreen() {
         activeTab={activeTab}
         onTabPress={setActiveTab}
         onProfilePress={handleProfilePress}
+        onMessagesPress={handleMessagesPress}
         tabs={tabs}
       />
       
@@ -227,6 +265,7 @@ export default function HomeScreen() {
               retweets={tweet.retweets}
               likes={tweet.likes}
               bookmarks={tweet.bookmarks}
+              views={tweet.views}
               onPress={() => console.log('Tweet pressed:', tweet.id)}
               onReply={() => console.log('Reply to:', tweet.id)}
               onRetweet={() => console.log('Retweet:', tweet.id)}
@@ -258,6 +297,66 @@ export default function HomeScreen() {
         slideAnim={slideAnim}
         userId={userId as string}
       />
+
+      {/* Messages Modal */}
+      <Modal
+        visible={messagesVisible}
+        animationType="none"
+        presentationStyle="fullScreen"
+        onRequestClose={handleCloseMessages}
+        transparent={true}
+        statusBarTranslucent={true}
+      >
+        <View style={{ 
+          flex: 1, 
+          backgroundColor: 'rgba(0,0,0,0.4)',
+          justifyContent: 'center',
+        }}>
+          <Animated.View
+            style={{
+              flex: 1,
+              transform: [{ translateX: messagesSlideAnim }],
+              backgroundColor: 'white',
+              shadowColor: '#000',
+              shadowOffset: { width: -5, height: 0 },
+              shadowOpacity: 0.3,
+              shadowRadius: 10,
+              elevation: 10,
+            }}
+          >
+            <MessagesScreen onClose={handleCloseMessages} />
+            <Pressable
+              style={({ pressed }) => ({
+                position: 'absolute',
+                top: 50,
+                left: 20,
+                zIndex: 1000,
+                backgroundColor: 'rgba(0,0,0,0.6)',
+                borderRadius: 25,
+                width: 50,
+                height: 50,
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: pressed ? 0.7 : 1,
+                transform: [{ scale: pressed ? 0.95 : 1 }],
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.3,
+                shadowRadius: 4,
+                elevation: 5,
+              })}
+              onPress={handleCloseMessages}
+            >
+              <Text style={{ 
+                color: 'white', 
+                fontWeight: 'bold', 
+                fontSize: 18,
+                textAlign: 'center',
+              }}>✕</Text>
+            </Pressable>
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
   );
 }
