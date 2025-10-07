@@ -1,15 +1,23 @@
-import { Share } from 'lucide-react-native';
 import React from 'react';
-import { Image, Pressable, Text, View } from 'react-native';
+import { Image, Pressable, Text, View, useColorScheme } from 'react-native';
 
 export default function ProfileInfo() {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  
+  const bgColor = isDark ? '#000000' : '#FFFFFF';
+  const borderColor = isDark ? '#374151' : '#D1D5DB';
+  const iconColor = isDark ? '#D1D5DB' : '#374151';
+  const buttonBg = isDark ? '#FFFFFF' : '#111827';
+  const buttonText = isDark ? '#000000' : '#FFFFFF';
+
   return (
-    <View className="bg-white px-5 py-6">
+    <View className="px-5 py-4" style={{ backgroundColor: bgColor }}>
       {/* Profile Section */}
       <View className="flex-row items-center">
         {/* Profile Picture */}
         <View className="mr-4">
-          <View className="w-20 h-20 rounded-full overflow-hidden">
+          <View className="w-20 h-20 rounded-full overflow-hidden border-2" style={{ borderColor: borderColor }}>
             <Image
               source={{ uri: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80' }}
               className="w-full h-full"
@@ -19,15 +27,31 @@ export default function ProfileInfo() {
         </View>
 
         {/* Action Buttons - Right Aligned */}
-        <View className="flex-row items-center space-x-3 ml-auto">
-          {/* Share Button */}
-          <Pressable className="w-10 h-10 rounded-full border border-gray-300 items-center justify-center active:opacity-70">
-            <Share size={18} color="#374151" strokeWidth={1.5} />
+        <View className="flex-row items-center ml-auto">
+          {/* Upload Button */}
+          <Pressable 
+            className="w-10 h-10 rounded-full items-center justify-center active:opacity-70 mr-3 border"
+            style={{ borderColor: borderColor }}
+          >
+            <Image
+              source={require('../../../../../assets/logo/upload.png')}
+              style={{
+                width: 18,
+                height: 18,
+                tintColor: isDark ? '#FFFFFF' : '#000000'
+              }}
+              resizeMode="contain"
+            />
           </Pressable>
 
           {/* Edit Profile Button */}
-          <Pressable className="bg-gray-900 rounded-full py-2 px-4 active:opacity-70">
-            <Text className="text-white text-sm font-medium">Edit Profile</Text>
+          <Pressable 
+            className="rounded-full py-2 px-4 active:opacity-70"
+            style={{ backgroundColor: buttonBg }}
+          >
+            <Text className="text-sm font-medium" style={{ color: buttonText }}>
+              Edit Profile
+            </Text>
           </Pressable>
         </View>
       </View>

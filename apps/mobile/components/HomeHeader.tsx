@@ -1,8 +1,7 @@
 import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
-import { MessagesSquare } from 'lucide-react-native';
 import React from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View, useColorScheme } from 'react-native';
 import { useTabStyles } from '../hooks/useTabStyles';
 
 interface HomeHeaderProps {
@@ -21,6 +20,8 @@ export default function HomeHeader({
   tabs 
 }: HomeHeaderProps) {
   const tabStyles = useTabStyles();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
   return (
     <BlurView
@@ -154,78 +155,60 @@ export default function HomeHeader({
             accessibilityLabel="BharathVA logo"
           />
 
-          {/* Chat Icon with Message Count - Right */}
+          {/* Text Icon with Message Count - Right */}
           <Pressable
             onPress={onMessagesPress}
             style={({ pressed }) => ({
-              width: 40,
-              height: 40,
-              borderRadius: 20,
               alignItems: 'center',
               justifyContent: 'center',
               opacity: pressed ? 0.8 : 1,
               transform: [{ scale: pressed ? 0.95 : 1 }],
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.15,
-              shadowRadius: 4,
-              elevation: 4,
+              position: 'relative',
             })}
             accessibilityLabel="Open messages"
             accessibilityRole="button"
           >
+            <Image
+              source={require('../assets/logo/text.png')}
+              style={{
+                width: 20,
+                height: 20,
+                tintColor: isDark ? '#FFFFFF' : '#000000'
+              }}
+              contentFit="contain"
+            />
+            
+            {/* Message Count Badge */}
             <View 
               style={{
-                width: 40,
-                height: 40,
-                borderRadius: 20,
-                backgroundColor: tabStyles.profile.backgroundColor,
-                borderWidth: 2,
-                borderColor: tabStyles.profile.borderColor,
+                position: 'absolute',
+                top: -8,
+                right: -8,
+                minWidth: 18,
+                height: 18,
+                backgroundColor: '#FF6B35',
+                borderRadius: 9,
                 justifyContent: 'center',
                 alignItems: 'center',
-                position: 'relative',
+                paddingHorizontal: 4,
+                shadowColor: '#FF6B35',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.3,
+                shadowRadius: 4,
+                elevation: 6,
               }}
             >
-              <MessagesSquare 
-                size={20} 
-                color={tabStyles.text.active}
-              />
-              
-              {/* Message Count Badge */}
-              <View 
+              <Text 
                 style={{
-                  position: 'absolute',
-                  top: -2,
-                  right: -2,
-                  minWidth: 18,
-                  height: 18,
-                  backgroundColor: '#FF6B35',
-                  borderRadius: 9,
-                  borderWidth: 2,
-                  borderColor: tabStyles.profile.backgroundColor,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  paddingHorizontal: 4,
-                  shadowColor: '#FF6B35',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 4,
-                  elevation: 6,
+                  color: '#FFFFFF',
+                  fontSize: 10,
+                  fontWeight: '700',
+                  textAlign: 'center',
+                  lineHeight: 12,
                 }}
               >
-                <Text 
-                  style={{
-                    color: '#FFFFFF',
-                    fontSize: 10,
-                    fontWeight: '700',
-                    textAlign: 'center',
-                    lineHeight: 12,
-                  }}
-                >
-                  17
-                </Text>
-              </View>
+                17
+              </Text>
             </View>
           </Pressable>
         </View>
