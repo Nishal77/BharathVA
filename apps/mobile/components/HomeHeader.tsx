@@ -81,54 +81,34 @@ export default function HomeHeader({
       
       {/* Header Content */}
       <View style={{ position: 'relative', zIndex: 10 }}>
-        {/* Top Row - Profile, Logo, Empty Space */}
+        {/* Top Row - Profile, Logo, Message Icon */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-          {/* Profile Button - Left with Glassmorphism */}
+          {/* Profile Button - Left */}
           <Pressable
             onPress={onProfilePress}
             style={({ pressed }) => ({
-              width: 40,
-              height: 40,
-              borderRadius: 20,
               alignItems: 'center',
               justifyContent: 'center',
               opacity: pressed ? 0.8 : 1,
               transform: [{ scale: pressed ? 0.95 : 1 }],
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.15,
-              shadowRadius: 4,
-              elevation: 4,
+              marginTop: 2, // Slight adjustment to align with other elements
             })}
             accessibilityLabel="Open profile menu"
             accessibilityRole="button"
           >
-            {/* Profile Container */}
-            <View 
-              style={{
-                width: 40,
+            <Image
+              source={require('../assets/logo/profilelogo.png')}
+              style={{ 
+                width: 40, 
                 height: 40,
-                borderRadius: 20,
-                backgroundColor: tabStyles.profile.backgroundColor,
-                justifyContent: 'center',
-                alignItems: 'center',
-                overflow: 'hidden',
+                tintColor: isDark ? '#FFFFFF' : '#000000'
               }}
-            >
-         
-              
-              <Image
-                source={{ uri: 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?auto=format&fit=facearea&w=256&h=256&facepad=2' }}
-                style={{ width: 36, height: 36, borderRadius: 18 }}
-                contentFit="cover"
-                placeholder={{ uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==' }}
-                onError={() => console.log('Profile image failed to load')}
-                accessibilityLabel="Profile picture"
-              />
-            </View>
+              contentFit="contain"
+              accessibilityLabel="Profile button"
+            />
           </Pressable>
 
-          {/* India Logo - Center with Premium Glassmorphism */}
+          {/* India Logo - Center */}
           <Image
             source={require('../assets/images/india.png')}
             style={{ 

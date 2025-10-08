@@ -28,7 +28,7 @@ export default function ProfileTab() {
         return <Feed />;
       case 'Media':
         return (
-          <View className="px-5 py-8 items-center">
+          <View className="px-5 py-8 items-center" style={{ paddingBottom: 100 }}>
             <Text className="text-gray-500 text-center">
               Media content will appear here
             </Text>
@@ -36,7 +36,7 @@ export default function ProfileTab() {
         );
       case 'Video':
         return (
-          <View className="px-5 py-8 items-center">
+          <View className="px-5 py-8 items-center" style={{ paddingBottom: 100 }}>
             <Text className="text-gray-500 text-center">
               Video content will appear here
             </Text>
@@ -44,7 +44,7 @@ export default function ProfileTab() {
         );
       case 'Replies':
         return (
-          <View className="px-5 py-8 items-center">
+          <View className="px-5 py-8 items-center" style={{ paddingBottom: 100 }}>
             <Text className="text-gray-500 text-center">
               Replies content will appear here
             </Text>
