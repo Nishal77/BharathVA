@@ -1,9 +1,12 @@
+import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { View, useColorScheme } from 'react-native';
 import CreatePassword from './CreatePassword';
 import Details from './details';
 import OTPVerification from './OTPVerification';
 import SignInAsSupport from './SignInAsSupport';
+import Username from './Username';
+import VideoIntro from './VideoIntro';
 
 export default function RegisterMain() {
   const colorScheme = useColorScheme();
@@ -62,10 +65,23 @@ export default function RegisterMain() {
   };
 
   const handleCreatePassword = (password: string, confirmPassword: string) => {
-    // Handle password creation
+    // Handle password creation and move to username selection
     console.log('Password created:', { password, confirmPassword });
-    // Here you would typically complete registration and navigate to main app
-    console.log('Registration completed!');
+    setCurrentStep('username');
+  };
+
+  const handleUsernameComplete = (username: string) => {
+    // Handle username selection and navigate to home page
+    console.log('Username selected:', username);
+    console.log('Registration completed! Navigating to home page...');
+    // Navigate to home page with a default userId
+    router.push('/(user)/user123/(tabs)');
+  };
+
+  const handleVideoSkip = () => {
+    // Handle video skip and navigate to home page
+    console.log('Video skipped, navigating to home page');
+    router.push('/(user)/user123/(tabs)');
   };
 
   const handleResendOTP = () => {
@@ -106,6 +122,19 @@ export default function RegisterMain() {
           <CreatePassword 
             onBack={() => setCurrentStep('otp')}
             onCreatePassword={handleCreatePassword}
+          />
+        );
+      case 'username':
+        return (
+          <Username 
+            onBack={() => setCurrentStep('password')}
+            onContinue={handleUsernameComplete}
+          />
+        );
+      case 'video':
+        return (
+          <VideoIntro 
+            onSkip={handleVideoSkip}
           />
         );
       default:

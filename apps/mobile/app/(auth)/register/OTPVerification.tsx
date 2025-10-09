@@ -7,6 +7,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   Text,
   TextInput,
   useColorScheme,
@@ -14,6 +15,39 @@ import {
 } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
+
+// Get screen dimensions for better Android compatibility
+const screenData = Dimensions.get('screen');
+const screenHeight = screenData.height;
+const statusBarHeight = Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0;
+const availableHeight = height;
+
+// Responsive calculations based on device dimensions
+const isSmallDevice = height < 700;
+const isMediumDevice = height >= 700 && height <= 800;
+const isLargeDevice = height > 800;
+const isTablet = width > 768;
+
+// Dynamic sizing based on device for perfect compatibility
+const imageHeight = isSmallDevice ? 0.40 : isMediumDevice ? 0.45 : isLargeDevice ? 0.50 : 0.48;
+const overlayHeight = imageHeight;
+const gradientStart = imageHeight - 0.15;
+const contentMarginTop = isSmallDevice ? 0.25 : isMediumDevice ? 0.30 : isLargeDevice ? 0.35 : 0.32;
+
+// Android-specific adjustments for full height
+const isAndroid = Platform.OS === 'android';
+
+// Dynamic image scaling based on device dimensions
+const aspectRatio = width / height;
+const isWideScreen = aspectRatio > 0.5; // Wider than standard mobile
+const isTallScreen = height > 800;
+
+// Optimized image height based on device characteristics
+const optimizedImageHeight = isAndroid 
+  ? (isTallScreen ? 0.45 : isWideScreen ? 0.50 : 0.48)
+  : (isTallScreen ? 0.50 : isWideScreen ? 0.45 : 0.48);
+
+const androidContentMarginTop = isAndroid ? Math.max(contentMarginTop - 0.03, 0.20) : contentMarginTop;
 
 interface OTPVerificationProps {
   email: string;
@@ -41,8 +75,8 @@ export default function OTPVerification({
   const bgColor = isDark ? '#000000' : '#FFFFFF';
   const textColor = isDark ? '#FFFFFF' : '#000000';
   const secondaryTextColor = isDark ? '#9CA3AF' : '#6B7280';
-  const borderColor = isDark ? '#374151' : '#E5E7EB';
-  const inputBgColor = isDark ? '#1F2937' : '#F9FAFB';
+  const borderColor = isDark ? 'rgba(255, 255, 255, 0.1)' : '#E5E7EB';
+  const inputBgColor = isDark ? '#151515' : '#F9FAFB';
   const buttonBgColor = isDark ? '#1F2937' : '#F3F4F6';
 
   const handleOtpChange = (value: string, index: number) => {
@@ -102,8 +136,8 @@ export default function OTPVerification({
   const isOtpComplete = otp.every(digit => digit !== '');
 
   return (
-    <View className="flex-1" style={{ backgroundColor: bgColor }}>
-      {/* Header Image - 40% Height */}
+    <View className="flex-1" style={{ backgroundColor: bgColor, minHeight: availableHeight }}>
+      {/* Header Image - Dynamic scaling based on device dimensions */}
       <Image
         source={require('../../../assets/images/beach.jpg')}
         style={{
@@ -111,26 +145,30 @@ export default function OTPVerification({
           top: 0,
           left: 0,
           right: 0,
-          height: height * 0.4,
+          height: height * optimizedImageHeight,
           width: '100%',
         }}
-        resizeMode="cover"
+        resizeMode={isWideScreen ? 'cover' : 'cover'}
+        contentFit="cover"
       />
       
-      {/* Theme-based Image Overlay */}
-      <View
+      {/* Enhanced Gradient Overlay for Better Readability */}
+      <LinearGradient
+        colors={isDark 
+          ? ['rgba(0,0,0,0.2)', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.6)']
+          : ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0.5)']
+        }
+        locations={[0, 0.5, 1]}
         style={{
           position: 'absolute',
           top: 0,
           left: 0,
           right: 0,
-          height: height * 0.4,
-          width: '100%',
-          backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.4)',
+          height: height * optimizedImageHeight,
         }}
       />
       
-      {/* Gradient Fade Overlay */}
+      {/* Gradient Fade Overlay - Dynamic positioning based on image height */}
       <LinearGradient
         colors={isDark 
           ? ['rgba(0,0,0,0)', 'rgba(0,0,0,0.1)', 'rgba(0,0,0,0.25)', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.75)', 'rgba(0,0,0,0.95)', 'rgba(0,0,0,1)']
@@ -139,7 +177,7 @@ export default function OTPVerification({
         locations={[0, 0.15, 0.3, 0.5, 0.7, 0.88, 1]}
         style={{
           position: 'absolute',
-          top: height * 0.25,
+          top: height * (optimizedImageHeight - 0.15),
           left: 0,
           width: width,
           height: height * 0.15,
@@ -149,60 +187,71 @@ export default function OTPVerification({
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1"
+        style={{ minHeight: availableHeight }}
       >
         <ScrollView 
           className="flex-1"
-          contentContainerStyle={{ flexGrow: 1 }}
+          contentContainerStyle={{ 
+            flexGrow: 1,
+            minHeight: availableHeight,
+            paddingBottom: isAndroid ? 20 : 0
+          }}
           showsVerticalScrollIndicator={false}
         >
           {/* Back Button */}
           <View className="flex-row items-center px-6 pt-12 pb-4 mt-4">
             <Pressable
               onPress={onBack}
-              className="p-2"
+              className="p-2 rounded-full"
+              style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)' }}
             >
               <Image
                 source={require('../../../assets/logo/arrow.png')}
-                style={{ width: 20, height: 20 }}
+                style={{
+                  width: 20,
+                  height: 20,
+                  tintColor: '#FFFFFF',
+                }}
                 contentFit="contain"
               />
             </Pressable>
           </View>
 
-          {/* Bottom Section - All Content */}
-          <View className="px-6 pb-8" style={{ marginTop: height * 0.30 }}>
-            {/* Header Text */}
-            <View className="items-center mb-6">
+          {/* Bottom Section - All Content - Optimized positioning for all devices */}
+          <View 
+            className="px-6 pb-8" 
+            style={{ 
+              marginTop: height * (isAndroid ? androidContentMarginTop : contentMarginTop),
+              minHeight: isAndroid ? availableHeight * 0.6 : undefined,
+              paddingTop: isWideScreen ? 15 : (isTallScreen ? 10 : 5), // Dynamic padding based on screen
+            }}
+          >
+            {/* Header Text - Enhanced Hierarchy - Responsive with dynamic spacing */}
+            <View className="items-center" style={{ marginBottom: isSmallDevice ? 20 : isMediumDevice ? 24 : 28 }}>
               <Text 
-                className="text-3xl font-bold text-center mb-3"
+                className={`${isSmallDevice ? 'text-xl' : isMediumDevice ? 'text-2xl' : isLargeDevice ? 'text-3xl' : 'text-2xl'} font-black text-center mb-3`}
                 style={{ color: textColor }}
               >
                 Verify Your Email
               </Text>
               <Text 
-                className="text-base text-center leading-6 mb-2"
+                className={`${isSmallDevice ? 'text-xs' : isMediumDevice ? 'text-sm' : 'text-base'} text-center leading-5 px-4 font-medium`}
                 style={{ color: secondaryTextColor }}
               >
                 We've sent a magical 6-digit code to your inbox
               </Text>
-              <Text 
-                className="text-lg font-semibold text-center"
-                style={{ color: textColor }}
-              >
-                {email}
-              </Text>
             </View>
 
-            {/* Journey Text */}
+            {/* Journey Text - Responsive */}
             <Text 
-              className="text-sm text-center mb-6"
+              className={`${isSmallDevice ? 'text-xs' : 'text-sm'} text-center mb-5`}
               style={{ color: secondaryTextColor }}
             >
               Check your email and enter the code below to continue your journey! ✨
             </Text>
 
-            {/* OTP Input Boxes */}
-            <View className="flex-row justify-center mb-6">
+            {/* OTP Input Boxes - Responsive */}
+            <View className="flex-row justify-center" style={{ marginBottom: isSmallDevice ? 20 : isMediumDevice ? 24 : 28 }}>
               {otp.map((digit, index) => (
                 <TextInput
                   key={index}
@@ -214,7 +263,7 @@ export default function OTPVerification({
                   onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, index)}
                   keyboardType="numeric"
                   maxLength={1}
-                  className="w-12 h-12 mx-2 text-center text-xl font-bold rounded-xl border-2"
+                  className={`${isSmallDevice ? 'w-10 h-10 mx-1' : isMediumDevice ? 'w-11 h-11 mx-1.5' : 'w-12 h-12 mx-2'} text-center ${isSmallDevice ? 'text-lg' : 'text-xl'} font-bold rounded-xl border`}
                   style={{
                     backgroundColor: inputBgColor,
                     borderColor: digit ? '#3B82F6' : borderColor,
@@ -225,28 +274,48 @@ export default function OTPVerification({
               ))}
             </View>
 
-            {/* Continue Button */}
-            <Pressable
-              onPress={handleVerify}
-              disabled={!isOtpComplete || isLoading}
-              className="rounded-xl py-4 mb-6"
+            {/* Enhanced Continue Button with Brand Gradient - Responsive with dynamic spacing */}
+            <View style={{ marginBottom: isSmallDevice ? 20 : isMediumDevice ? 24 : 28 }}>
+              <Pressable
+                onPress={handleVerify}
+                disabled={!isOtpComplete || isLoading}
+                className={`rounded-xl ${isSmallDevice ? 'py-2.5' : isMediumDevice ? 'py-3' : 'py-3.5'} shadow-lg`}
               style={{
-                backgroundColor: '#000000',
+                backgroundColor: isOtpComplete && !isLoading 
+                  ? (isDark ? '#FFFFFF' : '#000000') 
+                  : '#9CA3AF',
                 opacity: (!isOtpComplete || isLoading) ? 0.5 : 1,
+                shadowColor: isOtpComplete && !isLoading ? '#000000' : 'transparent',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                elevation: 8,
               }}
             >
-              <Text 
-                className="text-base font-semibold text-center"
-                style={{ color: '#FFFFFF' }}
-              >
-                {isLoading ? 'Verifying...' : 'Continue'}
-              </Text>
+              <View className="flex-row items-center justify-center">
+                <Text 
+                  className={`${isSmallDevice ? 'text-sm' : isMediumDevice ? 'text-sm' : 'text-base'} font-bold text-center mr-2`}
+                  style={{ 
+                    color: isOtpComplete && !isLoading 
+                      ? (isDark ? '#000000' : '#FFFFFF') 
+                      : '#FFFFFF' 
+                  }}
+                >
+                  {isLoading ? 'Verifying...' : 'Continue'}
+                </Text>
+                {isOtpComplete && !isLoading && (
+                  <View className={`${isSmallDevice ? 'w-4 h-4' : 'w-5 h-5'} bg-orange-500 rounded-full items-center justify-center`}>
+                    <Text className="text-white text-xs font-bold">→</Text>
+                  </View>
+                )}
+              </View>
             </Pressable>
+            </View>
 
-            {/* Resend Section */}
-            <View className="items-center mb-6">
+            {/* Resend Section - Responsive with dynamic spacing */}
+            <View className="items-center" style={{ marginBottom: isSmallDevice ? 20 : isMediumDevice ? 24 : 28 }}>
               <Text 
-                className="text-sm text-center mb-2"
+                className={`${isSmallDevice ? 'text-xs' : 'text-sm'} text-center mb-2`}
                 style={{ color: secondaryTextColor }}
               >
                 Didn't receive the magical code?
@@ -259,7 +328,7 @@ export default function OTPVerification({
                 })}
               >
                 <Text 
-                  className="text-base font-semibold"
+                  className={`${isSmallDevice ? 'text-sm' : 'text-base'} font-semibold`}
                   style={{ 
                     color: canResend ? '#3B82F6' : secondaryTextColor 
                   }}
@@ -269,10 +338,13 @@ export default function OTPVerification({
               </Pressable>
             </View>
 
-            {/* Terms and Privacy */}
+            {/* Terms and Privacy - Responsive with dynamic spacing */}
             <Text 
-              className="text-sm text-center leading-5"
-              style={{ color: secondaryTextColor }}
+              className={`${isSmallDevice ? 'text-xs' : 'text-sm'} text-center leading-4`}
+              style={{ 
+                color: secondaryTextColor,
+                marginTop: isSmallDevice ? 10 : isMediumDevice ? 15 : 20,
+              }}
             >
               By verifying your email, you agree to our{' '}
               <Text style={{ color: '#3B82F6' }}>Terms</Text>

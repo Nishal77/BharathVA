@@ -1,10 +1,10 @@
-// Navigation icons removed - only showing current month
 import React, { useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
   Modal,
   Pressable,
+  ScrollView,
   Text,
   useColorScheme,
   View
@@ -36,9 +36,13 @@ export default function DatePickerModal({
     return new Date();
   });
   
-  // Always show current month and year
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
+  // State for current displayed month and year
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  
+  // State for showing year/month pickers
+  const [showYearPicker, setShowYearPicker] = useState(false);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
   
   const slideAnim = useRef(new Animated.Value(height)).current;
   
@@ -111,7 +115,25 @@ export default function DatePickerModal({
     onClose();
   };
 
-  // Navigation removed - only show current month
+  // Generate years for picker (from 1947 to current year)
+  const generateYears = () => {
+    const years = [];
+    const currentYearNum = new Date().getFullYear();
+    for (let year = 1947; year <= currentYearNum; year++) {
+      years.push(year);
+    }
+    return years;
+  };
+
+  const handleYearSelect = (year: number) => {
+    setCurrentYear(year);
+    setShowYearPicker(false);
+  };
+
+  const handleMonthSelect = (month: number) => {
+    setCurrentMonth(month);
+    setShowMonthPicker(false);
+  };
 
   const isToday = (day: number) => {
     const today = new Date();
@@ -164,11 +186,31 @@ export default function DatePickerModal({
           }}
         >
 
-          {/* Current Month Display - Simple Style */}
+          {/* Current Month Display - Clickable for Selection */}
           <View className="px-4 py-4">
-            <Text className="text-xl font-bold text-center" style={{ color: '#000000' }}>
-              {monthNames[currentMonth]} {currentYear}
-            </Text>
+            <View className="flex-row items-center justify-center">
+              <Pressable
+                onPress={() => setShowMonthPicker(true)}
+                className="px-3 py-2 rounded-lg"
+                style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)' }}
+              >
+                <Text className="text-xl font-bold" style={{ color: '#3B82F6' }}>
+                  {monthNames[currentMonth]}
+                </Text>
+              </Pressable>
+              <Text className="text-xl font-bold mx-2" style={{ color: '#000000' }}>
+                {' '}
+              </Text>
+              <Pressable
+                onPress={() => setShowYearPicker(true)}
+                className="px-3 py-2 rounded-lg"
+                style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)' }}
+              >
+                <Text className="text-xl font-bold" style={{ color: '#3B82F6' }}>
+                  {currentYear}
+                </Text>
+              </Pressable>
+            </View>
           </View>
 
           {/* Day Names - Clean Style */}
@@ -243,6 +285,114 @@ export default function DatePickerModal({
             </Pressable>
           </View>
         </Animated.View>
+
+        {/* Year Picker Modal */}
+        {showYearPicker && (
+          <View className="absolute inset-0 justify-center items-center">
+            <View 
+              className="bg-white rounded-2xl mx-8 max-h-96"
+              style={{
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 12,
+                elevation: 12,
+              }}
+            >
+              <View className="p-4 border-b border-gray-200">
+                <Text className="text-lg font-bold text-center" style={{ color: '#000000' }}>
+                  Select Year
+                </Text>
+              </View>
+              <ScrollView 
+                className="max-h-80"
+                showsVerticalScrollIndicator={true}
+                contentContainerStyle={{ padding: 16 }}
+              >
+                {generateYears().map((year) => (
+                  <Pressable
+                    key={year}
+                    onPress={() => handleYearSelect(year)}
+                    className={`py-3 px-4 rounded-lg mb-2 ${
+                      year === currentYear ? 'bg-blue-100' : ''
+                    }`}
+                  >
+                    <Text 
+                      className={`text-base font-medium text-center ${
+                        year === currentYear ? 'text-blue-600' : 'text-gray-800'
+                      }`}
+                    >
+                      {year}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+              <View className="p-4 border-t border-gray-200">
+                <Pressable
+                  onPress={() => setShowYearPicker(false)}
+                  className="py-2 px-4 rounded-lg bg-gray-100"
+                >
+                  <Text className="text-base font-medium text-center text-gray-600">
+                    Cancel
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Month Picker Modal */}
+        {showMonthPicker && (
+          <View className="absolute inset-0 justify-center items-center">
+            <View 
+              className="bg-white rounded-2xl mx-8 max-h-96"
+              style={{
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 12,
+                elevation: 12,
+              }}
+            >
+              <View className="p-4 border-b border-gray-200">
+                <Text className="text-lg font-bold text-center" style={{ color: '#000000' }}>
+                  Select Month
+                </Text>
+              </View>
+              <View className="p-4">
+                <View className="flex-row flex-wrap">
+                  {monthNames.map((month, index) => (
+                    <Pressable
+                      key={index}
+                      onPress={() => handleMonthSelect(index)}
+                      className={`w-1/3 py-3 px-2 rounded-lg mb-2 ${
+                        index === currentMonth ? 'bg-blue-100' : ''
+                      }`}
+                    >
+                      <Text 
+                        className={`text-sm font-medium text-center ${
+                          index === currentMonth ? 'text-blue-600' : 'text-gray-800'
+                        }`}
+                      >
+                        {month}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+              <View className="p-4 border-t border-gray-200">
+                <Pressable
+                  onPress={() => setShowMonthPicker(false)}
+                  className="py-2 px-4 rounded-lg bg-gray-100"
+                >
+                  <Text className="text-base font-medium text-center text-gray-600">
+                    Cancel
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        )}
       </View>
     </Modal>
   );
