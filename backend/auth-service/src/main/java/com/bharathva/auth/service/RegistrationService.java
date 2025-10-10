@@ -10,8 +10,7 @@ import com.bharathva.auth.repository.UserRepository;
 import com.bharathva.shared.exception.BusinessException;
 import com.bharathva.shared.util.OTPGenerator;
 import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -20,15 +19,22 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class RegistrationService {
 
-    private final UserRepository userRepository;
-    private final EmailOtpRepository emailOtpRepository;
-    private final RegistrationSessionRepository registrationSessionRepository;
-    private final EmailService emailService;
-    private final PasswordEncoder passwordEncoder;
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private EmailOtpRepository emailOtpRepository;
+    
+    @Autowired
+    private RegistrationSessionRepository registrationSessionRepository;
+    
+    @Autowired
+    private EmailService emailService;
+    
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @Value("${otp.expiry-minutes:10}")
     private int otpExpiryMinutes;
@@ -58,36 +64,34 @@ public class RegistrationService {
 
         // Create new registration session
         String sessionToken = UUID.randomUUID().toString();
-        RegistrationSession session = RegistrationSession.builder()
-                .sessionToken(sessionToken)
-                .email(email)
-                .currentStep("EMAIL")
-                .isEmailVerified(false)
-                .expiry(LocalDateTime.now().plusHours(24)) // Session valid for 24 hours
-                .build();
+        RegistrationSession session = new RegistrationSession();
+        session.setSessionToken(sessionToken);
+        session.setEmail(email);
+        session.setCurrentStep("EMAIL");
+        session.setIsEmailVerified(false);
+        session.setExpiry(LocalDateTime.now().plusHours(24)); // Session valid for 24 hours
 
         registrationSessionRepository.save(session);
 
         // Generate and send OTP
         String otp = OTPGenerator.generateSixDigitOTP();
-        EmailOtp emailOtp = EmailOtp.builder()
-                .email(email)
-                .otpCode(otp)
-                .expiry(LocalDateTime.now().plusMinutes(otpExpiryMinutes))
-                .isUsed(false)
-                .build();
+        EmailOtp emailOtp = new EmailOtp();
+        emailOtp.setEmail(email);
+        emailOtp.setOtpCode(otp);
+        emailOtp.setExpiry(LocalDateTime.now().plusMinutes(otpExpiryMinutes));
+        emailOtp.setIsUsed(false);
 
         emailOtpRepository.save(emailOtp);
         emailService.sendOtpEmail(email, otp);
 
-        log.info("Registration initiated for email: {}", email);
+        System.out.println("Registration initiated for email: " + email);
 
-        return RegistrationResponse.builder()
-                .sessionToken(sessionToken)
-                .currentStep("OTP")
-                .email(email)
-                .message("OTP sent to your email. Please verify.")
-                .build();
+        RegistrationResponse response = new RegistrationResponse();
+        response.setSessionToken(sessionToken);
+        response.setCurrentStep("OTP");
+        response.setEmail(email);
+        response.setMessage("OTP sent to your email. Please verify.");
+        return response;
     }
 
     /**
@@ -116,13 +120,13 @@ public class RegistrationService {
 
         registrationSessionRepository.save(session);
 
-        log.info("User details saved for session: {}", session.getSessionToken());
+        System.out.println("User details saved for session: " + session.getSessionToken());
 
-        return RegistrationResponse.builder()
-                .sessionToken(session.getSessionToken())
-                .currentStep("PASSWORD")
-                .message("Details saved. Please create a password.")
-                .build();
+        RegistrationResponse response = new RegistrationResponse();
+        response.setSessionToken(session.getSessionToken());
+        response.setCurrentStep("PASSWORD");
+        response.setMessage("Details saved. Please create a password.");
+        return response;
     }
 
     /**
@@ -159,13 +163,13 @@ public class RegistrationService {
         // Clean up old OTPs
         emailOtpRepository.deleteByEmail(session.getEmail());
 
-        log.info("Email verified for session: {}", session.getSessionToken());
+        System.out.println("Email verified for session: " + session.getSessionToken());
 
-        return RegistrationResponse.builder()
-                .sessionToken(session.getSessionToken())
-                .currentStep("DETAILS")
-                .message("Email verified successfully. Please provide your details.")
-                .build();
+        RegistrationResponse response = new RegistrationResponse();
+        response.setSessionToken(session.getSessionToken());
+        response.setCurrentStep("DETAILS");
+        response.setMessage("Email verified successfully. Please provide your details.");
+        return response;
     }
 
     /**
@@ -193,13 +197,13 @@ public class RegistrationService {
 
         registrationSessionRepository.save(session);
 
-        log.info("Password created for session: {}", session.getSessionToken());
+        System.out.println("Password created for session: " + session.getSessionToken());
 
-        return RegistrationResponse.builder()
-                .sessionToken(session.getSessionToken())
-                .currentStep("USERNAME")
-                .message("Password created. Please choose a username.")
-                .build();
+        RegistrationResponse response = new RegistrationResponse();
+        response.setSessionToken(session.getSessionToken());
+        response.setCurrentStep("USERNAME");
+        response.setMessage("Password created. Please choose a username.");
+        return response;
     }
 
     /**
@@ -224,16 +228,15 @@ public class RegistrationService {
         }
 
         // Create final user account
-        User user = User.builder()
-                .fullName(session.getFullName())
-                .username(username)
-                .email(session.getEmail())
-                .phoneNumber(session.getPhoneNumber())
-                .countryCode(session.getCountryCode())
-                .dateOfBirth(session.getDateOfBirth())
-                .passwordHash(session.getPasswordHash())
-                .isEmailVerified(true)
-                .build();
+        User user = new User();
+        user.setFullName(session.getFullName());
+        user.setUsername(username);
+        user.setEmail(session.getEmail());
+        user.setPhoneNumber(session.getPhoneNumber());
+        user.setCountryCode(session.getCountryCode());
+        user.setDateOfBirth(session.getDateOfBirth());
+        user.setPasswordHash(session.getPasswordHash());
+        user.setIsEmailVerified(true);
 
         userRepository.save(user);
 
@@ -243,13 +246,13 @@ public class RegistrationService {
         // Clean up session
         registrationSessionRepository.delete(session);
 
-        log.info("User registration completed: {} ({})", user.getUsername(), user.getEmail());
+        System.out.println("User registration completed: " + user.getUsername() + " (" + user.getEmail() + ")");
 
-        return RegistrationResponse.builder()
-                .sessionToken(null)
-                .currentStep("COMPLETED")
-                .message("Registration completed successfully! Welcome to BharathVA!")
-                .build();
+        RegistrationResponse response = new RegistrationResponse();
+        response.setSessionToken(null);
+        response.setCurrentStep("COMPLETED");
+        response.setMessage("Registration completed successfully! Welcome to BharathVA!");
+        return response;
     }
 
     /**
@@ -268,23 +271,22 @@ public class RegistrationService {
 
         // Generate new OTP
         String otp = OTPGenerator.generateSixDigitOTP();
-        EmailOtp emailOtp = EmailOtp.builder()
-                .email(session.getEmail())
-                .otpCode(otp)
-                .expiry(LocalDateTime.now().plusMinutes(otpExpiryMinutes))
-                .isUsed(false)
-                .build();
+        EmailOtp emailOtp = new EmailOtp();
+        emailOtp.setEmail(session.getEmail());
+        emailOtp.setOtpCode(otp);
+        emailOtp.setExpiry(LocalDateTime.now().plusMinutes(otpExpiryMinutes));
+        emailOtp.setIsUsed(false);
 
         emailOtpRepository.save(emailOtp);
         emailService.sendOtpEmail(session.getEmail(), otp);
 
-        log.info("OTP resent for session: {}", session.getSessionToken());
+        System.out.println("OTP resent for session: " + session.getSessionToken());
 
-        return RegistrationResponse.builder()
-                .sessionToken(session.getSessionToken())
-                .currentStep("OTP")
-                .message("New OTP sent to your email.")
-                .build();
+        RegistrationResponse response = new RegistrationResponse();
+        response.setSessionToken(session.getSessionToken());
+        response.setCurrentStep("OTP");
+        response.setMessage("New OTP sent to your email.");
+        return response;
     }
 
     /**

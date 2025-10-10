@@ -1,18 +1,21 @@
 package com.bharathva.auth.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
 public class ResendOtpRequest {
     
     @NotBlank(message = "Session token is required")
     private String sessionToken;
+
+    // Constructors
+    public ResendOtpRequest() {}
+
+    public ResendOtpRequest(String sessionToken) {
+        this.sessionToken = sessionToken;
+    }
+
+    // Getters and Setters
+    public String getSessionToken() { return sessionToken; }
+    public void setSessionToken(String sessionToken) { this.sessionToken = sessionToken; }
 }
 

@@ -39,6 +39,9 @@ async function apiCall<T>(
     const url = `${API_CONFIG.BASE_URL}${endpoint}`;
     
     console.log(`[API] ${method} ${url}`);
+    if (body) {
+      console.log(`[API] Request body:`, JSON.stringify(body));
+    }
     
     const options: RequestInit = {
       method,
@@ -52,6 +55,7 @@ async function apiCall<T>(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
 
+    console.log(`[API] Sending request...`);
     const response = await fetch(url, {
       ...options,
       signal: controller.signal,
@@ -59,9 +63,21 @@ async function apiCall<T>(
 
     clearTimeout(timeoutId);
 
-    const data = await response.json();
+    console.log(`[API] Response status: ${response.status} ${response.statusText}`);
+    console.log(`[API] Response ok: ${response.ok}`);
+
+    let data;
+    try {
+      const textResponse = await response.text();
+      console.log(`[API] Response text:`, textResponse.substring(0, 200));
+      data = JSON.parse(textResponse);
+    } catch (parseError: any) {
+      console.error(`[API] JSON parse error:`, parseError.message);
+      throw new ApiError('Invalid response from server');
+    }
 
     if (!response.ok) {
+      console.error(`[API] Error response:`, data);
       throw new ApiError(
         data.message || 'Request failed',
         response.status,
@@ -70,8 +86,13 @@ async function apiCall<T>(
     }
 
     console.log(`[API] Success:`, data.message);
+    console.log(`[API] Response data:`, data);
     return data;
   } catch (error: any) {
+    console.error(`[API] Catch block error:`, error);
+    console.error(`[API] Error name:`, error.name);
+    console.error(`[API] Error message:`, error.message);
+    
     if (error.name === 'AbortError') {
       throw new ApiError('Request timeout. Please check your connection.');
     }

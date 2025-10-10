@@ -1,21 +1,22 @@
 // API Configuration
 // Update BASE_URL based on where you're testing from
 
-// For iOS Simulator
+// Using Local IP for better compatibility with Expo/React Native
 export const API_CONFIG = {
-  BASE_URL: 'http://localhost:8080/api',
+  BASE_URL: 'http://192.168.0.9:8080/api',
   TIMEOUT: 30000, // 30 seconds
 };
 
-// For Android Emulator - uncomment this:
+// Alternative configurations:
+// For localhost (might not work with Expo)
 // export const API_CONFIG = {
-//   BASE_URL: 'http://10.0.2.2:8080/api',
+//   BASE_URL: 'http://localhost:8080/api',
 //   TIMEOUT: 30000,
 // };
 
-// For Physical Device - uncomment and add your IP:
+// For Android Emulator:
 // export const API_CONFIG = {
-//   BASE_URL: 'http://YOUR_LOCAL_IP:8080/api', // e.g., http://192.168.1.100:8080/api
+//   BASE_URL: 'http://10.0.2.2:8080/api',
 //   TIMEOUT: 30000,
 // };
 

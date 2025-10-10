@@ -1,6 +1,6 @@
 -- Create users table (permanent storage after registration)
 CREATE TABLE IF NOT EXISTS users (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(100) NOT NULL,
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(150) UNIQUE NOT NULL,
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Create email_otps table (temporary OTP storage)
 CREATE TABLE IF NOT EXISTS email_otps (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(150) NOT NULL,
     otp_code VARCHAR(10) NOT NULL,
     expiry TIMESTAMP NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS email_otps (
 -- Create registration_sessions table (temporary session data during registration)
 -- This is NOT a duplicate of users - it's temporary storage during multi-step registration
 CREATE TABLE IF NOT EXISTS registration_sessions (
-    id SERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_token VARCHAR(255) UNIQUE NOT NULL,
     email VARCHAR(150) NOT NULL,
     full_name VARCHAR(100),

@@ -73,10 +73,17 @@ export default function Details({ email, onBack, onComplete }: DetailsProps) {
 
   const handleContinue = () => {
     if (name.trim() && phone.trim()) {
+      // Convert date from DD/MM/YYYY to YYYY-MM-DD format for backend
+      const formatDateForBackend = (dateStr: string): string => {
+        if (!dateStr) return '';
+        const [day, month, year] = dateStr.split('/');
+        return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      };
+
       onComplete({
         name: name.trim(),
         phone: phone.trim(),
-        dateOfBirth: dateOfBirth.trim(),
+        dateOfBirth: formatDateForBackend(dateOfBirth.trim()),
         countryCode: selectedCountryCode,
       });
     }

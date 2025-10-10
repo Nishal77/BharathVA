@@ -35,39 +35,11 @@ export default function RegisterMain() {
     Alert.alert('Coming Soon', 'Apple Sign In will be available soon!');
   };
 
-  const handleEmailSubmit = async (email: string) => {
-    try {
-      setLoading(true);
-      console.log('Registering email:', email);
-      
-      // Call backend API
-      const response = await authService.registerEmail(email);
-      
-      console.log('Registration response:', response);
-      
-      // Save session token and email
-      setSessionToken(response.sessionToken!);
-      setUserEmail(email);
-      
-      // Move to OTP step
-      setCurrentStep('otp');
-      
-      Alert.alert(
-        'Success! 📧',
-        'A 6-digit verification code has been sent to your email. Please check your inbox.',
-        [{ text: 'OK' }]
-      );
-    } catch (error) {
-      console.error('Email registration error:', error);
-      
-      if (error instanceof ApiError) {
-        Alert.alert('Error', error.message);
-      } else {
-        Alert.alert('Error', 'Failed to register email. Please try again.');
-      }
-    } finally {
-      setLoading(false);
-    }
+  const handleEmailSubmit = (email: string) => {
+    // Just save email and move to details page (no API call yet)
+    console.log('Email entered:', email);
+    setUserEmail(email);
+    setCurrentStep('details');
   };
 
   const handleSignIn = () => {
@@ -87,35 +59,37 @@ export default function RegisterMain() {
   }) => {
     try {
       setLoading(true);
-      console.log('Submitting details:', details);
-      
-      // Call backend API
-      const response = await authService.submitDetails(
-        sessionToken,
-        details.name,
-        details.phone,
-        details.countryCode,
-        details.dateOfBirth
-      );
-      
-      console.log('Details response:', response);
+      console.log('Details completed:', details);
       
       // Store details locally
       setUserPhone(details.phone);
       setUserCountryCode(details.countryCode);
       setUserDetails(details);
       
-      // Move to password step
-      setCurrentStep('password');
+      // NOW register email with backend (this sends OTP)
+      console.log('Registering email with backend:', userEmail);
+      const response = await authService.registerEmail(userEmail);
       
-      Alert.alert('Success', 'Details saved successfully!');
+      console.log('Email registration response:', response);
+      
+      // Save session token
+      setSessionToken(response.sessionToken!);
+      
+      // Move to OTP verification step
+      setCurrentStep('otp');
+      
+      Alert.alert(
+        'Details Saved! 📧',
+        `An OTP has been sent to ${userEmail}. Please check your email inbox.`,
+        [{ text: 'OK' }]
+      );
     } catch (error) {
-      console.error('Submit details error:', error);
+      console.error('Registration error:', error);
       
       if (error instanceof ApiError) {
         Alert.alert('Error', error.message);
       } else {
-        Alert.alert('Error', 'Failed to save details. Please try again.');
+        Alert.alert('Error', 'Failed to send OTP. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -127,20 +101,30 @@ export default function RegisterMain() {
       setLoading(true);
       console.log('Verifying OTP:', otp);
       
-      // Call backend API
-      const response = await authService.verifyOtp(sessionToken, otp);
+      // Verify OTP with backend
+      const verifyResponse = await authService.verifyOtp(sessionToken, otp);
+      console.log('OTP verification response:', verifyResponse);
       
-      console.log('OTP verification response:', response);
+      // Now submit user details to backend
+      console.log('Submitting user details to backend:', userDetails);
+      const detailsResponse = await authService.submitDetails(
+        sessionToken,
+        userDetails.name,
+        userDetails.phone,
+        userDetails.countryCode,
+        userDetails.dateOfBirth
+      );
+      console.log('Details submission response:', detailsResponse);
       
-      // Move to details step
-      setCurrentStep('details');
+      // Move to password step
+      setCurrentStep('password');
       
-      Alert.alert('Success! ✅', 'Email verified successfully!');
+      Alert.alert('Success! ✅', 'Email verified and details saved!');
     } catch (error) {
       console.error('OTP verification error:', error);
       
       if (error instanceof ApiError) {
-        Alert.alert('Invalid OTP', error.message);
+        Alert.alert('Error', error.message);
       } else {
         Alert.alert('Error', 'Failed to verify OTP. Please try again.');
       }

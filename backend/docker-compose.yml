@@ -65,8 +65,8 @@ services:
       # Email SMTP (Gmail)
       - SMTP_HOST=smtp.gmail.com
       - SMTP_PORT=587
-      - SMTP_USERNAME=nishalpoojary@gmail.com
-      - SMTP_PASSWORD=zpgefisdqkerffog
+      - SMTP_USERNAME=nishalpoojary66@gmail.com
+      - SMTP_PASSWORD=ojursmdswzazuykw
       
       # JWT
       - JWT_SECRET=bharathva-super-secret-key-change-in-production-2024
