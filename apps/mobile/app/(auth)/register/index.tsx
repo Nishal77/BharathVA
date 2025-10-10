@@ -1,12 +1,13 @@
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { View, useColorScheme } from 'react-native';
+import { View, useColorScheme, Alert, ActivityIndicator } from 'react-native';
 import CreatePassword from './CreatePassword';
 import Details from './details';
 import OTPVerification from './OTPVerification';
 import SignInAsSupport from './SignInAsSupport';
 import Username from './Username';
 import VideoIntro from './VideoIntro';
+import { authService, ApiError } from '../../../services/api/authService';
 
 export default function RegisterMain() {
   const colorScheme = useColorScheme();
@@ -16,24 +17,57 @@ export default function RegisterMain() {
   const [userEmail, setUserEmail] = useState('');
   const [userPhone, setUserPhone] = useState('');
   const [userCountryCode, setUserCountryCode] = useState('+91');
+  const [sessionToken, setSessionToken] = useState('');
+  const [userDetails, setUserDetails] = useState<any>({});
+  const [loading, setLoading] = useState(false);
   
   const bgColor = isDark ? '#000000' : '#FFFFFF';
 
   const handleGoogleSignIn = () => {
     // Handle Google sign in
     console.log('Google sign in pressed');
+    Alert.alert('Coming Soon', 'Google Sign In will be available soon!');
   };
 
   const handleAppleSignIn = () => {
     // Handle Apple sign in
     console.log('Apple sign in pressed');
+    Alert.alert('Coming Soon', 'Apple Sign In will be available soon!');
   };
 
-  const handleEmailSubmit = (email: string) => {
-    // Handle email submission and navigate to details
-    setUserEmail(email);
-    setCurrentStep('details');
-    console.log('Email submitted:', email);
+  const handleEmailSubmit = async (email: string) => {
+    try {
+      setLoading(true);
+      console.log('Registering email:', email);
+      
+      // Call backend API
+      const response = await authService.registerEmail(email);
+      
+      console.log('Registration response:', response);
+      
+      // Save session token and email
+      setSessionToken(response.sessionToken!);
+      setUserEmail(email);
+      
+      // Move to OTP step
+      setCurrentStep('otp');
+      
+      Alert.alert(
+        'Success! 📧',
+        'A 6-digit verification code has been sent to your email. Please check your inbox.',
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      console.error('Email registration error:', error);
+      
+      if (error instanceof ApiError) {
+        Alert.alert('Error', error.message);
+      } else {
+        Alert.alert('Error', 'Failed to register email. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSignIn = () => {
@@ -45,37 +79,145 @@ export default function RegisterMain() {
     setCurrentStep('signInAsSupport');
   };
 
-  const handleDetailsComplete = (details: {
+  const handleDetailsComplete = async (details: {
     name: string;
     phone: string;
     dateOfBirth: string;
     countryCode: string;
   }) => {
-    // Store phone details and move to OTP step
-    setUserPhone(details.phone);
-    setUserCountryCode(details.countryCode);
-    setCurrentStep('otp');
-    console.log('Moving to OTP step:', { email: userEmail, ...details });
+    try {
+      setLoading(true);
+      console.log('Submitting details:', details);
+      
+      // Call backend API
+      const response = await authService.submitDetails(
+        sessionToken,
+        details.name,
+        details.phone,
+        details.countryCode,
+        details.dateOfBirth
+      );
+      
+      console.log('Details response:', response);
+      
+      // Store details locally
+      setUserPhone(details.phone);
+      setUserCountryCode(details.countryCode);
+      setUserDetails(details);
+      
+      // Move to password step
+      setCurrentStep('password');
+      
+      Alert.alert('Success', 'Details saved successfully!');
+    } catch (error) {
+      console.error('Submit details error:', error);
+      
+      if (error instanceof ApiError) {
+        Alert.alert('Error', error.message);
+      } else {
+        Alert.alert('Error', 'Failed to save details. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleOTPVerify = (otp: string) => {
-    // Handle OTP verification and move to password creation
-    console.log('OTP verified:', otp);
-    setCurrentStep('password');
+  const handleOTPVerify = async (otp: string) => {
+    try {
+      setLoading(true);
+      console.log('Verifying OTP:', otp);
+      
+      // Call backend API
+      const response = await authService.verifyOtp(sessionToken, otp);
+      
+      console.log('OTP verification response:', response);
+      
+      // Move to details step
+      setCurrentStep('details');
+      
+      Alert.alert('Success! ✅', 'Email verified successfully!');
+    } catch (error) {
+      console.error('OTP verification error:', error);
+      
+      if (error instanceof ApiError) {
+        Alert.alert('Invalid OTP', error.message);
+      } else {
+        Alert.alert('Error', 'Failed to verify OTP. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleCreatePassword = (password: string, confirmPassword: string) => {
-    // Handle password creation and move to username selection
-    console.log('Password created:', { password, confirmPassword });
-    setCurrentStep('username');
+  const handleCreatePassword = async (password: string, confirmPassword: string) => {
+    try {
+      setLoading(true);
+      console.log('Creating password');
+      
+      // Call backend API
+      const response = await authService.createPassword(
+        sessionToken,
+        password,
+        confirmPassword
+      );
+      
+      console.log('Password creation response:', response);
+      
+      // Move to username step
+      setCurrentStep('username');
+      
+      Alert.alert('Success', 'Password created successfully!');
+    } catch (error) {
+      console.error('Password creation error:', error);
+      
+      if (error instanceof ApiError) {
+        Alert.alert('Error', error.message);
+      } else {
+        Alert.alert('Error', 'Failed to create password. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleUsernameComplete = (username: string) => {
-    // Handle username selection and navigate to home page
-    console.log('Username selected:', username);
-    console.log('Registration completed! Navigating to home page...');
-    // Navigate to home page with a default userId
-    router.push('/(user)/user123/(tabs)');
+  const handleUsernameComplete = async (username: string) => {
+    try {
+      setLoading(true);
+      console.log('Creating username:', username);
+      
+      // Call backend API
+      const response = await authService.createUsername(sessionToken, username);
+      
+      console.log('Username creation response:', response);
+      
+      // Clear session token (no longer needed)
+      setSessionToken('');
+      
+      // Show success message
+      Alert.alert(
+        'Registration Complete! 🎉',
+        `Welcome to BharathVA, @${username}! Check your email for a welcome message.`,
+        [
+          {
+            text: 'Continue',
+            onPress: () => {
+              // Navigate to home page - you can update this with actual user ID from response
+              router.push('/(user)/user123/(tabs)');
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Username creation error:', error);
+      
+      if (error instanceof ApiError) {
+        Alert.alert('Error', error.message);
+      } else {
+        Alert.alert('Error', 'Failed to create username. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleVideoSkip = () => {
@@ -84,9 +226,28 @@ export default function RegisterMain() {
     router.push('/(user)/user123/(tabs)');
   };
 
-  const handleResendOTP = () => {
-    // Handle OTP resend
-    console.log('Resending OTP to:', userCountryCode, userPhone);
+  const handleResendOTP = async () => {
+    try {
+      setLoading(true);
+      console.log('Resending OTP');
+      
+      // Call backend API
+      const response = await authService.resendOtp(sessionToken);
+      
+      console.log('Resend OTP response:', response);
+      
+      Alert.alert('Success', 'New OTP sent to your email!');
+    } catch (error) {
+      console.error('Resend OTP error:', error);
+      
+      if (error instanceof ApiError) {
+        Alert.alert('Error', error.message);
+      } else {
+        Alert.alert('Error', 'Failed to resend OTP. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderCurrentStep = () => {
@@ -151,6 +312,23 @@ export default function RegisterMain() {
 
   return (
     <View className="flex-1" style={{ backgroundColor: bgColor }}>
+      {loading && (
+        <View 
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+          }}
+        >
+          <ActivityIndicator size="large" color="#3B82F6" />
+        </View>
+      )}
       {renderCurrentStep()}
     </View>
   );

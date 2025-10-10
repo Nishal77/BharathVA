@@ -1,0 +1,96 @@
+# Docker Compose for BharathVA Backend
+# Removed version (obsolete in Docker Compose V2)
+
+services:
+  # Discovery Service (Eureka Server)
+  discovery-service:
+    build:
+      context: .
+      dockerfile: discovery-service/Dockerfile
+    container_name: bharathva-discovery
+    ports:
+      - "8761:8761"
+    networks:
+      - bharathva-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8761/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  # Gateway Service
+  gateway-service:
+    build:
+      context: .
+      dockerfile: gateway-service/Dockerfile
+    container_name: bharathva-gateway
+    ports:
+      - "8080:8080"
+    networks:
+      - bharathva-network
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service:8761/eureka/
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  # Auth Service
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+    container_name: bharathva-auth
+    ports:
+      - "8081:8081"
+    networks:
+      - bharathva-network
+    environment:
+      # Eureka
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service:8761/eureka/
+      
+      # Database (Neon PostgreSQL)
+      - DB_URL=jdbc:postgresql://ep-summer-bar-a1bv6p9u-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+      - DB_USERNAME=neondb_owner
+      - DB_PASSWORD=npg_Dtqy63pieawz
+      
+      # Email SMTP (Gmail)
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USERNAME=nishalpoojary@gmail.com
+      - SMTP_PASSWORD=zpgefisdqkerffog
+      
+      # JWT
+      - JWT_SECRET=bharathva-super-secret-key-change-in-production-2024
+      - JWT_EXPIRATION=86400000
+      
+      # Server
+      - SERVER_PORT=8081
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/auth/register/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+networks:
+  bharathva-network:
+    driver: bridge
+
+# Optional: Add volumes for logs persistence
+volumes:
+  logs:
+    driver: local
+

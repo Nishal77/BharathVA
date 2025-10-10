@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   Animated,
   Dimensions,
@@ -12,7 +12,9 @@ import {
   TextInput,
   useColorScheme,
   View,
+  Alert,
 } from 'react-native';
+import { authService, ApiError } from '../../../services/api/authService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -41,6 +43,7 @@ export default function Username({
   const [username, setUsername] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
   
   // Animation values for smooth transition
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -59,21 +62,53 @@ export default function Username({
 
   const isFormValid = username.length >= 3;
 
+  // Debounce timer for username checking
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const handleUsernameChange = (text: string) => {
     // Remove @ symbol if user types it, and allow only alphanumeric and underscore
     const cleanText = text.replace('@', '').replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
     setUsername(cleanText);
+    setIsAvailable(null);
     
-    // Simulate availability check
+    // Clear previous timer
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+    
+    // Check availability after user stops typing (500ms delay)
     if (cleanText.length >= 3) {
-      setIsAvailable(true); // In real app, check with API
+      setIsChecking(true);
+      debounceTimer.current = setTimeout(async () => {
+        try {
+          const result = await authService.checkUsername(cleanText);
+          setIsAvailable(result.available);
+        } catch (error) {
+          console.error('Username check error:', error);
+          setIsAvailable(null);
+        } finally {
+          setIsChecking(false);
+        }
+      }, 500);
     } else {
-      setIsAvailable(null);
+      setIsChecking(false);
     }
   };
 
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, []);
+
   const handleContinue = async () => {
-    if (!isFormValid) return;
+    if (!isFormValid || !isAvailable) {
+      Alert.alert('Error', 'Please choose an available username');
+      return;
+    }
     
     setIsLoading(true);
     
@@ -249,7 +284,20 @@ export default function Username({
               </View>
               
               {/* Enhanced Availability Indicator with Micro-interactions */}
-              {username.length >= 3 && isAvailable === true && (
+              {isChecking && (
+                <View className="flex-row items-center mt-3">
+                  <View className="w-5 h-5 items-center justify-center mr-2">
+                    <Text className="text-sm">⏳</Text>
+                  </View>
+                  <Text 
+                    className="text-sm font-semibold"
+                    style={{ color: secondaryTextColor }}
+                  >
+                    Checking availability...
+                  </Text>
+                </View>
+              )}
+              {!isChecking && username.length >= 3 && isAvailable === true && (
                 <View className="flex-row items-center mt-3">
                   <View className="w-5 h-5 bg-green-500 rounded-full items-center justify-center mr-2">
                     <Text className="text-white text-xs font-bold">✓</Text>
@@ -275,7 +323,7 @@ export default function Username({
                   </Text>
                 </View>
               )}
-              {username.length >= 3 && isAvailable === false && (
+              {!isChecking && username.length >= 3 && isAvailable === false && (
                 <View className="flex-row items-center mt-3">
                   <View className="w-5 h-5 bg-red-500 rounded-full items-center justify-center mr-2">
                     <Text className="text-white text-xs font-bold">✗</Text>

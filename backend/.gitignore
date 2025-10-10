@@ -1,0 +1,60 @@
+# Compiled class files
+*.class
+
+# Maven target directory (build output)
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Package Files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Maven
+.mvn/
+mvnw
+mvnw.cmd
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Logs
+*.log
+logs/
+spring.log
+
+# Environment files (contains sensitive data)
+.env
+*.env
+set-env.sh
+!.env.example
+
+# Sensitive data
+application-local.yml
+application-dev.yml
+application-prod.yml
+
+# Test coverage
+*.exec
+*.coverage
+

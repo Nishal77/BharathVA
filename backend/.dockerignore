@@ -1,0 +1,39 @@
+# Maven build output
+target/
+!target/*.jar
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+.project
+.classpath
+.settings/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+*.env
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Git
+.git/
+.gitignore
+
+# Documentation (no need in image)
+*.md
+!README.md
+
+# Scripts
+*.sh
+
+# Node modules (if any)
+node_modules/
+

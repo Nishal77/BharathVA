@@ -247,7 +247,7 @@ export default function OTPVerification({
               className={`${isSmallDevice ? 'text-xs' : 'text-sm'} text-center mb-5`}
               style={{ color: secondaryTextColor }}
             >
-              Check your email and enter the code below to continue your journey! ✨
+              Check your email and enter the code below to continue your journey!
             </Text>
 
             {/* OTP Input Boxes - Responsive */}

@@ -1,0 +1,97 @@
+### BharathVA API Testing
+### Use with REST Client extension in Cursor IDE
+### Click "Send Request" above each section
+
+### Variables
+@baseUrl = http://localhost:8080/api/auth/register
+@email = your-email@gmail.com
+@sessionToken = YOUR_SESSION_TOKEN_HERE
+
+### ========================================
+### 1. Health Check
+GET {{baseUrl}}/health
+Content-Type: application/json
+
+### ========================================
+### 2. Register Email
+POST {{baseUrl}}/email
+Content-Type: application/json
+
+{
+  "email": "{{email}}"
+}
+
+### ========================================
+### 3. Verify OTP (Update sessionToken and otp from email)
+POST {{baseUrl}}/verify-otp
+Content-Type: application/json
+
+{
+  "sessionToken": "{{sessionToken}}",
+  "otp": "123456"
+}
+
+### ========================================
+### 4. Resend OTP (Optional)
+POST {{baseUrl}}/resend-otp
+Content-Type: application/json
+
+{
+  "sessionToken": "{{sessionToken}}"
+}
+
+### ========================================
+### 5. Submit User Details
+POST {{baseUrl}}/details
+Content-Type: application/json
+
+{
+  "sessionToken": "{{sessionToken}}",
+  "fullName": "Nishal Poojary",
+  "phoneNumber": "9876543210",
+  "countryCode": "+91",
+  "dateOfBirth": "1995-05-15"
+}
+
+### ========================================
+### 6. Create Password
+POST {{baseUrl}}/password
+Content-Type: application/json
+
+{
+  "sessionToken": "{{sessionToken}}",
+  "password": "SecurePass123!",
+  "confirmPassword": "SecurePass123!"
+}
+
+### ========================================
+### 7. Check Username Availability
+GET {{baseUrl}}/check-username?username=nishalpoojary
+Content-Type: application/json
+
+### ========================================
+### 8. Create Username (Complete Registration)
+POST {{baseUrl}}/username
+Content-Type: application/json
+
+{
+  "sessionToken": "{{sessionToken}}",
+  "username": "nishalpoojary"
+}
+
+### ========================================
+### Direct Auth Service (bypass gateway)
+@authUrl = http://localhost:8081/auth/register
+
+### Health Check (Direct)
+GET {{authUrl}}/health
+Content-Type: application/json
+
+### Register Email (Direct)
+POST {{authUrl}}/email
+Content-Type: application/json
+
+{
+  "email": "{{email}}"
+}
+
