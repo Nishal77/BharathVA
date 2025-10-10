@@ -24,16 +24,16 @@ export default function SignInAsSupport({
   const [email, setEmail] = useState('');
   
   const bgColor = isDark ? '#000000' : '#FFFFFF';
-  const textColor = isDark ? '#FFFFFF' : '#000000';
-  const secondaryTextColor = isDark ? '#9CA3AF' : '#6B7280';
-  const borderColor = isDark ? '#374151' : '#E5E7EB';
-  const inputBgColor = isDark ? '#1F2937' : '#F9FAFB';
+  const textColor = isDark ? 'rgba(255, 255, 255, 0.87)' : '#000000';
+  const secondaryTextColor = isDark ? 'rgba(255, 255, 255, 0.4)' : '#6B7280';
+  const borderColor = isDark ? '#FFFFFF0D' : '#E5E7EB';
+  const inputBgColor = isDark ? '#151515' : '#F9FAFB';
 
   return (
     <View className="flex-1" style={{ backgroundColor: bgColor }}>
       {/* Header Image - 40% Height */}
       <Image
-        source={require('../../../assets/images/indiaflag.jpg')}
+        source={require('../../../assets/images/indiaflag.jpeg')}
         style={{
           position: 'absolute',
           top: 0,
@@ -103,7 +103,7 @@ export default function SignInAsSupport({
           <View 
             className="rounded-xl px-4 py-3 flex-row items-center justify-center"
             style={{ 
-              backgroundColor: bgColor,
+              backgroundColor: inputBgColor,
               borderWidth: 1,
               borderColor: borderColor,
             }}
@@ -136,7 +136,7 @@ export default function SignInAsSupport({
           <View 
             className="rounded-xl px-4 py-3 flex-row items-center justify-center"
             style={{ 
-              backgroundColor: bgColor,
+              backgroundColor: inputBgColor,
               borderWidth: 1,
               borderColor: borderColor,
             }}
@@ -215,13 +215,13 @@ export default function SignInAsSupport({
               }
             }}
             disabled={!email.trim()}
-            className="rounded-xl py-3 mt-3 bg-black"
+            className="rounded-xl py-3 mt-3 bg-white/90"
             style={({ pressed }) => ({
               opacity: pressed ? 0.8 : 1,
             })}
           >
             <Text 
-              className="text-base font-semibold text-center text-white"
+              className="text-base font-semibold text-center text-black"
             >
               Next
             </Text>
@@ -245,7 +245,7 @@ export default function SignInAsSupport({
   className="text-xs text-center leading-5 mb-8 px-4"
   style={{ color: secondaryTextColor }}
 >
-  By joining <Text className="font-semibold text-blue-500">Bharath</Text>, you agree to our{' '}
+  By joining <Text className="font-semibold text-blue-500">BharathVa</Text>, you agree to our{' '}
   <Text className="text-blue-500 font-medium">Terms</Text> and{' '}
   <Text className="text-blue-500 font-medium">Privacy Policy</Text>.{' '}
   Your trust and voice are protected under{' '}

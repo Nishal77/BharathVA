@@ -12,7 +12,7 @@ public class EmailOtp {
     
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "id", columnDefinition = "UUID")
+    @Column(name = "id", columnDefinition = "uuid")
     private UUID id;
     
     @Column(name = "email", nullable = false, length = 150)

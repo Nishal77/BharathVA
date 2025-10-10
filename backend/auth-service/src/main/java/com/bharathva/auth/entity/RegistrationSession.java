@@ -2,6 +2,7 @@ package com.bharathva.auth.entity;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.GenericGenerator;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDate;
@@ -17,7 +18,7 @@ public class RegistrationSession {
     
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "id", columnDefinition = "UUID")
+    @Column(name = "id", columnDefinition = "uuid")
     private UUID id;
     
     @Column(name = "session_token", unique = true, nullable = false)

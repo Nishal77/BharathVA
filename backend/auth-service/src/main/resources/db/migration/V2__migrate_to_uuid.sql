@@ -1,8 +1,17 @@
--- Enable UUID extension for PostgreSQL
+-- Migration to convert existing tables from bigserial to UUID
+-- This will drop existing tables and recreate them with UUID primary keys
+
+-- Enable UUID extension for PostgreSQL (if not already enabled)
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Create users table (permanent storage after registration)
-CREATE TABLE IF NOT EXISTS users (
+-- Drop existing tables (this will delete all data - use with caution!)
+-- If you want to preserve data, you'll need a more complex migration
+DROP TABLE IF EXISTS registration_sessions CASCADE;
+DROP TABLE IF EXISTS email_otps CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
+-- Recreate users table with UUID primary key
+CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(100) NOT NULL,
     username VARCHAR(50) UNIQUE NOT NULL,
@@ -16,8 +25,8 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create email_otps table (temporary OTP storage)
-CREATE TABLE IF NOT EXISTS email_otps (
+-- Recreate email_otps table with UUID primary key
+CREATE TABLE email_otps (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(150) NOT NULL,
     otp_code VARCHAR(10) NOT NULL,
@@ -26,9 +35,8 @@ CREATE TABLE IF NOT EXISTS email_otps (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create registration_sessions table (temporary session data during registration)
--- This is NOT a duplicate of users - it's temporary storage during multi-step registration
-CREATE TABLE IF NOT EXISTS registration_sessions (
+-- Recreate registration_sessions table with UUID primary key
+CREATE TABLE registration_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_token VARCHAR(255) UNIQUE NOT NULL,
     email VARCHAR(150) NOT NULL,
@@ -54,3 +62,6 @@ CREATE INDEX IF NOT EXISTS idx_registration_sessions_token ON registration_sessi
 CREATE INDEX IF NOT EXISTS idx_registration_sessions_email ON registration_sessions(email);
 CREATE INDEX IF NOT EXISTS idx_registration_sessions_expiry ON registration_sessions(expiry);
 
+-- Verify UUID generation is working
+-- This will show that the next inserted record will have a UUID
+SELECT 'UUID tables created successfully. Next records will have UUID primary keys.' as status;

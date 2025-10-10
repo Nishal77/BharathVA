@@ -65,11 +65,10 @@ export default function Details({ email, onBack, onComplete }: DetailsProps) {
   ];
   
   const bgColor = isDark ? '#000000' : '#FFFFFF';
-  const textColor = isDark ? '#FFFFFF' : '#000000';
-  const secondaryTextColor = isDark ? '#9CA3AF' : '#6B7280';
-  const borderColor = isDark ? '#374151' : '#E5E7EB';
-  const inputBgColor = isDark ? '#1F2937' : '#F9FAFB';
-  const buttonBgColor = isDark ? '#1F2937' : '#F3F4F6';
+  const textColor = isDark ? 'rgba(255, 255, 255, 0.87)' : '#000000';
+  const secondaryTextColor = isDark ? 'rgba(255, 255, 255, 0.4)' : '#6B7280';
+  const borderColor = isDark ? '#FFFFFF0D' : '#E5E7EB';
+  const inputBgColor = isDark ? '#151515' : '#F9FAFB';
 
   const handleContinue = () => {
     if (name.trim() && phone.trim()) {
@@ -295,13 +294,13 @@ export default function Details({ email, onBack, onComplete }: DetailsProps) {
             <Pressable
               onPress={handleContinue}
               disabled={!isFormValid}
-              className="rounded-xl py-4 mb-6 bg-black"
+              className="rounded-xl py-4 mb-6 bg-white/85"
               style={({ pressed }) => ({
                 opacity: pressed ? 0.8 : 1,
               })}
             >
               <Text 
-                className="text-base font-semibold text-center text-white"
+                className="text-base font-semibold text-center text-black"
               >
                 Next
               </Text>

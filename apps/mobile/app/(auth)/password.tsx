@@ -71,7 +71,7 @@ export default function PasswordScreen() {
     <View className={`flex-1 ${isDark ? 'bg-black' : 'bg-white'}`}>
       {/* Bottom Image - 30% Height */}
       <Image
-        source={require('../../assets/images/11.jpg')}
+        source={require('../../assets/images/Amber Fort.jpeg')}
         style={{
           position: 'absolute',
           bottom: 0,
