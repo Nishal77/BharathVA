@@ -44,41 +44,7 @@ public class AuthenticationController {
                 ? xDeviceInfo 
                 : userAgent;
             
-            log.info("===========================================");
-            log.info("LOGIN REQUEST RECEIVED");
-            log.info("Email: {}", loginRequest.getEmail());
-            log.info("IP Address: {}", ipAddress);
-            log.info("Device Info: {}", deviceInfo);
-            log.info("User Agent: {}", userAgent);
-            log.info("===========================================");
-            
             LoginResponse loginResponse = authenticationService.login(loginRequest, ipAddress, deviceInfo);
-            
-            log.info("===========================================");
-            log.info("LOGIN RESPONSE BEING SENT");
-            log.info("===========================================");
-            log.info("User ID: {}", loginResponse.getUserId());
-            log.info("Email: {}", loginResponse.getEmail());
-            log.info("Username: {}", loginResponse.getUsername());
-            log.info("Full Name: {}", loginResponse.getFullName());
-            log.info("-------------------------------------------");
-            log.info("ACCESS TOKEN (JWT):");
-            log.info("{}", loginResponse.getAccessToken());
-            log.info("-------------------------------------------");
-            log.info("REFRESH TOKEN (Session Token):");
-            log.info("{}", loginResponse.getRefreshToken());
-            log.info("-------------------------------------------");
-            log.info("Access Token Expires In: {} ms ({} minutes)", 
-                loginResponse.getExpiresIn(), 
-                loginResponse.getExpiresIn() / 60000);
-            log.info("Refresh Token Expires In: {} ms ({} days)", 
-                loginResponse.getRefreshExpiresIn(), 
-                loginResponse.getRefreshExpiresIn() / 86400000);
-            log.info("-------------------------------------------");
-            log.info("Session Details:");
-            log.info("IP Address: {}", ipAddress);
-            log.info("Device Info: {}", deviceInfo);
-            log.info("===========================================");
             
             return ResponseEntity.ok(new ApiResponse<>(
                     true,
@@ -87,11 +53,6 @@ public class AuthenticationController {
                     LocalDateTime.now()
             ));
         } catch (RuntimeException e) {
-            log.error("===========================================");
-            log.error("LOGIN FAILED");
-            log.error("Email: {}", loginRequest.getEmail());
-            log.error("Reason: {}", e.getMessage());
-            log.error("===========================================");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(
                     false,
                     e.getMessage(),
@@ -99,11 +60,7 @@ public class AuthenticationController {
                     LocalDateTime.now()
             ));
         } catch (Exception e) {
-            log.error("===========================================");
-            log.error("LOGIN ERROR");
-            log.error("Email: {}", loginRequest.getEmail());
-            log.error("Error: {}", e.getMessage(), e);
-            log.error("===========================================");
+            log.error("Login failed: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
                     false,
                     "An unexpected error occurred during login",
@@ -116,10 +73,7 @@ public class AuthenticationController {
     @PostMapping("/validate")
     public ResponseEntity<ApiResponse<Map<String, Object>>> validateToken(@RequestHeader("Authorization") String authHeader) {
         try {
-            log.info("Token validation request received");
-            
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                log.warn("Invalid or missing authorization header");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(
                         false,
                         "Invalid or missing authorization header",
@@ -129,22 +83,11 @@ public class AuthenticationController {
             }
 
             String token = authHeader.substring(7);
-            log.info("Token to validate: {}...{}", 
-                     token.substring(0, Math.min(20, token.length())),
-                     token.length() > 20 ? token.substring(token.length() - 10) : "");
-            
             boolean isValid = authenticationService.validateToken(token);
             
             Map<String, Object> responseData = new HashMap<>();
             responseData.put("valid", isValid);
-            
-            if (isValid) {
-                responseData.put("message", "Token is valid");
-                log.info("Token validation: VALID");
-            } else {
-                responseData.put("message", "Token is invalid or expired");
-                log.warn("Token validation: INVALID");
-            }
+            responseData.put("message", isValid ? "Token is valid" : "Token is invalid or expired");
             
             return ResponseEntity.ok(new ApiResponse<>(
                     true,
@@ -153,7 +96,7 @@ public class AuthenticationController {
                     LocalDateTime.now()
             ));
         } catch (Exception e) {
-            log.error("Error during token validation: {}", e.getMessage(), e);
+            log.error("Token validation failed: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
                     false,
                     "An unexpected error occurred during token validation",
@@ -169,7 +112,6 @@ public class AuthenticationController {
             String refreshToken = request.get("refreshToken");
             
             if (refreshToken == null || refreshToken.isEmpty()) {
-                log.warn("Refresh token request missing token");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(
                         false,
                         "Refresh token is required",
@@ -178,10 +120,7 @@ public class AuthenticationController {
                 ));
             }
 
-            log.info("Processing token refresh");
             LoginResponse loginResponse = authenticationService.refreshToken(refreshToken);
-            
-            log.info("Token refreshed successfully for user: {}", loginResponse.getEmail());
             
             return ResponseEntity.ok(new ApiResponse<>(
                     true,
@@ -190,7 +129,6 @@ public class AuthenticationController {
                     LocalDateTime.now()
             ));
         } catch (RuntimeException e) {
-            log.error("Token refresh failed: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(
                     false,
                     e.getMessage(),
@@ -198,7 +136,7 @@ public class AuthenticationController {
                     LocalDateTime.now()
             ));
         } catch (Exception e) {
-            log.error("Unexpected error during token refresh: {}", e.getMessage(), e);
+            log.error("Token refresh failed: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
                     false,
                     "An unexpected error occurred during token refresh",
@@ -234,7 +172,7 @@ public class AuthenticationController {
                     LocalDateTime.now()
             ));
         } catch (Exception e) {
-            log.error("Error during logout: {}", e.getMessage(), e);
+            log.error("Logout failed: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
                     false,
                     "An unexpected error occurred during logout",
@@ -258,8 +196,6 @@ public class AuthenticationController {
 
             String token = authHeader.substring(7);
             UUID userId = authenticationService.getUserIdFromToken(token);
-            
-            // Get full user data from database
             Map<String, Object> profileData = authenticationService.getUserProfileData(userId);
             
             return ResponseEntity.ok(new ApiResponse<>(
@@ -276,6 +212,7 @@ public class AuthenticationController {
                     LocalDateTime.now()
             ));
         } catch (Exception e) {
+            log.error("Profile retrieval failed: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
                     false,
                     "An unexpected error occurred while retrieving profile",
@@ -287,12 +224,8 @@ public class AuthenticationController {
 
     private String extractIpAddress(String xForwardedFor, jakarta.servlet.http.HttpServletRequest request) {
         if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            // X-Forwarded-For can contain multiple IPs, get the first one (original client)
             return xForwardedFor.split(",")[0].trim();
         }
-        // Fallback to remote address
-        String remoteAddr = request.getRemoteAddr();
-        log.debug("Extracted IP address: {}", remoteAddr);
-        return remoteAddr;
+        return request.getRemoteAddr();
     }
 }

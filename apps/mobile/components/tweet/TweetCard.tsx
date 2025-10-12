@@ -1,11 +1,10 @@
 import React from 'react';
-import { Dimensions, Pressable, View } from 'react-native';
-import { useTabStyles } from '../../hooks/useTabStyles';
-import TweetActions from './TweetActions';
-import TweetContent from './TweetContent';
-import TweetHeader from './TweetHeader';
-import TweetMedia from './TweetMedia';
-import TweetThread from './TweetThread';
+import { View, useColorScheme } from 'react-native';
+import TweetActionSection from './TweetActionSection';
+import TweetContentSection from './TweetContentSection';
+import TweetMediaSection from './TweetMediaSection';
+import TweetProfileSection from './TweetProfileSection';
+import TweetStatsSection from './TweetStatsSection';
 
 interface TweetCardProps {
   id: string;
@@ -59,79 +58,45 @@ export default function TweetCard({
   onShare,
   onTweetPress
 }: TweetCardProps) {
-  const tabStyles = useTabStyles();
-  const { width } = Dimensions.get('window');
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
   
-  // Calculate device-based margins
-  const deviceMargin = width < 375 ? 12 : width < 414 ? 16 : 20; // Smaller margins for smaller devices
+  const borderColor = isDark ? '#374151' : '#E5E7EB';
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => ({
-        backgroundColor: tabStyles.card.backgroundColor,
-        paddingHorizontal: 28, // Increased external padding for better content spacing
-        paddingVertical: 20, // Increased vertical padding
-        marginHorizontal: deviceMargin, // Device-based external margin from screen edges
-        marginBottom: 24, // Increased margin between cards for better visual separation
-        borderRadius: 12, // Add subtle border radius
-        opacity: pressed ? 0.98 : 1,
-      })}
-    >
-      {/* Tweet Header */}
-      <TweetHeader
-        name={name}
-        handle={handle}
-        time={time}
-        avatar={avatar}
-        verified={verified}
-      />
+    <View className="border-b relative" style={{ borderBottomColor: borderColor }}>
+      {/* Two Column Layout */}
+      <View className="flex-row px-4 py-3">
+        {/* Left Column - Profile Picture and Vertical Line */}
+        <TweetProfileSection avatar={avatar} />
 
-      {/* Tweet Content */}
-      <TweetContent
-        text={content}
-        emojis={emojis}
-      />
+        {/* Right Column - All Content */}
+        <View className="flex-1">
+          <TweetContentSection
+            name={name}
+            handle={handle}
+            time={time}
+            verified={verified}
+            content={content}
+            emojis={emojis}
+          />
 
-      {/* Tweet Media */}
-      {media && (
-        <TweetMedia
-          type={media.type}
-          items={media.items}
-        />
-      )}
+          {/* Media Section - Always shows random image */}
+          <TweetMediaSection media={media} />
 
-      {/* Tweet Thread */}
-      {thread && thread.length > 0 && (
-        <TweetThread
-          tweets={thread}
-          onTweetPress={onTweetPress}
-        />
-      )}
+          <TweetActionSection
+            onLike={onLike}
+            onReply={onReply}
+            onShare={onShare}
+            onBookmark={onBookmark}
+          />
 
-      {/* Tweet Actions */}
-      <View style={{ marginTop: 4, marginBottom: 8 }}>
-        <TweetActions
-          replies={replies}
-          retweets={retweets}
-          likes={likes}
-          bookmarks={bookmarks}
-          views={views}
-          onReply={onReply}
-          onRetweet={onRetweet}
-          onLike={onLike}
-          onBookmark={onBookmark}
-          onShare={onShare}
-        />
+          <TweetStatsSection
+            replies={replies}
+            likes={likes}
+          />
+        </View>
       </View>
-
-      {/* Border below actions with proper spacing */}
-      <View style={{
-        borderBottomWidth: 1,
-        borderBottomColor: tabStyles.border.card,
-        marginTop: 4, // Reduced spacing since actions now have their own margins
-        marginBottom: 8, // Spacing below border for cleaner separation
-      }} />
-    </Pressable>
+    </View>
   );
 }

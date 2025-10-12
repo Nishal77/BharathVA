@@ -41,9 +41,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         
         final String requestURI = request.getRequestURI();
         
-        // Skip JWT validation for public endpoints
         if (isPublicEndpoint(requestURI)) {
-            logger.debug("Public endpoint accessed: {}", requestURI);
             filterChain.doFilter(request, response);
             return;
         }
@@ -51,7 +49,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final String authHeader = request.getHeader("Authorization");
         
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            logger.debug("No valid Authorization header found for: {}", requestURI);
             filterChain.doFilter(request, response);
             return;
         }
@@ -59,35 +56,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             final String jwt = authHeader.substring(7);
             
-            // Validate token with database session check
             if (authenticationService.validateToken(jwt)) {
-                // Extract user information from JWT
                 UUID userId = jwtService.extractUserId(jwt);
-                String email = jwtService.extractEmail(jwt);
-                String username = jwtService.extractUsername(jwt);
                 
-                logger.info("🔓 Authenticated user: {} ({}) - ID: {}", username, email, userId);
-                
-                // Create authentication token with user details
-                // ✅ Using userId as principal so JwtUtils.getCurrentUserId() works
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        userId.toString(), // principal - user ID as string
-                        null, // credentials (not needed for JWT)
+                        userId.toString(),
+                        null,
                         Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"))
                 );
                 
-                // Add additional details
                 authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                
-                // Set authentication in security context
                 SecurityContextHolder.getContext().setAuthentication(authToken);
-                
-                logger.debug("Security context set for user ID: {}", userId);
-            } else {
-                logger.warn("❌ Invalid JWT token for request: {} (JWT invalid OR no active session in database)", requestURI);
             }
         } catch (Exception e) {
-            logger.error("❌ JWT authentication error: {}", e.getMessage());
+            logger.error("JWT authentication failed: {}", e.getMessage());
         }
         
         filterChain.doFilter(request, response);

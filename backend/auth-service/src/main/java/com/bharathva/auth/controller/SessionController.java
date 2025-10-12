@@ -41,8 +41,6 @@ public class SessionController {
             String token = authHeader.substring(7);
             List<UserSessionResponse> sessions = sessionManagementService.getActiveSessions(token);
             
-            log.info("Retrieved {} active sessions", sessions.size());
-            
             return ResponseEntity.ok(new ApiResponse<>(
                     true,
                     "Active sessions retrieved successfully",
@@ -50,7 +48,6 @@ public class SessionController {
                     LocalDateTime.now()
             ));
         } catch (RuntimeException e) {
-            log.error("Error fetching active sessions: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(
                     false,
                     e.getMessage(),
@@ -58,10 +55,10 @@ public class SessionController {
                     LocalDateTime.now()
             ));
         } catch (Exception e) {
-            log.error("Unexpected error fetching active sessions: {}", e.getMessage(), e);
+            log.error("Failed to fetch active sessions: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
                     false,
-                    "An unexpected error occurred while fetching sessions",
+                    "An unexpected error occurred",
                     null,
                     LocalDateTime.now()
             ));
@@ -95,8 +92,6 @@ public class SessionController {
             String token = authHeader.substring(7);
             sessionManagementService.logoutSession(UUID.fromString(sessionId), token);
             
-            log.info("Session {} logged out successfully", sessionId);
-            
             return ResponseEntity.ok(new ApiResponse<>(
                     true,
                     "Session logged out successfully",
@@ -104,7 +99,6 @@ public class SessionController {
                     LocalDateTime.now()
             ));
         } catch (RuntimeException e) {
-            log.error("Error logging out session: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ApiResponse<>(
                     false,
                     e.getMessage(),
@@ -112,10 +106,10 @@ public class SessionController {
                     LocalDateTime.now()
             ));
         } catch (Exception e) {
-            log.error("Unexpected error logging out session: {}", e.getMessage(), e);
+            log.error("Failed to logout session: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
                     false,
-                    "An unexpected error occurred while logging out session",
+                    "An unexpected error occurred",
                     null,
                     LocalDateTime.now()
             ));
@@ -138,8 +132,6 @@ public class SessionController {
             String token = authHeader.substring(7);
             int loggedOutCount = sessionManagementService.logoutAllOtherSessions(token);
             
-            log.info("Logged out {} other sessions", loggedOutCount);
-            
             return ResponseEntity.ok(new ApiResponse<>(
                     true,
                     "All other sessions logged out successfully",
@@ -147,7 +139,6 @@ public class SessionController {
                     LocalDateTime.now()
             ));
         } catch (RuntimeException e) {
-            log.error("Error logging out other sessions: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(
                     false,
                     e.getMessage(),
@@ -155,14 +146,13 @@ public class SessionController {
                     LocalDateTime.now()
             ));
         } catch (Exception e) {
-            log.error("Unexpected error logging out other sessions: {}", e.getMessage(), e);
+            log.error("Failed to logout other sessions: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
                     false,
-                    "An unexpected error occurred while logging out sessions",
+                    "An unexpected error occurred",
                     null,
                     LocalDateTime.now()
             ));
         }
     }
 }
-

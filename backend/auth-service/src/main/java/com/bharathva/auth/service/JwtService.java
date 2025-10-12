@@ -43,13 +43,10 @@ public class JwtService {
     }
 
     public String generateAccessToken(Map<String, Object> extraClaims, UUID userId, String email, String username) {
-        log.info("Generating JWT access token for user: {}", email);
-        log.debug("User ID: {}, Username: {}", userId, username);
-        
         Date issuedAt = new Date(System.currentTimeMillis());
         Date expiresAt = new Date(System.currentTimeMillis() + jwtExpiration);
         
-        String token = Jwts.builder()
+        return Jwts.builder()
                 .setClaims(extraClaims)
                 .setSubject(userId.toString())
                 .claim("email", email)
@@ -60,23 +57,12 @@ public class JwtService {
                 .setExpiration(expiresAt)
                 .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                 .compact();
-        
-        log.info("JWT Access Token Generated Successfully");
-        log.info("Token Preview: {}...{}", token.substring(0, Math.min(20, token.length())), 
-                 token.length() > 20 ? token.substring(token.length() - 10) : "");
-        log.info("Issued At: {}", issuedAt);
-        log.info("Expires At: {}", expiresAt);
-        log.info("Token Valid For: {} milliseconds ({} hours)", jwtExpiration, jwtExpiration / 3600000);
-        
-        return token;
     }
 
     public String generateRefreshToken() {
         byte[] randomBytes = new byte[REFRESH_TOKEN_LENGTH];
         secureRandom.nextBytes(randomBytes);
-        String refreshToken = Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
-        log.info("Refresh token generated successfully");
-        return refreshToken;
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
     }
 
     public long getRefreshExpirationMillis() {
@@ -106,13 +92,11 @@ public class JwtService {
     public UUID extractUserId(String token) {
         String userIdStr = extractClaim(token, claims -> claims.get("userId", String.class));
         if (userIdStr == null || userIdStr.trim().isEmpty()) {
-            log.error("❌ JWT token does not contain 'userId' claim");
             throw new IllegalArgumentException("Invalid user ID in token - userId claim missing");
         }
         try {
             return UUID.fromString(userIdStr);
         } catch (IllegalArgumentException e) {
-            log.error("❌ JWT token contains invalid userId format: {}", userIdStr);
             throw new IllegalArgumentException("Invalid user ID in token - invalid UUID format");
         }
     }
@@ -124,20 +108,13 @@ public class JwtService {
 
     private Claims extractAllClaims(String token) {
         try {
-            Claims claims = Jwts.parser()
+            return Jwts.parser()
                     .setSigningKey(getSigningKey())
                     .build()
                     .parseClaimsJws(token)
                     .getBody();
-            
-            log.debug("🔍 JWT Claims extracted: {}", claims);
-            log.debug("🔍 JWT Claims keys: {}", claims.keySet());
-            log.debug("🔍 JWT userId claim: {}", claims.get("userId"));
-            log.debug("🔍 JWT sub claim: {}", claims.getSubject());
-            
-            return claims;
         } catch (Exception e) {
-            log.error("❌ Failed to extract claims from JWT: {}", e.getMessage());
+            log.error("Failed to extract claims from JWT: {}", e.getMessage());
             throw e;
         }
     }
@@ -152,17 +129,8 @@ public class JwtService {
 
     public Boolean validateToken(String token, UUID userId) {
         try {
-            log.info("Validating JWT token for user ID: {}", userId);
             final UUID extractedUserId = extractUserId(token);
-            boolean isValid = (extractedUserId.equals(userId) && !isTokenExpired(token));
-            
-            if (isValid) {
-                log.info("Token is VALID for user: {}", extractedUserId);
-            } else {
-                log.warn("Token is INVALID - User ID mismatch or expired");
-            }
-            
-            return isValid;
+            return extractedUserId.equals(userId) && !isTokenExpired(token);
         } catch (Exception e) {
             log.error("Token validation failed: {}", e.getMessage());
             return false;
@@ -171,25 +139,7 @@ public class JwtService {
 
     public Boolean validateToken(String token) {
         try {
-            log.info("Validating JWT token (no user check)");
-            boolean isValid = !isTokenExpired(token);
-            
-            if (isValid) {
-                UUID userId = extractUserId(token);
-                String email = extractEmail(token);
-                String username = extractUsername(token);
-                Date expiration = extractExpiration(token);
-                
-                log.info("Token is VALID");
-                log.info("User ID: {}", userId);
-                log.info("Email: {}", email);
-                log.info("Username: {}", username);
-                log.info("Expires At: {}", expiration);
-            } else {
-                log.warn("Token is EXPIRED");
-            }
-            
-            return isValid;
+            return !isTokenExpired(token);
         } catch (Exception e) {
             log.error("Token validation failed: {}", e.getMessage());
             return false;
@@ -198,12 +148,9 @@ public class JwtService {
 
     public String refreshAccessToken(UUID userId, String email, String username) {
         try {
-            log.info("Generating new access token from refresh for user: {}", email);
-            String newToken = generateAccessToken(userId, email, username);
-            log.info("Access token refreshed successfully");
-            return newToken;
+            return generateAccessToken(userId, email, username);
         } catch (Exception e) {
-            log.error("Unable to refresh access token: {}", e.getMessage());
+            log.error("Failed to refresh access token: {}", e.getMessage());
             throw new RuntimeException("Unable to refresh access token", e);
         }
     }

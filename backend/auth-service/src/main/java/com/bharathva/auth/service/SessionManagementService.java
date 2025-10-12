@@ -28,11 +28,7 @@ public class SessionManagementService {
     public List<UserSessionResponse> getActiveSessions(String accessToken) {
         try {
             UUID userId = jwtService.extractUserId(accessToken);
-            log.info("Fetching active sessions for user: {}", userId);
-            
             List<UserSession> sessions = userSessionRepository.findActiveSessionsByUserId(userId, LocalDateTime.now());
-            
-            log.info("Found {} active sessions for user {}", sessions.size(), userId);
             
             return sessions.stream()
                     .map(session -> {
@@ -49,7 +45,7 @@ public class SessionManagementService {
                     })
                     .collect(Collectors.toList());
         } catch (Exception e) {
-            log.error("Error fetching active sessions: {}", e.getMessage());
+            log.error("Failed to get active sessions: {}", e.getMessage());
             throw new RuntimeException("Failed to fetch active sessions");
         }
     }
@@ -58,7 +54,6 @@ public class SessionManagementService {
     public void logoutSession(UUID sessionId, String accessToken) {
         try {
             UUID userId = jwtService.extractUserId(accessToken);
-            log.info("Logging out session {} for user {}", sessionId, userId);
             
             UserSession session = userSessionRepository.findById(sessionId)
                     .orElseThrow(() -> new RuntimeException("Session not found"));
@@ -68,9 +63,8 @@ public class SessionManagementService {
             }
             
             userSessionRepository.delete(session);
-            log.info("Session {} deleted successfully", sessionId);
         } catch (Exception e) {
-            log.error("Error logging out session: {}", e.getMessage());
+            log.error("Failed to logout session: {}", e.getMessage());
             throw new RuntimeException("Failed to logout session: " + e.getMessage());
         }
     }
@@ -79,12 +73,9 @@ public class SessionManagementService {
     public int logoutAllOtherSessions(String accessToken) {
         try {
             UUID userId = jwtService.extractUserId(accessToken);
-            log.info("Logging out all other sessions for user {}", userId);
-            
             List<UserSession> allSessions = userSessionRepository.findActiveSessionsByUserId(userId, LocalDateTime.now());
             
             if (allSessions.size() <= 1) {
-                log.info("No other sessions to logout");
                 return 0;
             }
             
@@ -94,10 +85,9 @@ public class SessionManagementService {
                     .skip(1)
                     .forEach(userSessionRepository::delete);
             
-            log.info("Logged out {} other sessions", loggedOutCount);
             return loggedOutCount;
         } catch (Exception e) {
-            log.error("Error logging out other sessions: {}", e.getMessage());
+            log.error("Failed to logout other sessions: {}", e.getMessage());
             throw new RuntimeException("Failed to logout other sessions: " + e.getMessage());
         }
     }

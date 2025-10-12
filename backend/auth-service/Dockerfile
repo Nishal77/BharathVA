@@ -1,5 +1,5 @@
 # Auth Service Dockerfile
-# Multi-stage build for optimized image size
+# Multi-stage build for optimizd image size
 
 # Stage 1: Build stage
 FROM maven:3.9.6-eclipse-temurin-17 AS build

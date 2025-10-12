@@ -34,106 +34,96 @@ export default function HomeScreen() {
 
   const tabs = ['For you', 'Following', 'Local', 'Communities', 'Shorts/Video', 'Space(Live)'];
 
-  // Sample tweet data based on the reference image - Professional layout
+  // Sample tweet data with Indian names and content - No images
   const [sampleTweets, setSampleTweets] = useState([
     {
       id: '1',
-      name: 'Neerja Thakkar',
-      handle: 'neerjathakkar',
-      time: '1d',
-      avatar: 'https://picsum.photos/seed/profile/300/300?random=1',
-      verified: false,
-      content: "I've joined @GoogleDeepMind as a Student Researcher working on video models of animal motion in London",
-      emojis: ['🐆', '🇬🇧'],
-      media: {
-        type: 'single' as const,
-        items: [
-          {
-            id: '1',
-            type: 'image' as const,
-            image: 'https://picsum.photos/seed/google-office/800/600?random=1'
-          }
-        ]
-      },
-      replies: 24,
-      retweets: 12,
-      likes: 156,
-      bookmarks: 8,
+      name: 'Priya Sharma',
+      handle: 'priya_tech',
+      time: '2h',
+      avatar: 'https://picsum.photos/seed/priya/300/300?random=1',
+      verified: true,
+      content: "Building the next generation of fintech solutions from Bangalore! India's startup ecosystem is truly inspiring. #StartupIndia #TechForGood",
+      emojis: ['🚀', '🇮🇳'],
+      replies: 45,
+      retweets: 28,
+      likes: 234,
+      bookmarks: 12,
       views: 128
     },
     {
       id: '2',
-      name: 'Alex Chen',
-      handle: 'alexchen_dev',
-      time: '3h',
-      avatar: 'https://picsum.photos/seed/alex/300/300?random=2',
-      verified: true,
-      content: "Just shipped a new feature for our React Native app! The performance improvements are incredible 🚀 Can't wait to see the user feedback.",
-      emojis: ['🚀', '💻'],
-      media: {
-        type: 'single' as const,
-        items: [
-          {
-            id: '2',
-            type: 'image' as const,
-            image: 'https://picsum.photos/seed/tech/800/600?random=2'
-          }
-        ]
-      },
-      replies: 42,
-      retweets: 28,
-      likes: 234,
-      bookmarks: 15,
+      name: 'Arjun Patel',
+      handle: 'arjun_dev',
+      time: '4h',
+      avatar: 'https://picsum.photos/seed/arjun/300/300?random=2',
+      verified: false,
+      content: "Just witnessed the most beautiful sunrise over the Ganges in Varanasi. The spiritual energy here is unmatched. 🙏 #IncredibleIndia",
+      emojis: ['🌅', '🙏'],
+      replies: 32,
+      retweets: 15,
+      likes: 189,
+      bookmarks: 8,
       views: 128
     },
     {
       id: '3',
-      name: 'Sarah Johnson',
-      handle: 'sarah_j',
+      name: 'Kavya Reddy',
+      handle: 'kavya_music',
       time: '6h',
-      avatar: 'https://picsum.photos/seed/sarah/300/300?random=3',
+      avatar: 'https://picsum.photos/seed/kavya/300/300?random=3',
       verified: false,
-      content: "Beautiful sunset from my balcony today 🌅 Sometimes you just need to pause and appreciate the little moments in life.",
-      emojis: ['🌅', '✨'],
-      media: {
-        type: 'single' as const,
-        items: [
-          {
-            id: '3',
-            type: 'image' as const,
-            image: 'https://picsum.photos/seed/sunset/800/600?random=3'
-          }
-        ]
-      },
-      replies: 18,
-      retweets: 35,
-      likes: 189,
-      bookmarks: 7,
+      content: "Performing at the Mysore Palace this evening! Classical music has such deep roots in our culture. Feeling blessed to be part of this tradition.",
+      emojis: ['🎵', '🏛️'],
+      replies: 28,
+      retweets: 42,
+      likes: 167,
+      bookmarks: 15,
       views: 128
     },
     {
       id: '4',
-      name: 'Marcus Rodriguez',
-      handle: 'marcus_r',
-      time: '12h',
-      avatar: 'https://picsum.photos/seed/marcus/300/300?random=4',
+      name: 'Rohit Kumar',
+      handle: 'rohit_cricket',
+      time: '8h',
+      avatar: 'https://picsum.photos/seed/rohit/300/300?random=4',
+      verified: true,
+      content: "Another day of training at the National Cricket Academy! The passion for cricket in India is unmatched. Dreaming of representing the country one day! 🏏",
+      emojis: ['🏏', '💪'],
+      replies: 67,
+      retweets: 89,
+      likes: 456,
+      bookmarks: 23,
+      views: 128
+    },
+    {
+      id: '5',
+      name: 'Sneha Gupta',
+      handle: 'sneha_art',
+      time: '10h',
+      avatar: 'https://picsum.photos/seed/sneha/300/300?random=5',
       verified: false,
-      content: "Coffee and code - the perfect combination ☕️ Working on some exciting AI projects this weekend. The future is here!",
-      emojis: ['☕️', '🤖'],
-      media: {
-        type: 'single' as const,
-        items: [
-          {
-            id: '4',
-            type: 'image' as const,
-            image: 'https://picsum.photos/seed/coffee/800/600?random=4'
-          }
-        ]
-      },
-      replies: 31,
-      retweets: 19,
-      likes: 167,
-      bookmarks: 12,
+      content: "Working on a new series inspired by the vibrant colors of Rajasthan. Indian art and culture are a constant source of inspiration for my work.",
+      emojis: ['🎨', '🌈'],
+      replies: 19,
+      retweets: 31,
+      likes: 145,
+      bookmarks: 9,
+      views: 128
+    },
+    {
+      id: '6',
+      name: 'Vikram Singh',
+      handle: 'vikram_space',
+      time: '12h',
+      avatar: 'https://picsum.photos/seed/vikram/300/300?random=6',
+      verified: true,
+      content: "ISRO's achievements make every Indian proud! From Mars Mission to Chandrayaan, we're reaching for the stars. The future of space exploration is bright! 🚀",
+      emojis: ['🚀', '🌕'],
+      replies: 89,
+      retweets: 156,
+      likes: 789,
+      bookmarks: 45,
       views: 128
     }
   ]);
@@ -193,25 +183,25 @@ export default function HomeScreen() {
 
     // Simulate API call - add new tweet to the top
     setTimeout(() => {
+      const indianNames = [
+        { name: 'Amit Kumar', handle: 'amit_tech', content: "Just finished building an AI chatbot for Indian languages! Making technology more accessible for everyone. #DigitalIndia #AI" },
+        { name: 'Deepika Singh', handle: 'deepika_food', content: "Made the most delicious biryani today! Nothing beats the aroma of authentic Indian spices. Sharing the recipe with my followers soon! 🍛" },
+        { name: 'Rajesh Verma', handle: 'rajesh_business', content: "Attending the Startup India event in Delhi today. The energy and innovation in our ecosystem is incredible! Proud to be part of this journey." },
+        { name: 'Anjali Mehta', handle: 'anjali_yoga', content: "Morning yoga session overlooking the Himalayas. The peace and serenity here is unmatched. This is what inner peace feels like! 🧘‍♀️" },
+        { name: 'Suresh Reddy', handle: 'suresh_education', content: "Teaching coding to underprivileged children in Hyderabad. Every child deserves access to quality education and technology. #EducationForAll" }
+      ];
+      
+      const randomUser = indianNames[Math.floor(Math.random() * indianNames.length)];
+      
       const newTweet = {
         id: Date.now().toString(),
-        name: 'New User',
-        handle: 'newuser_' + Math.floor(Math.random() * 1000),
+        name: randomUser.name,
+        handle: randomUser.handle,
         time: 'now',
-        avatar: `https://picsum.photos/seed/new${Math.floor(Math.random() * 100)}/300/300`,
+        avatar: `https://picsum.photos/seed/${randomUser.handle}/300/300`,
         verified: Math.random() > 0.7,
-        content: "Fresh content just loaded! 🚀 This is a new tweet from the pull-to-refresh feature.",
-        emojis: ['🚀', '✨'],
-        media: {
-          type: 'single' as const,
-          items: [
-            {
-              id: Date.now().toString(),
-              type: 'image' as const,
-              image: `https://picsum.photos/seed/fresh${Math.floor(Math.random() * 100)}/800/600`
-            }
-          ]
-        },
+        content: randomUser.content,
+        emojis: ['🇮🇳', '✨'],
         replies: Math.floor(Math.random() * 50),
         retweets: Math.floor(Math.random() * 30),
         likes: Math.floor(Math.random() * 200),
@@ -260,7 +250,6 @@ export default function HomeScreen() {
               verified={tweet.verified}
               content={tweet.content}
               emojis={tweet.emojis}
-              media={tweet.media}
               replies={tweet.replies}
               retweets={tweet.retweets}
               likes={tweet.likes}

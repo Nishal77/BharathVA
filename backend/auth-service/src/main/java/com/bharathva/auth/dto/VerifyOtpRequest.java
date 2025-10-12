@@ -12,7 +12,6 @@ public class VerifyOtpRequest {
     @Size(min = 6, max = 6, message = "OTP must be 6 digits")
     private String otp;
 
-    // Constructors
     public VerifyOtpRequest() {}
 
     public VerifyOtpRequest(String sessionToken, String otp) {
@@ -20,11 +19,19 @@ public class VerifyOtpRequest {
         this.otp = otp;
     }
 
-    // Getters and Setters
-    public String getSessionToken() { return sessionToken; }
-    public void setSessionToken(String sessionToken) { this.sessionToken = sessionToken; }
+    public String getSessionToken() {
+        return sessionToken;
+    }
 
-    public String getOtp() { return otp; }
-    public void setOtp(String otp) { this.otp = otp; }
+    public void setSessionToken(String sessionToken) {
+        this.sessionToken = sessionToken;
+    }
+
+    public String getOtp() {
+        return otp;
+    }
+
+    public void setOtp(String otp) {
+        this.otp = otp;
+    }
 }
-

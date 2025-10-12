@@ -14,7 +14,6 @@ public class CreateUsernameRequest {
     @Pattern(regexp = "^[a-z0-9_]+$", message = "Username can only contain lowercase letters, numbers, and underscores")
     private String username;
 
-    // Constructors
     public CreateUsernameRequest() {}
 
     public CreateUsernameRequest(String sessionToken, String username) {
@@ -22,11 +21,19 @@ public class CreateUsernameRequest {
         this.username = username;
     }
 
-    // Getters and Setters
-    public String getSessionToken() { return sessionToken; }
-    public void setSessionToken(String sessionToken) { this.sessionToken = sessionToken; }
+    public String getSessionToken() {
+        return sessionToken;
+    }
 
-    public String getUsername() { return username; }
-    public void setUsername(String username) { this.username = username; }
+    public void setSessionToken(String sessionToken) {
+        this.sessionToken = sessionToken;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
 }
-

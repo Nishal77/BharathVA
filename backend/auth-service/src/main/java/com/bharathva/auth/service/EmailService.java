@@ -1,5 +1,7 @@
 package com.bharathva.auth.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -9,6 +11,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class EmailService {
 
+    private static final Logger log = LoggerFactory.getLogger(EmailService.class);
     private final JavaMailSender mailSender;
 
     @Value("${spring.mail.username}")
@@ -24,30 +27,29 @@ public class EmailService {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromEmail);
             message.setTo(toEmail);
-            message.setSubject("BharathVA - Your Email Verification Code");
+            message.setSubject("Verify your email for BharathVA");
             
-            String body = "Namaste!\n\n" +
-                    "Thank you for joining BharathVA - Your Voice, Our Nation!\n\n" +
-                    "Your 6-digit verification code is:\n\n" +
+            String body = "Namaste,\n\n" +
+                    "Welcome to BharathVA - The Voice of India.\n\n" +
+                    "You are joining India's own platform, built for the people of Bharat, by the people of Bharat. A space where your voice matters, your thoughts resonate, and your identity is celebrated.\n\n" +
+                    "Your verification code is:\n\n" +
                     otp + "\n\n" +
-                    "This code will expire in 10 minutes.\n\n" +
-                    "Important:\n" +
-                    "- Never share this code with anyone\n" +
-                    "- If you didn't request this code, please ignore this email\n\n" +
-                    "Welcome to the BharathVA community!\n\n" +
-                    "Jai Hind!\n\n" +
-                    "—\n" +
-                    "Team BharathVA\n" +
-                    "© 2024 BharathVA. All rights reserved.";
+                    "This code expires in 10 minutes for your security.\n\n" +
+                    "If you did not request this code, you can safely ignore this email. Your account remains secure.\n\n" +
+                    "We are proud to have you here.\n\n" +
+                    "Jai Hind,\n" +
+                    "The BharathVA Team\n\n" +
+                    "---\n" +
+                    "BharathVA - The Voice of India\n" +
+                    "Built in India, for India";
             
             message.setText(body);
             mailSender.send(message);
             
-            System.out.println("✅ OTP email sent successfully to: " + toEmail);
-            System.out.println("🔑 DEBUG: OTP Code: " + otp);
+            log.info("OTP email sent to: {}", toEmail);
+            log.debug("OTP code: {}", otp);
         } catch (Exception e) {
-            System.err.println("❌ Failed to send OTP email to: " + toEmail + " - " + e.getMessage());
-            e.printStackTrace();
+            log.error("Failed to send OTP email to {}: {}", toEmail, e.getMessage());
         }
     }
 
@@ -57,29 +59,31 @@ public class EmailService {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromEmail);
             message.setTo(toEmail);
-            message.setSubject("Welcome to BharathVA, @" + username + "!");
+            message.setSubject("Welcome to BharathVA, @" + username);
             
-            String body = "Namaste!\n\n" +
-                    "Welcome to BharathVA - Your Voice, Our Nation!\n\n" +
-                    "Hi @" + username + ",\n\n" +
-                    "We're thrilled to have you join our community of passionate voices!\n\n" +
-                    "BharathVA is your platform to:\n" +
-                    "• Share your voice and perspectives\n" +
-                    "• Connect with like-minded individuals\n" +
-                    "• Celebrate our incredible nation\n" +
-                    "• Stay updated with what matters\n\n" +
-                    "Your registration is complete, and you're all set to explore!\n\n" +
-                    "Jai Hind!\n\n" +
-                    "—\n" +
-                    "Team BharathVA\n" +
-                    "© 2024 BharathVA. All rights reserved.";
+            String body = "Namaste, @" + username + "\n\n" +
+                    "Your journey on BharathVA - The Voice of India begins now.\n\n" +
+                    "You are now part of something truly special. This is not just another social platform. This is India's platform. A place where millions of voices come together to share ideas, spark conversations, and shape the future of our nation.\n\n" +
+                    "Here, your thoughts have power. Your voice has reach. Your identity has pride.\n\n" +
+                    "What you can do on BharathVA:\n\n" +
+                    "- Share your perspectives with authenticity and confidence\n" +
+                    "- Connect with passionate individuals who care about what matters\n" +
+                    "- Engage in meaningful conversations that reflect our diverse culture\n" +
+                    "- Stay informed with real voices, real stories, and real impact\n\n" +
+                    "This is your platform. Built in India. For India.\n\n" +
+                    "Welcome home.\n\n" +
+                    "Jai Hind,\n" +
+                    "The BharathVA Team\n\n" +
+                    "---\n" +
+                    "BharathVA - The Voice of India\n" +
+                    "Built in India, for India";
             
             message.setText(body);
             mailSender.send(message);
             
-            System.out.println("✅ Welcome email sent successfully to: " + toEmail);
+            log.info("Welcome email sent to: {}", toEmail);
         } catch (Exception e) {
-            System.err.println("❌ Failed to send welcome email to: " + toEmail + " - " + e.getMessage());
+            log.error("Failed to send welcome email to {}: {}", toEmail, e.getMessage());
         }
     }
 }

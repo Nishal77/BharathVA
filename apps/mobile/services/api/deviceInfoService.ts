@@ -75,19 +75,16 @@ class DeviceInfoService {
   }
 
   async getFullDeviceInfo(): Promise<DeviceInfo> {
-    console.log('===========================================');
-    console.log('📱 COLLECTING DEVICE INFORMATION');
-    console.log('===========================================');
+    console.log('COLLECTING DEVICE INFORMATION');
     
     const [deviceInfo, ipAddress] = await Promise.all([
       this.getDeviceInfo(),
       this.getPublicIpAddress(),
     ]);
 
-    console.log('✅ Device Info Collected:');
-    console.log('  📱 Device:', deviceInfo);
-    console.log('  🌐 IP Address:', ipAddress);
-    console.log('===========================================');
+    console.log('Device Info Collected:');
+    console.log('Device:', deviceInfo);
+    console.log('IP Address:', ipAddress);
 
     return {
       deviceInfo,
