@@ -86,38 +86,33 @@ export default function TweetActionSection({
         </View>
       </View>
 
-      {/* Discord-like Emoji Reactions - Aligned with Heart Icon */}
-      <View className="flex-row items-center mt-3">
+      {/* Perfect Emoji Reactions - Clean Design */}
+      <View className="flex-row items-center mt-4">
         <View className="flex-row items-center space-x-2">
           {/* Emoji Reactions */}
-          <Pressable className="flex-row items-center bg-gray-50 dark:bg-gray-800/50 rounded-xl px-2.5 py-1 border border-gray-200 dark:border-gray-700">
-            <Text style={{ fontSize: 13, marginRight: 4 }}>👍</Text>
-            <Text style={{ fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '600' }}>12</Text>
+          <Pressable className="flex-row items-center bg-white dark:bg-gray-800 rounded-full px-2 py-1 border border-gray-200 dark:border-gray-700">
+            <Text style={{ fontSize: 16 }}>👍</Text>
+            <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '600', marginLeft: 4 }}>12</Text>
           </Pressable>
           
-          <Pressable className="flex-row items-center bg-gray-50 dark:bg-gray-800/50 rounded-full px-2.5 py-1 border border-gray-200 dark:border-gray-700">
-            <Text style={{ fontSize: 13, marginRight: 4 }}>😂</Text>
-            <Text style={{ fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '600' }}>8</Text>
+          <Pressable className="flex-row items-center bg-white dark:bg-gray-800 rounded-full px-2 py-1 border border-gray-200 dark:border-gray-700">
+            <Text style={{ fontSize: 16 }}>😂</Text>
+            <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '600', marginLeft: 4 }}>8</Text>
           </Pressable>
           
-          <Pressable className="flex-row items-center bg-gray-50 dark:bg-gray-800/50 rounded-full px-2.5 py-1 border border-gray-200 dark:border-gray-700">
-            <Text style={{ fontSize: 13, marginRight: 4 }}>🔥</Text>
-            <Text style={{ fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '600' }}>5</Text>
+          <Pressable className="flex-row items-center bg-white dark:bg-gray-800 rounded-full px-2 py-1 border border-gray-200 dark:border-gray-700">
+            <Text style={{ fontSize: 16 }}>🔥</Text>
+            <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '600', marginLeft: 4 }}>5</Text>
           </Pressable>
           
-          <Pressable className="flex-row items-center bg-gray-50 dark:bg-gray-800/50 rounded-full px-2.5 py-1 border border-gray-200 dark:border-gray-700">
-            <Text style={{ fontSize: 13, marginRight: 4 }}>😮</Text>
-            <Text style={{ fontSize: 11, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '600' }}>3</Text>
-          </Pressable>
-          
-          {/* Add Emoji Button */}
-          <Pressable className="flex-row items-center bg-white dark:bg-gray-700 rounded-full px-2.5 py-1 border border-gray-300 dark:border-gray-600 shadow-sm">
-            <Text style={{ fontSize: 13, color: isDark ? '#D1D5DB' : '#6B7280', fontWeight: '700' }}>+</Text>
+          <Pressable className="flex-row items-center bg-white dark:bg-gray-800 rounded-full px-2 py-1 border border-gray-200 dark:border-gray-700">
+            <Text style={{ fontSize: 16 }}>😮</Text>
+            <Text style={{ fontSize: 12, color: isDark ? '#9CA3AF' : '#6B7280', fontWeight: '600', marginLeft: 4 }}>3</Text>
           </Pressable>
           
           {/* More Option */}
-          <Pressable className="flex-row items-center bg-blue-50 dark:bg-blue-900/30 rounded-full px-2.5 py-1 border border-blue-200 dark:border-blue-800">
-            <Text style={{ fontSize: 11, color: '#3B82F6', fontWeight: '700' }}>...more</Text>
+          <Pressable className="flex-row items-center bg-blue-50 dark:bg-blue-900/30 rounded-full px-2 py-1 border border-blue-200 dark:border-blue-700">
+            <Text style={{ fontSize: 12, color: '#3B82F6', fontWeight: '700' }}>...more</Text>
           </Pressable>
         </View>
       </View>
