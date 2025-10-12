@@ -194,7 +194,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n    \"sessionToken\": \"{{sessionToken}}\",\n    \"fullName\": \"Nishal Poojary\",\n    \"phoneNumber\": \"9876543210\",\n    \"countryCode\": \"+91\",\n    \"dateOfBirth\": \"1995-05-15\"\n}"
+          "raw": "{\n    \"sessionToken\": \"{{sessionToken}}\",\n    \"full_name\": \"Nishal Poojary\",\n    \"phoneNumber\": \"9876543210\",\n    \"countryCode\": \"+91\",\n    \"dateOfBirth\": \"1995-05-15\"\n}"
         },
         "url": {
           "raw": "{{baseUrl}}/register/details",

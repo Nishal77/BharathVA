@@ -6,9 +6,10 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface EmailOtpRepository extends JpaRepository<EmailOtp, Long> {
+public interface EmailOtpRepository extends JpaRepository<EmailOtp, UUID> {
     Optional<EmailOtp> findByEmailAndOtpCodeAndIsUsedFalseAndExpiryAfter(
             String email, String otpCode, LocalDateTime currentTime);
     

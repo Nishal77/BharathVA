@@ -302,7 +302,7 @@ export default function HomeScreen() {
       <Modal
         visible={messagesVisible}
         animationType="none"
-        presentationStyle="fullScreen"
+        presentationStyle="overFullScreen"
         onRequestClose={handleCloseMessages}
         transparent={true}
         statusBarTranslucent={true}

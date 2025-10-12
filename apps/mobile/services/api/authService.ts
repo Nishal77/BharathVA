@@ -1,5 +1,7 @@
 // Authentication API Service
 import { API_CONFIG, ENDPOINTS } from './config';
+import * as SecureStore from 'expo-secure-store';
+import { deviceInfoService } from './deviceInfoService';
 
 // API Response type
 interface ApiResponse<T> {
@@ -17,6 +19,27 @@ interface RegistrationResponse {
   email?: string;
 }
 
+// Login Response
+interface LoginResponse {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: string;
+  userId: string;
+  email: string;
+  username: string;
+  fullName: string;
+  expiresIn: number;
+  refreshExpiresIn: number;
+  message: string;
+}
+
+// Token Storage Keys
+const TOKEN_KEYS = {
+  ACCESS_TOKEN: 'accessToken',
+  REFRESH_TOKEN: 'refreshToken',
+  USER_DATA: 'userData',
+};
+
 // API Error
 export class ApiError extends Error {
   constructor(
@@ -29,33 +52,98 @@ export class ApiError extends Error {
   }
 }
 
-// Generic API call function
-async function apiCall<T>(
+// Token Management Functions
+export const tokenManager = {
+  // Prevent infinite refresh loops
+  isRefreshing: false,
+  refreshPromise: null as Promise<boolean> | null,
+
+  async saveTokens(accessToken: string, refreshToken: string): Promise<void> {
+    try {
+      await SecureStore.setItemAsync(TOKEN_KEYS.ACCESS_TOKEN, accessToken);
+      await SecureStore.setItemAsync(TOKEN_KEYS.REFRESH_TOKEN, refreshToken);
+    } catch (error) {
+      throw new ApiError('Failed to save authentication tokens');
+    }
+  },
+
+  async getAccessToken(): Promise<string | null> {
+    try {
+      return await SecureStore.getItemAsync(TOKEN_KEYS.ACCESS_TOKEN);
+    } catch (error) {
+      return null;
+    }
+  },
+
+  async getRefreshToken(): Promise<string | null> {
+    try {
+      return await SecureStore.getItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
+    } catch (error) {
+      return null;
+    }
+  },
+
+  async clearTokens(): Promise<void> {
+    try {
+      await SecureStore.deleteItemAsync(TOKEN_KEYS.ACCESS_TOKEN);
+      await SecureStore.deleteItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
+      await SecureStore.deleteItemAsync(TOKEN_KEYS.USER_DATA);
+    } catch (error) {
+      // Silent fail for clearing tokens
+    }
+  },
+
+  async saveUserData(userData: any): Promise<void> {
+    try {
+      await SecureStore.setItemAsync(TOKEN_KEYS.USER_DATA, JSON.stringify(userData));
+    } catch (error) {
+      // Silent fail for saving user data
+    }
+  },
+
+  async getUserData(): Promise<any | null> {
+    try {
+      const data = await SecureStore.getItemAsync(TOKEN_KEYS.USER_DATA);
+      return data ? JSON.parse(data) : null;
+    } catch (error) {
+      return null;
+    }
+  },
+};
+
+// Internal API call function without token refresh (to prevent infinite loops)
+async function internalApiCall<T>(
   endpoint: string,
   method: 'GET' | 'POST' = 'GET',
-  body?: any
+  body?: any,
+  includeAuth: boolean = false,
+  extraHeaders?: Record<string, string>
 ): Promise<ApiResponse<T>> {
   try {
     const url = `${API_CONFIG.BASE_URL}${endpoint}`;
     
-    console.log(`[API] ${method} ${url}`);
-    if (body) {
-      console.log(`[API] Request body:`, JSON.stringify(body));
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      ...extraHeaders,
+    };
+
+    if (includeAuth) {
+      const accessToken = await tokenManager.getAccessToken();
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+      }
     }
-    
+
     const options: RequestInit = {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
+      headers,
       ...(body && { body: JSON.stringify(body) }),
     };
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
 
-    console.log(`[API] Sending request...`);
     const response = await fetch(url, {
       ...options,
       signal: controller.signal,
@@ -63,21 +151,15 @@ async function apiCall<T>(
 
     clearTimeout(timeoutId);
 
-    console.log(`[API] Response status: ${response.status} ${response.statusText}`);
-    console.log(`[API] Response ok: ${response.ok}`);
-
     let data;
     try {
       const textResponse = await response.text();
-      console.log(`[API] Response text:`, textResponse.substring(0, 200));
       data = JSON.parse(textResponse);
     } catch (parseError: any) {
-      console.error(`[API] JSON parse error:`, parseError.message);
       throw new ApiError('Invalid response from server');
     }
 
     if (!response.ok) {
-      console.error(`[API] Error response:`, data);
       throw new ApiError(
         data.message || 'Request failed',
         response.status,
@@ -85,14 +167,8 @@ async function apiCall<T>(
       );
     }
 
-    console.log(`[API] Success:`, data.message);
-    console.log(`[API] Response data:`, data);
     return data;
   } catch (error: any) {
-    console.error(`[API] Catch block error:`, error);
-    console.error(`[API] Error name:`, error.name);
-    console.error(`[API] Error message:`, error.message);
-    
     if (error.name === 'AbortError') {
       throw new ApiError('Request timeout. Please check your connection.');
     }
@@ -106,6 +182,33 @@ async function apiCall<T>(
       undefined,
       error
     );
+  }
+}
+
+// Generic API call function with automatic token refresh
+async function apiCall<T>(
+  endpoint: string,
+  method: 'GET' | 'POST' = 'GET',
+  body?: any,
+  includeAuth: boolean = false,
+  extraHeaders?: Record<string, string>,
+  retryCount: number = 0
+): Promise<ApiResponse<T>> {
+  try {
+    // First attempt
+    return await internalApiCall<T>(endpoint, method, body, includeAuth, extraHeaders);
+  } catch (error: any) {
+    // Handle 401 with token refresh only once per call
+    if (error instanceof ApiError && error.statusCode === 401 && includeAuth && retryCount === 0) {
+      const refreshed = await authService.refreshAccessToken();
+      if (refreshed) {
+        // Retry the call with refreshed token
+        return apiCall<T>(endpoint, method, body, includeAuth, extraHeaders, retryCount + 1);
+      }
+    }
+    
+    // Re-throw the error if not a 401 or if retry failed
+    throw error;
   }
 }
 
@@ -252,5 +355,273 @@ export const authService = {
     
     return response.data;
   },
+
+  /**
+   * Login with email and password
+   */
+  login: async (email: string, password: string): Promise<LoginResponse> => {
+    const { deviceInfo, ipAddress } = await deviceInfoService.getFullDeviceInfo();
+    
+    const response = await apiCall<LoginResponse>(
+      ENDPOINTS.AUTH.LOGIN,
+      'POST',
+      { email, password },
+      false,
+      {
+        'X-Device-Info': deviceInfo,
+        'X-IP-Address': ipAddress,
+      }
+    );
+    
+    if (!response.success) {
+      throw new ApiError(response.message);
+    }
+
+
+    await tokenManager.saveTokens(response.data.accessToken, response.data.refreshToken);
+    
+    await tokenManager.saveUserData({
+      userId: response.data.userId,
+      email: response.data.email,
+      username: response.data.username,
+      fullName: response.data.fullName,
+    });
+    
+    return response.data;
+  },
+
+  /**
+   * Refresh access token using refresh token
+   */
+  refreshAccessToken: async (): Promise<boolean> => {
+    // If already refreshing, return the existing promise
+    if (tokenManager.isRefreshing && tokenManager.refreshPromise) {
+      return await tokenManager.refreshPromise;
+    }
+
+    // Create new refresh promise
+    tokenManager.refreshPromise = (async (): Promise<boolean> => {
+      try {
+        tokenManager.isRefreshing = true;
+        const refreshToken = await tokenManager.getRefreshToken();
+        
+        if (!refreshToken) {
+          return false;
+        }
+        
+        // Use internal API call to prevent infinite loops
+        const response = await internalApiCall<LoginResponse>(
+          ENDPOINTS.AUTH.REFRESH,
+          'POST',
+          { refreshToken }
+        );
+        
+        if (!response.success) {
+          await tokenManager.clearTokens();
+          return false;
+        }
+
+        // Ensure tokens are properly saved
+        if (response.data?.accessToken && response.data?.refreshToken) {
+          await tokenManager.saveTokens(response.data.accessToken, response.data.refreshToken);
+          
+          // Update user data with refreshed information
+          if (response.data.email && response.data.username && response.data.fullName) {
+            await tokenManager.saveUserData({
+              userId: response.data.userId,
+              email: response.data.email,
+              username: response.data.username,
+              fullName: response.data.fullName,
+            });
+          }
+          
+          return true;
+        } else {
+          await tokenManager.clearTokens();
+          return false;
+        }
+      } catch (error) {
+        await tokenManager.clearTokens();
+        return false;
+      } finally {
+        tokenManager.isRefreshing = false;
+        tokenManager.refreshPromise = null;
+      }
+    })();
+
+    return await tokenManager.refreshPromise;
+  },
+
+  /**
+   * Logout and clear all tokens
+   */
+  logout: async (): Promise<void> => {
+    try {
+      const refreshToken = await tokenManager.getRefreshToken();
+      
+      if (refreshToken) {
+        await internalApiCall(
+          ENDPOINTS.AUTH.LOGOUT,
+          'POST',
+          { refreshToken }
+        );
+      }
+    } catch (error) {
+      // Silent error handling for logout
+    } finally {
+      await tokenManager.clearTokens();
+    }
+  },
+
+  /**
+   * Check if user is authenticated
+   */
+  isAuthenticated: async (): Promise<boolean> => {
+    const accessToken = await tokenManager.getAccessToken();
+    return accessToken !== null;
+  },
+
+  /**
+   * Get current user data
+   */
+  getCurrentUser: async (): Promise<any | null> => {
+    return await tokenManager.getUserData();
+  },
+
+  /**
+   * ✅ Fetch current user profile from backend (users table)
+   */
+  getCurrentUserProfile: async (): Promise<any> => {
+    try {
+      const response = await apiCall(
+        ENDPOINTS.AUTH.USER_ME,
+        'GET',
+        undefined,
+        true // Include auth token
+      );
+      
+      if (!response.success) {
+        throw new ApiError(response.message);
+      }
+      
+      return response;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Get user profile by ID
+   */
+  getUserProfile: async (userId: string): Promise<{ fullName: string; username: string }> => {
+    try {
+      const response = await apiCall<{ fullName: string; username: string }>(
+        `/auth/user/${userId}`,
+        'GET',
+        undefined,
+        true // Include auth token
+      );
+      
+      if (!response.success) {
+        throw new ApiError(response.message);
+      }
+      
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Validate current access token
+   */
+  validateToken: async (): Promise<boolean> => {
+    try {
+      const response = await internalApiCall<{ valid: boolean }>(
+        ENDPOINTS.AUTH.VALIDATE,
+        'POST',
+        undefined,
+        true
+      );
+      
+      return response.success && response.data.valid;
+    } catch (error) {
+      return false;
+    }
+  },
+
+  /**
+   * Get all active sessions for current user
+   */
+  getActiveSessions: async (): Promise<UserSessionInfo[]> => {
+    try {
+      const response = await apiCall<UserSessionInfo[]>(
+        ENDPOINTS.AUTH.GET_SESSIONS,
+        'GET',
+        undefined,
+        true
+      );
+      
+      if (!response.success) {
+        throw new ApiError(response.message);
+      }
+      
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Logout specific session by session ID
+   */
+  logoutSession: async (sessionId: string): Promise<void> => {
+    try {
+      const response = await apiCall(
+        ENDPOINTS.AUTH.LOGOUT_SESSION,
+        'POST',
+        { sessionId },
+        true
+      );
+      
+      if (!response.success) {
+        throw new ApiError(response.message);
+      }
+      
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Logout all sessions except current
+   */
+  logoutAllOtherSessions: async (): Promise<void> => {
+    try {
+      const response = await apiCall(
+        ENDPOINTS.AUTH.LOGOUT_ALL_OTHER,
+        'POST',
+        undefined,
+        true
+      );
+      
+      if (!response.success) {
+        throw new ApiError(response.message);
+      }
+      
+    } catch (error) {
+      throw error;
+    }
+  },
 };
 
+// User Session Info interface
+export interface UserSessionInfo {
+  id: string;
+  deviceInfo: string;
+  ipAddress: string;
+  lastUsedAt: string;
+  createdAt: string;
+  expiresAt: string;
+  isCurrentSession: boolean;
+}

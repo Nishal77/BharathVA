@@ -1,5 +1,5 @@
 # Docker Compose for BharathVA Backend
-# Removed version (obsolete in Docker Compose V2)
+# Microservices Architecture with individual .env files
 
 services:
   # Discovery Service (Eureka Server)
@@ -10,6 +10,8 @@ services:
     container_name: bharathva-discovery
     ports:
       - "8761:8761"
+    env_file:
+      - ./discovery-service/.env
     networks:
       - bharathva-network
     healthcheck:
@@ -28,13 +30,13 @@ services:
     container_name: bharathva-gateway
     ports:
       - "8080:8080"
-    networks:
-      - bharathva-network
-    environment:
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service:8761/eureka/
+    env_file:
+      - ./gateway-service/.env
     depends_on:
       discovery-service:
         condition: service_healthy
+    networks:
+      - bharathva-network
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
       interval: 30s
@@ -51,32 +53,13 @@ services:
     container_name: bharathva-auth
     ports:
       - "8081:8081"
-    networks:
-      - bharathva-network
-    environment:
-      # Eureka
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service:8761/eureka/
-      
-      # Database (Neon PostgreSQL)
-      - DB_URL=jdbc:postgresql://ep-summer-bar-a1bv6p9u-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
-      - DB_USERNAME=neondb_owner
-      - DB_PASSWORD=npg_Dtqy63pieawz
-      
-      # Email SMTP (Gmail)
-      - SMTP_HOST=smtp.gmail.com
-      - SMTP_PORT=587
-      - SMTP_USERNAME=nishalpoojary66@gmail.com
-      - SMTP_PASSWORD=ojursmdswzazuykw
-      
-      # JWT
-      - JWT_SECRET=bharathva-super-secret-key-change-in-production-2024
-      - JWT_EXPIRATION=86400000
-      
-      # Server
-      - SERVER_PORT=8081
+    env_file:
+      - ./auth-service/.env
     depends_on:
       discovery-service:
         condition: service_healthy
+    networks:
+      - bharathva-network
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/auth/register/health"]
       interval: 30s

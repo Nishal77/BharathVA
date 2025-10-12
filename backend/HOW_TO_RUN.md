@@ -190,7 +190,7 @@ curl -X POST http://localhost:8080/api/auth/register/details \
   -H "Content-Type: application/json" \
   -d '{
     "sessionToken": "YOUR_SESSION_TOKEN",
-    "fullName": "Nishal Poojary",
+    "full_name": "Nishal Poojary",
     "phoneNumber": "9876543210",
     "countryCode": "+91",
     "dateOfBirth": "1995-05-15"

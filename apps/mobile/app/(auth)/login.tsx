@@ -37,11 +37,23 @@ export default function LoginScreen() {
     }
 
     setIsLoading(true);
-    // Simulate API call
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address');
+      setIsLoading(false);
+      return;
+    }
+
+    // Navigate to password screen with email parameter
     setTimeout(() => {
       setIsLoading(false);
-      router.push('/(auth)/password');
-    }, 1500);
+      router.push({
+        pathname: '/(auth)/password',
+        params: { email: email.toLowerCase().trim() }
+      });
+    }, 500);
   };
 
   const handleForgotPassword = () => {
@@ -50,6 +62,16 @@ export default function LoginScreen() {
 
   const handleRegister = () => {
     router.push('/(auth)/register');
+  };
+
+  const handleBack = () => {
+    // Check if we can go back in the auth stack
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      // If no previous screen, go to landing page
+      router.replace('/');
+    }
   };
 
 
@@ -120,7 +142,7 @@ export default function LoginScreen() {
           {/* Back Button positioned near India image */}
           <View className="absolute top-0 left-0 z-10">
             <Pressable
-              onPress={() => router.back()}
+              onPress={handleBack}
               className="w-10 h-10 items-center justify-center"
             >
               <Image

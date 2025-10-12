@@ -4,8 +4,9 @@ import com.bharathva.auth.dto.*;
 import com.bharathva.auth.service.RegistrationService;
 import com.bharathva.shared.dto.ApiResponse;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,12 +14,13 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/auth/register")
-@RequiredArgsConstructor
-@Slf4j
 @CrossOrigin(origins = "*")
 public class RegistrationController {
 
-    private final RegistrationService registrationService;
+    private static final Logger log = LoggerFactory.getLogger(RegistrationController.class);
+    
+    @Autowired
+    private RegistrationService registrationService;
 
     /**
      * Step 1: Register with email

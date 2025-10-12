@@ -1,5 +1,6 @@
 package com.bharathva.auth.security;
 
+import com.bharathva.auth.service.AuthenticationService;
 import com.bharathva.auth.service.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -27,6 +28,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Autowired
     private JwtService jwtService;
+    
+    @Autowired
+    private AuthenticationService authenticationService;
 
     @Override
     protected void doFilterInternal(
@@ -55,19 +59,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             final String jwt = authHeader.substring(7);
             
-            // Validate token
-            if (jwtService.validateToken(jwt)) {
+            // Validate token with database session check
+            if (authenticationService.validateToken(jwt)) {
                 // Extract user information from JWT
                 UUID userId = jwtService.extractUserId(jwt);
                 String email = jwtService.extractEmail(jwt);
                 String username = jwtService.extractUsername(jwt);
                 
-                logger.info("🔓 Authenticated user: {} ({})", username, email);
+                logger.info("🔓 Authenticated user: {} ({}) - ID: {}", username, email, userId);
                 
                 // Create authentication token with user details
-                // Using email as principal for better identification
+                // ✅ Using userId as principal so JwtUtils.getCurrentUserId() works
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                        email, // principal
+                        userId.toString(), // principal - user ID as string
                         null, // credentials (not needed for JWT)
                         Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"))
                 );
@@ -78,9 +82,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 // Set authentication in security context
                 SecurityContextHolder.getContext().setAuthentication(authToken);
                 
-                logger.debug("Security context set for user: {}", email);
+                logger.debug("Security context set for user ID: {}", userId);
             } else {
-                logger.warn("❌ Invalid JWT token for request: {}", requestURI);
+                logger.warn("❌ Invalid JWT token for request: {} (JWT invalid OR no active session in database)", requestURI);
             }
         } catch (Exception e) {
             logger.error("❌ JWT authentication error: {}", e.getMessage());

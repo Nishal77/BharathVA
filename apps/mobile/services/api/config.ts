@@ -30,6 +30,15 @@ export const ENDPOINTS = {
     CHECK_USERNAME: '/auth/register/check-username',
     CREATE_USERNAME: '/auth/register/username',
     HEALTH: '/auth/register/health',
+    LOGIN: '/auth/login',
+    REFRESH: '/auth/refresh',
+    LOGOUT: '/auth/logout',
+    VALIDATE: '/auth/validate',
+    PROFILE: '/auth/profile',
+    GET_SESSIONS: '/auth/sessions',
+    LOGOUT_SESSION: '/auth/sessions/logout',
+    LOGOUT_ALL_OTHER: '/auth/sessions/logout-all-other',
+    USER_ME: '/auth/user/me',
   },
 };
 

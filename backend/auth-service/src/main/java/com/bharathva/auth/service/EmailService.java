@@ -44,6 +44,7 @@ public class EmailService {
             mailSender.send(message);
             
             System.out.println("✅ OTP email sent successfully to: " + toEmail);
+            System.out.println("🔑 DEBUG: OTP Code: " + otp);
         } catch (Exception e) {
             System.err.println("❌ Failed to send OTP email to: " + toEmail + " - " + e.getMessage());
             e.printStackTrace();

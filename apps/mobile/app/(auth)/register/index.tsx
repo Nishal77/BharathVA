@@ -8,15 +8,18 @@ import SignInAsSupport from './SignInAsSupport';
 import Username from './Username';
 import VideoIntro from './VideoIntro';
 import { authService, ApiError } from '../../../services/api/authService';
+import { useAuth } from '../../../contexts/AuthContext';
 
 export default function RegisterMain() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { login: authLogin } = useAuth();
   
   const [currentStep, setCurrentStep] = useState('signInAsSupport');
   const [userEmail, setUserEmail] = useState('');
   const [userPhone, setUserPhone] = useState('');
   const [userCountryCode, setUserCountryCode] = useState('+91');
+  const [userPassword, setUserPassword] = useState('');
   const [sessionToken, setSessionToken] = useState('');
   const [userDetails, setUserDetails] = useState<any>({});
   const [loading, setLoading] = useState(false);
@@ -138,6 +141,9 @@ export default function RegisterMain() {
       setLoading(true);
       console.log('Creating password');
       
+      // Store password for auto-login after registration
+      setUserPassword(password);
+      
       // Call backend API
       const response = await authService.createPassword(
         sessionToken,
@@ -177,20 +183,69 @@ export default function RegisterMain() {
       // Clear session token (no longer needed)
       setSessionToken('');
       
-      // Show success message
-      Alert.alert(
-        'Registration Complete! 🎉',
-        `Welcome to BharathVA, @${username}! Check your email for a welcome message.`,
-        [
-          {
-            text: 'Continue',
-            onPress: () => {
-              // Navigate to home page - you can update this with actual user ID from response
-              router.push('/(user)/user123/(tabs)');
+      // AUTO-LOGIN after successful registration
+      console.log('\n╔═══════════════════════════════════════════╗');
+      console.log('║  AUTO-LOGIN AFTER REGISTRATION STARTED    ║');
+      console.log('╚═══════════════════════════════════════════╝');
+      console.log('📧 Email:', userEmail);
+      console.log('🔑 Password Stored:', userPassword ? 'Yes ✅' : 'No ❌');
+      console.log('🔑 Password Length:', userPassword ? userPassword.length : 0, 'characters');
+      console.log('👤 Username:', username);
+      console.log('-------------------------------------------');
+      
+      try {
+        // Use AuthContext login - handles auth state and navigation automatically
+        await authLogin(userEmail, userPassword);
+        
+        console.log('\n╔═══════════════════════════════════════════╗');
+        console.log('║    AUTO-LOGIN SUCCESSFUL!                 ║');
+        console.log('╚═══════════════════════════════════════════╝');
+        console.log('✅ Registration complete + User logged in via AuthContext');
+        console.log('-------------------------------------------');
+        console.log('💾 Database Updates:');
+        console.log('  ✅ users table: User created');
+        console.log('  ✅ user_sessions table: Session created with device info');
+        console.log('-------------------------------------------');
+        console.log('🔄 Auth state updated - navigation handled by context');
+        console.log('═══════════════════════════════════════════\n');
+        
+        // Show success message
+        Alert.alert(
+          'Registration Complete! 🎉',
+          `Welcome to BharathVA, @${username}! You're now logged in.`,
+          [{ text: 'Get Started' }]
+        );
+      } catch (loginError) {
+        console.log('\n╔═══════════════════════════════════════════╗');
+        console.log('║    AUTO-LOGIN FAILED                      ║');
+        console.log('╚═══════════════════════════════════════════╝');
+        console.error('❌ Error:', loginError);
+        console.log('-------------------------------------------');
+        console.log('⚠️  User registered but not logged in');
+        console.log('💾 Database Updates:');
+        console.log('  ✅ users table: User created');
+        console.log('  ❌ user_sessions table: No session created');
+        console.log('-------------------------------------------');
+        console.log('👉 User will need to login manually');
+        console.log('═══════════════════════════════════════════\n');
+        
+        // If auto-login fails, still show success but ask user to login manually
+        Alert.alert(
+          'Registration Complete! 🎉',
+          `Welcome to BharathVA, @${username}! Please login to continue.`,
+          [
+            {
+              text: 'Login Now',
+              onPress: () => {
+                router.replace({
+                  pathname: '/(auth)/password',
+                  params: { email: userEmail }
+                });
+              },
             },
-          },
-        ]
-      );
+          ]
+        );
+      }
     } catch (error) {
       console.error('Username creation error:', error);
       

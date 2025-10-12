@@ -43,6 +43,8 @@ public class SecurityConfig {
                 // Public endpoints - no authentication required
                 .requestMatchers("/auth/register/**").permitAll()
                 .requestMatchers("/auth/login").permitAll()
+                .requestMatchers("/auth/refresh").permitAll()
+                .requestMatchers("/auth/logout").permitAll()
                 .requestMatchers("/auth/validate").permitAll()
                 .requestMatchers("/auth/health").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
@@ -50,7 +52,7 @@ public class SecurityConfig {
                 // Protected endpoints - require valid JWT
                 .requestMatchers("/auth/user/**").authenticated()
                 .requestMatchers("/auth/profile").authenticated()
-                .requestMatchers("/auth/refresh").authenticated()
+                .requestMatchers("/auth/sessions/**").authenticated()
                 // All other endpoints require authentication
                 .anyRequest().authenticated()
             )

@@ -58,7 +58,6 @@ export default function ProfileTab() {
   return (
     <View className="flex-1" style={{ backgroundColor: bgColor }}>
       <ProfileHeader 
-        username="@sarah.johnson"
         onBackPress={() => router.back()}
         onMenuPress={() => console.log('Menu pressed')}
       />

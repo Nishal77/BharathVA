@@ -120,7 +120,16 @@ public class RegistrationService {
 
         registrationSessionRepository.save(session);
 
-        System.out.println("User details saved for session: " + session.getSessionToken());
+        System.out.println("===========================================");
+        System.out.println("👤 USER DETAILS SAVED");
+        System.out.println("===========================================");
+        System.out.println("📧 Email: " + session.getEmail());
+        System.out.println("📛 Full Name: " + session.getFullName());
+        System.out.println("📱 Phone: " + session.getPhoneNumber());
+        System.out.println("🌍 Country Code: " + session.getCountryCode());
+        System.out.println("📅 Date of Birth: " + session.getDateOfBirth());
+        System.out.println("🔑 Session Token: " + session.getSessionToken());
+        System.out.println("===========================================");
 
         RegistrationResponse response = new RegistrationResponse();
         response.setSessionToken(session.getSessionToken());
@@ -191,13 +200,25 @@ public class RegistrationService {
         }
 
         // Hash password
+        System.out.println("===========================================");
+        System.out.println("🔐 HASHING PASSWORD");
+        System.out.println("===========================================");
+        System.out.println("📧 Email: " + session.getEmail());
+        System.out.println("🔑 Plain password length: " + request.getPassword().length() + " characters");
+        
         String hashedPassword = passwordEncoder.encode(request.getPassword());
+        
+        System.out.println("✅ Password hashed successfully");
+        System.out.println("🔒 Hash format: " + hashedPassword.substring(0, Math.min(20, hashedPassword.length())) + "...");
+        System.out.println("📊 Hash length: " + hashedPassword.length() + " characters");
+        System.out.println("===========================================");
+        
         session.setPasswordHash(hashedPassword);
         session.setCurrentStep("PASSWORD");
 
         registrationSessionRepository.save(session);
 
-        System.out.println("Password created for session: " + session.getSessionToken());
+        System.out.println("💾 Password hash saved to registration session");
 
         RegistrationResponse response = new RegistrationResponse();
         response.setSessionToken(session.getSessionToken());
@@ -228,6 +249,19 @@ public class RegistrationService {
         }
 
         // Create final user account
+        System.out.println("===========================================");
+        System.out.println("👤 CREATING USER ACCOUNT");
+        System.out.println("===========================================");
+        System.out.println("📧 Email: " + session.getEmail());
+        System.out.println("👤 Username: " + username);
+        System.out.println("📛 Full Name: '" + session.getFullName() + "'");
+        System.out.println("📛 Full Name Length: " + (session.getFullName() != null ? session.getFullName().length() : "NULL") + " characters");
+        System.out.println("📱 Phone: " + session.getPhoneNumber());
+        System.out.println("🌍 Country Code: " + session.getCountryCode());
+        System.out.println("📅 Date of Birth: " + session.getDateOfBirth());
+        System.out.println("🔒 Password Hash from session: " + session.getPasswordHash().substring(0, Math.min(20, session.getPasswordHash().length())) + "...");
+        System.out.println("📊 Hash length: " + session.getPasswordHash().length() + " characters");
+        
         User user = new User();
         user.setFullName(session.getFullName());
         user.setUsername(username);
@@ -238,7 +272,19 @@ public class RegistrationService {
         user.setPasswordHash(session.getPasswordHash());
         user.setIsEmailVerified(true);
 
-        userRepository.save(user);
+        User savedUser = userRepository.save(user);
+        
+        System.out.println("✅ User saved to database:");
+        System.out.println("   User ID: " + savedUser.getId());
+        System.out.println("   Email: " + savedUser.getEmail());
+        System.out.println("   Username: " + savedUser.getUsername());
+        System.out.println("   Full Name: '" + savedUser.getFullName() + "'");
+        System.out.println("   Full Name Length: " + (savedUser.getFullName() != null ? savedUser.getFullName().length() : "NULL") + " characters");
+        System.out.println("   Phone: " + savedUser.getPhoneNumber());
+        System.out.println("   Country Code: " + savedUser.getCountryCode());
+        System.out.println("   Date of Birth: " + savedUser.getDateOfBirth());
+        System.out.println("   Password Hash: " + savedUser.getPasswordHash().substring(0, Math.min(20, savedUser.getPasswordHash().length())) + "...");
+        System.out.println("===========================================");
 
         // Send welcome email
         emailService.sendWelcomeEmail(user.getEmail(), user.getUsername());
@@ -246,7 +292,11 @@ public class RegistrationService {
         // Clean up session
         registrationSessionRepository.delete(session);
 
-        System.out.println("User registration completed: " + user.getUsername() + " (" + user.getEmail() + ")");
+        System.out.println("🎉 REGISTRATION COMPLETED SUCCESSFULLY!");
+        System.out.println("   👤 Username: " + user.getUsername());
+        System.out.println("   📧 Email: " + user.getEmail());
+        System.out.println("   📛 Full Name: '" + user.getFullName() + "'");
+        System.out.println("   🆔 User ID: " + user.getId());
 
         RegistrationResponse response = new RegistrationResponse();
         response.setSessionToken(null);
@@ -312,4 +362,3 @@ public class RegistrationService {
         return session;
     }
 }
-

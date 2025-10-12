@@ -60,7 +60,13 @@ export default function VerifyOTPScreen() {
   };
 
   const handleBack = () => {
-    router.back();
+    // Check if we can go back in the auth stack
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      // If no previous screen, go to landing page
+      router.replace('/');
+    }
   };
 
   return (

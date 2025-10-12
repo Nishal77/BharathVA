@@ -12,6 +12,7 @@ import {
 } from 'lucide-react-native';
 import React, { useEffect, useRef } from 'react';
 import {
+  Alert,
   Animated,
   Dimensions,
   Pressable,
@@ -19,6 +20,7 @@ import {
   Text,
   View
 } from 'react-native';
+import { useAuth } from '../../contexts/AuthContext';
 
 const { height: windowHeight } = Dimensions.get('window');
 const statusBarHeight = StatusBar.currentHeight || 0;
@@ -53,6 +55,7 @@ export default function Sidebar({
   userId
 }: SidebarProps) {
   const router = useRouter();
+  const { logout } = useAuth();
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   // Add pulse animation when sidebar becomes visible
@@ -110,10 +113,24 @@ export default function Sidebar({
         // Navigate to settings & privacy
         break;
       case 'logout':
-        router.push('/(auth)/login');
+        Alert.alert(
+          'Logout',
+          'Are you sure you want to logout?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Logout',
+              style: 'destructive',
+              onPress: async () => {
+                console.log('🚪 User confirmed logout');
+                await logout();
+              },
+            },
+          ]
+        );
         break;
     }
-  }, [handleCloseSidebar, router]);
+  }, [handleCloseSidebar, router, logout]);
 
   if (!sidebarVisible) {
     return null;

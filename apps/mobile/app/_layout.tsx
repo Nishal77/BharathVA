@@ -3,9 +3,10 @@ import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import { StatusBar } from 'react-native';
+import { useEffect, useCallback } from 'react';
+import { StatusBar, View, Text, ActivityIndicator } from 'react-native';
 import { ThemeProvider as AppThemeProvider, useTheme } from '../contexts/ThemeContext';
+import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import '../global.css';
 
 export {
@@ -32,14 +33,23 @@ export default function RootLayout() {
     if (error) throw error;
   }, [error]);
 
-  useEffect(() => {
+  const onLayoutRootView = useCallback(async () => {
     if (loaded) {
-      SplashScreen.hideAsync();
+      await SplashScreen.hideAsync();
     }
   }, [loaded]);
 
+  useEffect(() => {
+    onLayoutRootView();
+  }, [onLayoutRootView]);
+
   if (!loaded) {
-    return null;
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+        <Text style={{ marginTop: 16, color: '#666' }}>Loading fonts...</Text>
+      </View>
+    );
   }
 
   return <RootLayoutNav />;
@@ -47,14 +57,26 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   return (
-    <AppThemeProvider>
-      <ThemedRootLayout />
-    </AppThemeProvider>
+    <AuthProvider>
+      <AppThemeProvider>
+        <ThemedRootLayout />
+      </AppThemeProvider>
+    </AuthProvider>
   );
 }
 
 function ThemedRootLayout() {
   const { isDark } = useTheme();
+  const { isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <View className="flex-1 bg-white justify-center items-center">
+        <ActivityIndicator size="large" color="#3B82F6" />
+        <Text className="text-gray-600 text-base mt-4">Loading...</Text>
+      </View>
+    );
+  }
 
   return (
     <>

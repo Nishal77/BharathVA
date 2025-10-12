@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image, Pressable, Text, View, useColorScheme } from 'react-native';
-
+import { useAuth } from '../../../../contexts/AuthContext';
 
 interface ProfileHeaderProps {
   username?: string;
@@ -9,10 +9,12 @@ interface ProfileHeaderProps {
 }
 
 export default function ProfileHeader({ 
-  username = '@aarav.sharma98',
+  username,
   onBackPress, 
   onMenuPress 
 }: ProfileHeaderProps) {
+  const { user } = useAuth();
+  const [displayUsername, setDisplayUsername] = useState(`@${user?.username || 'user'}`);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   
@@ -20,6 +22,16 @@ export default function ProfileHeader({
   const textColor = isDark ? '#F9FAFB' : '#1F2937';
   const bgColor = isDark ? '#000000' : '#FFFFFF';
   const borderColor = isDark ? '#374151' : '#E5E7EB';
+
+  useEffect(() => {
+    if (username) {
+      setDisplayUsername(username);
+    } else if (user?.username) {
+      setDisplayUsername(`@${user.username}`);
+    } else {
+      setDisplayUsername('@user');
+    }
+  }, [user, username]);
 
   return (
     <View 
@@ -50,7 +62,7 @@ export default function ProfileHeader({
         className="text-lg font-semibold text-center flex-1"
         style={{ color: textColor }}
       >
-        {username}
+        {displayUsername}
       </Text>
       
       {/* Category Menu */}

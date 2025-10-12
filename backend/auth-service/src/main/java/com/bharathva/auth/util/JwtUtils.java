@@ -11,7 +11,8 @@ public class JwtUtils {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof String) {
             try {
-                return UUID.fromString((String) authentication.getPrincipal());
+                String userIdStr = (String) authentication.getPrincipal();
+                return UUID.fromString(userIdStr);
             } catch (IllegalArgumentException e) {
                 throw new RuntimeException("Invalid user ID in token");
             }

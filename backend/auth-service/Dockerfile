@@ -5,11 +5,11 @@
 FROM maven:3.9.6-eclipse-temurin-17 AS build
 WORKDIR /build
 
-# Copy entire backend project
+# Copy entire project (context is backend/)
 COPY . .
 
-# Build everything from root (includes shared module)
-RUN mvn clean install -DskipTests
+# Build only auth-service and its dependencies
+RUN mvn clean install -DskipTests -pl auth-service -am
 
 # Stage 2: Runtime stage
 FROM eclipse-temurin:17-jre

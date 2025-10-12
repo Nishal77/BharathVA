@@ -4,31 +4,54 @@ import java.util.UUID;
 
 public class LoginResponse {
     
-    private String token;
+    private String accessToken;
+    private String refreshToken;
     private String tokenType = "Bearer";
     private UUID userId;
     private String email;
     private String username;
+    private String fullName;
     private long expiresIn;
+    private long refreshExpiresIn;
     private String message;
 
     public LoginResponse() {}
 
-    public LoginResponse(String token, UUID userId, String email, String username, long expiresIn, String message) {
-        this.token = token;
+    public LoginResponse(String accessToken, String refreshToken, UUID userId, String email, 
+                         String username, String fullName, long expiresIn, long refreshExpiresIn, String message) {
+        this.accessToken = accessToken;
+        this.refreshToken = refreshToken;
         this.userId = userId;
         this.email = email;
         this.username = username;
+        this.fullName = fullName;
         this.expiresIn = expiresIn;
+        this.refreshExpiresIn = refreshExpiresIn;
         this.message = message;
     }
 
     public String getToken() {
-        return token;
+        return accessToken;
     }
 
     public void setToken(String token) {
-        this.token = token;
+        this.accessToken = token;
+    }
+
+    public String getAccessToken() {
+        return accessToken;
+    }
+
+    public void setAccessToken(String accessToken) {
+        this.accessToken = accessToken;
+    }
+
+    public String getRefreshToken() {
+        return refreshToken;
+    }
+
+    public void setRefreshToken(String refreshToken) {
+        this.refreshToken = refreshToken;
     }
 
     public String getTokenType() {
@@ -63,12 +86,28 @@ public class LoginResponse {
         this.username = username;
     }
 
+    public String getFullName() {
+        return fullName;
+    }
+
+    public void setFullName(String fullName) {
+        this.fullName = fullName;
+    }
+
     public long getExpiresIn() {
         return expiresIn;
     }
 
     public void setExpiresIn(long expiresIn) {
         this.expiresIn = expiresIn;
+    }
+
+    public long getRefreshExpiresIn() {
+        return refreshExpiresIn;
+    }
+
+    public void setRefreshExpiresIn(long refreshExpiresIn) {
+        this.refreshExpiresIn = refreshExpiresIn;
     }
 
     public String getMessage() {

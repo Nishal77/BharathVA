@@ -1,6 +1,6 @@
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -15,35 +15,78 @@ import {
   View,
   useColorScheme
 } from 'react-native';
+import { ApiError } from '../../services/api/authService';
+import { useAuth } from '../../contexts/AuthContext';
+import Toast from '../../components/ui/Toast';
 
 const { height, width } = Dimensions.get('window');
 
 export default function PasswordScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const email = params.email as string || '';
+  const { login } = useAuth();
+  
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'warning' | 'info'>('error');
+  const [passwordError, setPasswordError] = useState('');
 
   // Load the Aclonica font
   const [fontsLoaded] = useFonts({
     Aclonica: require('../../assets/fonts/Aclonica-Regular.ttf'),
   });
 
+  // Helper functions for toast messages
+  const showToastMessage = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'error') => {
+    setToastMessage(message);
+    setToastType(type);
+    setShowToast(true);
+  };
+
+  const hideToast = () => {
+    setShowToast(false);
+  };
+
+  const clearPasswordError = () => {
+    setPasswordError('');
+  };
+
   const handleLogin = async () => {
-    if (!password) {
-      Alert.alert('Error', 'Please enter your password');
+    clearPasswordError();
+    
+    if (!password || !email) {
+      setPasswordError('Please enter your password');
       return;
     }
 
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+    
+    try {
+      // Backend checks password against database (users table)
+      // If password matches: creates session in user_sessions table and returns tokens
+      // If password doesn't match: throws "Invalid email or password" error
+      await login(email, password);
+      
+      // Success - user authenticated and session created
+      showToastMessage('Login successful! Welcome back!', 'success');
+      
+    } catch (error) {
+      // Password doesn't match database or other error occurred
+      const errorMsg = error instanceof ApiError ? error.message : 'Login failed. Please try again.';
+      
+      // Show "Incorrect password" for any authentication failure
+      setPasswordError('Incorrect password');
+      showToastMessage(errorMsg);
+    } finally {
       setIsLoading(false);
-      router.push('/(user)/123/(tabs)');
-    }, 1500);
+    }
   };
 
   const handleForgotPassword = () => {
@@ -163,10 +206,13 @@ export default function PasswordScreen() {
             {/* Password Input */}
             <View className="mb-6">
               <Text className={`${isDark ? 'text-white' : 'text-black'} text-base font-semibold mb-3`}>Enter your password</Text>
-              <View className={`${isDark ? 'bg-[#151515]' : 'bg-white'} rounded-2xl px-4 py-4 border ${isDark ? 'border-white/5' : 'border-gray-200'} flex-row items-center`}>
+              <View className={`${isDark ? 'bg-[#151515]' : 'bg-white'} rounded-2xl px-4 py-4 border ${passwordError ? 'border-red-500' : (isDark ? 'border-white/5' : 'border-gray-200')} flex-row items-center`}>
                 <TextInput
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    clearPasswordError(); // Clear error when user starts typing
+                  }}
                   placeholder="********"
                   placeholderTextColor="#9CA3AF"
                   secureTextEntry={!showPassword}
@@ -181,6 +227,15 @@ export default function PasswordScreen() {
                   </Text>
                 </Pressable>
               </View>
+              
+              {/* Inline Error Message */}
+              {passwordError ? (
+                <View className="mt-2">
+                  <Text className="text-red-500 text-sm font-medium">
+                    {passwordError}
+                  </Text>
+                </View>
+              ) : null}
             </View>
 
             {/* Remember Me and Forgot Password */}
@@ -243,6 +298,15 @@ export default function PasswordScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      
+      {/* Toast Notification */}
+      <Toast
+        message={toastMessage}
+        type={toastType}
+        visible={showToast}
+        onHide={hideToast}
+        duration={4000}
+      />
     </View>
   );
 }

@@ -1,8 +1,9 @@
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Dimensions, Image, Pressable, Text, View, useColorScheme } from 'react-native';
+import { useAuth } from '../contexts/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -10,11 +11,19 @@ export default function HeroScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { isAuthenticated, user } = useAuth();
 
   // Load the Aclonica font
   const [fontsLoaded] = useFonts({
     Aclonica: require('../assets/fonts/Aclonica-Regular.ttf'),
   });
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      console.log('✅ User already authenticated - redirecting to home');
+      router.replace(`/(user)/${user.userId}/(tabs)`);
+    }
+  }, [isAuthenticated, user]);
 
   const handleGetStarted = () => {
     router.push('/(auth)/register');
