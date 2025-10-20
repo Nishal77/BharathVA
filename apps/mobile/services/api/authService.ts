@@ -151,12 +151,41 @@ async function internalApiCall<T>(
 
     clearTimeout(timeoutId);
 
+    // Log request details in development
+    if (API_CONFIG.ENABLE_LOGGING) {
+      console.log(`🌐 API Request: ${method} ${url}`);
+      if (body) {
+        try {
+          console.log('📤 Request Body:', JSON.parse(body));
+        } catch (e) {
+          console.log('📤 Request Body:', body);
+        }
+      }
+    }
+
     let data;
     try {
       const textResponse = await response.text();
       data = JSON.parse(textResponse);
+      
+      // Log response details in development
+      if (API_CONFIG.ENABLE_LOGGING) {
+        console.log(`📥 API Response: ${response.status} ${response.statusText}`);
+        console.log('📥 Response Data:', data);
+      }
     } catch (parseError: any) {
-      throw new ApiError('Invalid response from server');
+      if (API_CONFIG.ENABLE_LOGGING) {
+        console.error('❌ JSON Parse Error:', parseError);
+        console.log('📥 Raw Response:', textResponse);
+        console.log('📥 Response Headers:', response.headers);
+      }
+      
+      // Check if response is HTML (error page)
+      if (textResponse.includes('<html>') || textResponse.includes('<!DOCTYPE')) {
+        throw new ApiError('Server returned HTML instead of JSON. Check if backend is running correctly.');
+      }
+      
+      throw new ApiError(`JSON Parse error: ${parseError.message}. Raw response: ${textResponse.substring(0, 200)}...`);
     }
 
     if (!response.ok) {
@@ -175,6 +204,15 @@ async function internalApiCall<T>(
     
     if (error instanceof ApiError) {
       throw error;
+    }
+
+    // Handle network errors more specifically
+    if (error.message && error.message.includes('Network request failed')) {
+      throw new ApiError('Network request failed. Please check your internet connection and ensure the backend is running.');
+    }
+
+    if (error.message && error.message.includes('fetch')) {
+      throw new ApiError('Network error. Please check your connection and try again.');
     }
 
     throw new ApiError(

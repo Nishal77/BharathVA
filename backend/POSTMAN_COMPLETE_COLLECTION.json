@@ -1,0 +1,551 @@
+{
+  "info": {
+    "name": "BharathVA Complete API Collection",
+    "description": "Complete API testing including registration, login, and performance endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "localUrl",
+      "value": "http://localhost:8080/api/auth",
+      "type": "default"
+    },
+    {
+      "key": "networkUrl",
+      "value": "http://192.168.0.225:8080/api/auth",
+      "type": "default"
+    },
+    {
+      "key": "testEmail",
+      "value": "postman_test@example.com",
+      "type": "default"
+    },
+    {
+      "key": "sessionToken",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "default"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & Status",
+      "item": [
+        {
+          "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Service is running', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.eql(true);",
+                  "    pm.expect(jsonData.data).to.eql('OK');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{localUrl}}/register/health",
+              "host": ["{{localUrl}}"],
+              "path": ["register", "health"]
+            }
+          }
+        },
+        {
+          "name": "Network Health Check (Mobile)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{networkUrl}}/register/health",
+              "host": ["{{networkUrl}}"],
+              "path": ["register", "health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Registration Flow",
+      "item": [
+        {
+          "name": "1. Register Email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Registration successful', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.eql(true);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.sessionToken) {",
+                  "    pm.collectionVariables.set('sessionToken', jsonData.data.sessionToken);",
+                  "    console.log('Session Token:', jsonData.data.sessionToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{testEmail}}\"\n}"
+            },
+            "url": {
+              "raw": "{{localUrl}}/register/email",
+              "host": ["{{localUrl}}"],
+              "path": ["register", "email"]
+            }
+          }
+        },
+        {
+          "name": "2. Verify OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('OTP verified', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.currentStep).to.eql('DETAILS');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"sessionToken\": \"{{sessionToken}}\",\n    \"otp\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{localUrl}}/register/verify-otp",
+              "host": ["{{localUrl}}"],
+              "path": ["register", "verify-otp"]
+            }
+          }
+        },
+        {
+          "name": "3. Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"sessionToken\": \"{{sessionToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{localUrl}}/register/resend-otp",
+              "host": ["{{localUrl}}"],
+              "path": ["register", "resend-otp"]
+            }
+          }
+        },
+        {
+          "name": "4. Submit Details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Details saved', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.currentStep).to.eql('PASSWORD');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"sessionToken\": \"{{sessionToken}}\",\n    \"fullName\": \"Nishal Poojary\",\n    \"phoneNumber\": \"9876543210\",\n    \"countryCode\": \"+91\",\n    \"dateOfBirth\": \"1995-05-15\"\n}"
+            },
+            "url": {
+              "raw": "{{localUrl}}/register/details",
+              "host": ["{{localUrl}}"],
+              "path": ["register", "details"]
+            }
+          }
+        },
+        {
+          "name": "5. Create Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Password created', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.currentStep).to.eql('USERNAME');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"sessionToken\": \"{{sessionToken}}\",\n    \"password\": \"TestPass123!\",\n    \"confirmPassword\": \"TestPass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{localUrl}}/register/password",
+              "host": ["{{localUrl}}"],
+              "path": ["register", "password"]
+            }
+          }
+        },
+        {
+          "name": "6. Check Username",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{localUrl}}/register/check-username?username=testuser123",
+              "host": ["{{localUrl}}"],
+              "path": ["register", "check-username"],
+              "query": [
+                {
+                  "key": "username",
+                  "value": "testuser123"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "7. Create Username",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Registration completed', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.currentStep).to.eql('COMPLETED');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"sessionToken\": \"{{sessionToken}}\",\n    \"username\": \"testuser_{{$timestamp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{localUrl}}/register/username",
+              "host": ["{{localUrl}}"],
+              "path": ["register", "username"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login successful', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.eql(true);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.accessToken) {",
+                  "    pm.collectionVariables.set('accessToken', jsonData.data.accessToken);",
+                  "    console.log('Access Token:', jsonData.data.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Device-Info",
+                "value": "Postman | Testing"
+              },
+              {
+                "key": "X-IP-Address",
+                "value": "127.0.0.1"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{testEmail}}\",\n    \"password\": \"TestPass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{localUrl}}/login",
+              "host": ["{{localUrl}}"],
+              "path": ["login"]
+            }
+          }
+        },
+        {
+          "name": "Validate Token (Fast)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{localUrl}}/validate",
+              "host": ["{{localUrl}}"],
+              "path": ["validate"]
+            }
+          }
+        },
+        {
+          "name": "Validate Token (Secure)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{localUrl}}/validate-secure",
+              "host": ["{{localUrl}}"],
+              "path": ["validate-secure"]
+            }
+          }
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{localUrl}}/profile",
+              "host": ["{{localUrl}}"],
+              "path": ["profile"]
+            }
+          }
+        },
+        {
+          "name": "Get Active Sessions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{localUrl}}/sessions",
+              "host": ["{{localUrl}}"],
+              "path": ["sessions"]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{localUrl}}/logout",
+              "host": ["{{localUrl}}"],
+              "path": ["logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Performance Testing",
+      "item": [
+        {
+          "name": "Fast Validation (100 times)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Response time under 10ms', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(10);",
+                  "});",
+                  "",
+                  "pm.test('Token is valid', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.valid).to.eql(true);",
+                  "});",
+                  "",
+                  "console.log('Response time:', pm.response.responseTime, 'ms');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{localUrl}}/validate",
+              "host": ["{{localUrl}}"],
+              "path": ["validate"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Mobile Testing",
+      "item": [
+        {
+          "name": "Mobile - Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{networkUrl}}/register/health",
+              "host": ["{{networkUrl}}"],
+              "path": ["register", "health"]
+            }
+          }
+        },
+        {
+          "name": "Mobile - Register Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"mobile_test@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{networkUrl}}/register/email",
+              "host": ["{{networkUrl}}"],
+              "path": ["register", "email"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+

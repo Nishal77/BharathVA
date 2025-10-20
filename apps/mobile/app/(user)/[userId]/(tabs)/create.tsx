@@ -1,18 +1,31 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { useTabStyles } from '../../../../hooks/useTabStyles';
+import { View, StyleSheet, useColorScheme } from 'react-native';
+import { useRouter } from 'expo-router';
+import { PostComposer } from '../../../../components/PostComposer';
 
 export default function CreateScreen() {
-  const tabStyles = useTabStyles();
+  const router = useRouter();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const handlePost = (content: string) => {
+    console.log('New post created:', content);
+    // TODO: Implement post creation API call
+    // For now, just navigate back
+    router.back();
+  };
+
+  const handleCancel = () => {
+    console.log('Post creation cancelled');
+    router.back();
+  };
 
   return (
-    <View style={[styles.container, { backgroundColor: tabStyles.container.backgroundColor }]}>
-      <Text style={[styles.title, { color: tabStyles.text.active }]}>
-        Create Content
-      </Text>
-      <Text style={[styles.subtitle, { color: tabStyles.text.inactive }]}>
-        This is the create screen where users can create new content.
-      </Text>
+    <View style={[styles.container, { backgroundColor: isDark ? '#000000' : '#FFFFFF' }]}>
+      <PostComposer 
+        onPost={handlePost}
+        onCancel={handleCancel}
+      />
     </View>
   );
 }
@@ -20,19 +33,5 @@ export default function CreateScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 24,
   },
 });

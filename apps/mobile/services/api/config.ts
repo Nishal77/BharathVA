@@ -1,44 +1,31 @@
 // API Configuration
-// Update BASE_URL based on where you're testing from
+import { getBaseURL, getTimeout, isLoggingEnabled } from './environment';
 
-// Using Local IP for better compatibility with Expo/React Native
 export const API_CONFIG = {
-  BASE_URL: 'http://192.168.0.9:8080/api',
-  TIMEOUT: 30000, // 30 seconds
+  BASE_URL: getBaseURL(),
+  TIMEOUT: getTimeout(),
+  ENABLE_LOGGING: isLoggingEnabled(),
 };
-
-// Alternative configurations:
-// For localhost (might not work with Expo)
-// export const API_CONFIG = {
-//   BASE_URL: 'http://localhost:8080/api',
-//   TIMEOUT: 30000,
-// };
-
-// For Android Emulator:
-// export const API_CONFIG = {
-//   BASE_URL: 'http://10.0.2.2:8080/api',
-//   TIMEOUT: 30000,
-// };
 
 export const ENDPOINTS = {
   AUTH: {
-    REGISTER_EMAIL: '/auth/register/email',
-    VERIFY_OTP: '/auth/register/verify-otp',
-    RESEND_OTP: '/auth/register/resend-otp',
-    SUBMIT_DETAILS: '/auth/register/details',
-    CREATE_PASSWORD: '/auth/register/password',
-    CHECK_USERNAME: '/auth/register/check-username',
-    CREATE_USERNAME: '/auth/register/username',
-    HEALTH: '/auth/register/health',
-    LOGIN: '/auth/login',
-    REFRESH: '/auth/refresh',
-    LOGOUT: '/auth/logout',
-    VALIDATE: '/auth/validate',
-    PROFILE: '/auth/profile',
-    GET_SESSIONS: '/auth/sessions',
-    LOGOUT_SESSION: '/auth/sessions/logout',
-    LOGOUT_ALL_OTHER: '/auth/sessions/logout-all-other',
-    USER_ME: '/auth/user/me',
+    REGISTER_EMAIL: '/register/email',
+    VERIFY_OTP: '/register/verify-otp',
+    RESEND_OTP: '/register/resend-otp',
+    SUBMIT_DETAILS: '/register/details',
+    CREATE_PASSWORD: '/register/password',
+    CHECK_USERNAME: '/register/check-username',
+    CREATE_USERNAME: '/register/username',
+    HEALTH: '/register/health',
+    LOGIN: '/login',
+    REFRESH: '/refresh',
+    LOGOUT: '/logout',
+    VALIDATE: '/validate',
+    PROFILE: '/profile',
+    GET_SESSIONS: '/sessions',
+    LOGOUT_SESSION: '/sessions/logout',
+    LOGOUT_ALL_OTHER: '/sessions/logout-all-other',
+    USER_ME: '/user/me',
   },
 };
 

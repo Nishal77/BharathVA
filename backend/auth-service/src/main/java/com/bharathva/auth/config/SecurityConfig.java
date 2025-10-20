@@ -34,6 +34,7 @@ public class SecurityConfig {
                 .requestMatchers("/auth/refresh").permitAll()
                 .requestMatchers("/auth/logout").permitAll()
                 .requestMatchers("/auth/validate").permitAll()
+                .requestMatchers("/auth/validate-secure").permitAll()
                 .requestMatchers("/auth/health").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/error").permitAll()

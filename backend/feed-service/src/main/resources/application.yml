@@ -1,0 +1,75 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  application:
+    name: feed-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:docker}
+  
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/bharathva_feed}
+      database: ${MONGO_DATABASE:bharathva_feed}
+  
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${AUTH_SERVICE_URL:http://localhost:8081}/oauth2/default
+  
+  cache:
+    type: simple
+    cache-names:
+      - userCache
+      - feedCache
+    caffeine:
+      spec: maximumSize=1000,expireAfterWrite=${CACHE_TTL:300}s
+
+# Eureka Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
+
+# Management endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# Logging
+logging:
+  level:
+    com.bharathva.feed: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Feed Service Configuration
+feed:
+  max-items: ${MAX_FEED_ITEMS:50}
+  default-page-size: ${DEFAULT_PAGE_SIZE:20}
+  cache-ttl: ${CACHE_TTL:300}
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:your-64-character-secret-key-for-feed-service-jwt-validation-only}
+  expiration: ${JWT_EXPIRATION:3600000}
+
+# Auth Service Configuration
+auth:
+  service:
+    url: ${AUTH_SERVICE_URL:http://localhost:8081}
+    local-url: ${AUTH_SERVICE_LOCAL_URL:http://localhost:8081}

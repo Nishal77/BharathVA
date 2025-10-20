@@ -1,0 +1,39 @@
+# Docker-specific overrides
+spring:
+  data:
+    mongodb:
+      uri: mongodb://mongodb:27017/bharathva_feed
+      database: bharathva_feed
+  cache:
+    type: simple
+    cache-names:
+      - userCache
+      - feedCache
+    caffeine:
+      spec: maximumSize=1000,expireAfterWrite=300s
+
+# Override for Docker environment
+eureka:
+  client:
+    service-url:
+      defaultZone: http://discovery-service:8761/eureka/
+  instance:
+    prefer-ip-address: true
+    instance-id: feed-service:8082
+
+# Auth Service Configuration for Docker
+auth:
+  service:
+    url: http://auth-service:8081
+    local-url: http://localhost:8081
+
+# JWT Configuration
+jwt:
+  secret: your-64-character-secret-key-for-feed-service-jwt-validation-only
+  expiration: 3600000
+
+# Feed Service Configuration
+feed:
+  max-items: 50
+  default-page-size: 20
+  cache-ttl: 300

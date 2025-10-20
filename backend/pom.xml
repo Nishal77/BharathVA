@@ -25,6 +25,7 @@
         <module>config-service</module>
         <module>gateway-service</module>
         <module>auth-service</module>
+        <module>feed-service</module>
     </modules>
 
     <properties>
@@ -76,6 +77,13 @@
                 <artifactId>lombok</artifactId>
                 <version>1.18.34</version>
                 <scope>provided</scope>
+            </dependency>
+
+            <!-- Embedded MongoDB -->
+            <dependency>
+                <groupId>de.flapdoodle.embed</groupId>
+                <artifactId>de.flapdoodle.embed.mongo</artifactId>
+                <version>4.9.2</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

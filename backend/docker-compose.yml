@@ -2,6 +2,24 @@
 # Microservices Architecture with individual .env files
 
 services:
+  # Redis Cache Service
+  redis:
+    image: redis:7-alpine
+    container_name: bharathva-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - bharathva-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
   # Discovery Service (Eureka Server)
   discovery-service:
     build:
@@ -58,6 +76,8 @@ services:
     depends_on:
       discovery-service:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - bharathva-network
     healthcheck:
@@ -68,12 +88,64 @@ services:
       start_period: 60s
     restart: unless-stopped
 
+  # MongoDB for Feed Service
+  mongodb:
+    image: mongo:7.0
+    container_name: bharathva-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=bharathva_feed
+    volumes:
+      - mongodb_data:/data/db
+      - ./feed-service/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - bharathva-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Feed Service
+  feed-service:
+    build:
+      context: .
+      dockerfile: feed-service/Dockerfile
+    container_name: bharathva-feed
+    ports:
+      - "8082:8082"
+    env_file:
+      - ./feed-service/.env
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    networks:
+      - bharathva-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8082/api/feed/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
 networks:
   bharathva-network:
     driver: bridge
 
-# Optional: Add volumes for logs persistence
+# Volumes for data persistence
 volumes:
+  redis-data:
+    driver: local
+  mongodb_data:
+    driver: local
   logs:
     driver: local
 

@@ -34,7 +34,7 @@ export default function HomeHeader({
           right: 0,
           zIndex: 50,
           paddingTop: 48,
-          paddingBottom: 13,
+          paddingBottom: 0,
           paddingHorizontal: 24,
           borderBottomWidth: 1,
           borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : tabStyles.border.bottom,
@@ -82,7 +82,7 @@ export default function HomeHeader({
       {/* Header Content */}
       <View style={{ position: 'relative', zIndex: 10 }}>
         {/* Top Row - Profile, Logo, Message Icon */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 0 }}>
           {/* Profile Button - Left */}
           <Pressable
             onPress={onProfilePress}
@@ -91,25 +91,30 @@ export default function HomeHeader({
               justifyContent: 'center',
               opacity: pressed ? 0.8 : 1,
               transform: [{ scale: pressed ? 0.95 : 1 }],
-              marginTop: 2, // Slight adjustment to align with other elements
+              backgroundColor: isDark ? '#FFFFFF' : '#000000',
+              borderRadius: 24,
+              padding: 6,
             })}
             accessibilityLabel="Open profile menu"
             accessibilityRole="button"
           >
             <Image
-              source={require('../assets/logo/profilelogo.png')}
+              source={require('../assets/logo/Ada.png')}
               style={{ 
-                width: 40, 
-                height: 40,
-                tintColor: isDark ? '#FFFFFF' : '#000000'
+                width: 28, 
+                height: 28,
+                backgroundColor: 'transparent',
               }}
               contentFit="contain"
               accessibilityLabel="Profile button"
+              onError={(error) => console.log('Main logo failed to load:', error)}
+              onLoad={() => console.log('Main logo loaded successfully')}
+              placeholder={{ uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==' }}
             />
           </Pressable>
 
-          {/* India Logo - Center */}
-          <Image
+          {/* India Logo - Center - Commented out but space preserved */}
+          {/* <Image
             source={require('../assets/images/india.png')}
             style={{ 
               width: 64, 
@@ -120,6 +125,14 @@ export default function HomeHeader({
             placeholder={{ uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==' }}
             onError={() => console.log('India logo failed to load')}
             accessibilityLabel="BharathVA logo"
+          /> */}
+          
+          {/* Placeholder View to maintain layout space */}
+          <View 
+            style={{ 
+              width: 64, 
+              height: 64,
+            }}
           />
 
           {/* Text Icon with Message Count - Right */}
@@ -136,10 +149,10 @@ export default function HomeHeader({
             accessibilityRole="button"
           >
             <Image
-              source={require('../assets/logo/text.png')}
+              source={require('../assets/logo/message.png')}
               style={{
-                width: 20,
-                height: 20,
+                width: 28,
+                height: 28,
                 tintColor: isDark ? '#FFFFFF' : '#000000'
               }}
               contentFit="contain"
@@ -153,34 +166,30 @@ export default function HomeHeader({
                 right: -8,
                 minWidth: 18,
                 height: 18,
-                backgroundColor: '#FF6B35',
+                backgroundColor: '#FF3B30',
                 borderRadius: 9,
                 justifyContent: 'center',
                 alignItems: 'center',
                 paddingHorizontal: 4,
-                shadowColor: '#FF6B35',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.3,
-                shadowRadius: 4,
-                elevation: 6,
               }}
             >
               <Text 
                 style={{
                   color: '#FFFFFF',
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: '700',
                   textAlign: 'center',
-                  lineHeight: 12,
+                  lineHeight: 13,
                 }}
               >
-                17
+                3
               </Text>
             </View>
           </Pressable>
         </View>
 
-        {/* Navigation Tabs - Horizontally Scrollable */}
+        {/* Navigation Tabs - Horizontally Scrollable - Commented out */}
+        {/*
         <ScrollView 
           horizontal 
           showsHorizontalScrollIndicator={false}
@@ -214,7 +223,6 @@ export default function HomeHeader({
                   {tab}
                 </Text>
                 
-                {/* Active Tab Indicator */}
                 {activeTab === tab && (
                   <View 
                     style={{
@@ -232,6 +240,7 @@ export default function HomeHeader({
             ))}
           </View>
         </ScrollView>
+        */}
       </View>
     </BlurView>
   );

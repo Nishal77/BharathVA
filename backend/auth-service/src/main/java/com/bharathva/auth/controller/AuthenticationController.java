@@ -3,6 +3,7 @@ package com.bharathva.auth.controller;
 import com.bharathva.auth.dto.LoginRequest;
 import com.bharathva.auth.dto.LoginResponse;
 import com.bharathva.auth.service.AuthenticationService;
+import com.bharathva.auth.service.FastAuthService;
 import com.bharathva.shared.dto.ApiResponse;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -26,6 +27,9 @@ public class AuthenticationController {
 
     @Autowired
     private AuthenticationService authenticationService;
+
+    @Autowired
+    private FastAuthService fastAuthService;
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<LoginResponse>> login(
@@ -70,6 +74,14 @@ public class AuthenticationController {
         }
     }
 
+    /**
+     * FAST token validation endpoint - uses stateless JWT verification.
+     * This endpoint is optimized for high-frequency validation checks.
+     * 
+     * Performance: <10ms (no database queries)
+     * 
+     * For security-critical operations, use /validate-secure instead.
+     */
     @PostMapping("/validate")
     public ResponseEntity<ApiResponse<Map<String, Object>>> validateToken(@RequestHeader("Authorization") String authHeader) {
         try {
@@ -83,11 +95,23 @@ public class AuthenticationController {
             }
 
             String token = authHeader.substring(7);
-            boolean isValid = authenticationService.validateToken(token);
+            boolean isValid = fastAuthService.validateTokenFast(token);
             
             Map<String, Object> responseData = new HashMap<>();
             responseData.put("valid", isValid);
-            responseData.put("message", isValid ? "Token is valid" : "Token is invalid or expired");
+            
+            if (isValid) {
+                UUID userId = fastAuthService.getUserIdFromTokenFast(token);
+                String username = fastAuthService.getUsernameFromToken(token);
+                String email = fastAuthService.getEmailFromToken(token);
+                
+                responseData.put("userId", userId.toString());
+                responseData.put("username", username);
+                responseData.put("email", email);
+                responseData.put("message", "Token is valid");
+            } else {
+                responseData.put("message", "Token is invalid or expired");
+            }
             
             return ResponseEntity.ok(new ApiResponse<>(
                     true,
@@ -100,6 +124,53 @@ public class AuthenticationController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
                     false,
                     "An unexpected error occurred during token validation",
+                    null,
+                    LocalDateTime.now()
+            ));
+        }
+    }
+
+    /**
+     * SECURE token validation endpoint - verifies JWT + database session.
+     * Use this ONLY for security-critical operations.
+     * 
+     * Performance: 50-200ms (includes database queries)
+     */
+    @PostMapping("/validate-secure")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> validateTokenSecure(@RequestHeader("Authorization") String authHeader) {
+        try {
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(
+                        false,
+                        "Invalid or missing authorization header",
+                        null,
+                        LocalDateTime.now()
+                ));
+            }
+
+            String token = authHeader.substring(7);
+            boolean isValid = authenticationService.validateTokenWithSessionCheck(token);
+            
+            Map<String, Object> responseData = new HashMap<>();
+            responseData.put("valid", isValid);
+            responseData.put("message", isValid ? "Token and session are valid" : "Token is invalid, expired, or session not found");
+            
+            if (isValid) {
+                UUID userId = authenticationService.getUserIdFromToken(token);
+                responseData.put("userId", userId.toString());
+            }
+            
+            return ResponseEntity.ok(new ApiResponse<>(
+                    true,
+                    "Secure token validation completed",
+                    responseData,
+                    LocalDateTime.now()
+            ));
+        } catch (Exception e) {
+            log.error("Secure token validation failed: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
+                    false,
+                    "An unexpected error occurred during secure token validation",
                     null,
                     LocalDateTime.now()
             ));

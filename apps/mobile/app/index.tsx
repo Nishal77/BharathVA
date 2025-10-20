@@ -20,7 +20,7 @@ export default function HeroScreen() {
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      console.log('✅ User already authenticated - redirecting to home');
+      console.log('User already authenticated - redirecting to home');
       router.replace(`/(user)/${user.userId}/(tabs)`);
     }
   }, [isAuthenticated, user]);

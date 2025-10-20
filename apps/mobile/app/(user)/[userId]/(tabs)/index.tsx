@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import HomeHeader from '../../../../components/HomeHeader';
 import MessagesScreen from '../../../../components/messages/MessagesScreen';
-import TweetCard from '../../../../components/tweet/TweetCard';
+import FeedCard from '../../../../components/feed/FeedCard';
 import { Sidebar } from '../../../../components/ui';
 import { useSidebar } from '../../../../contexts/SidebarContext';
 import { useTabStyles } from '../../../../hooks/useTabStyles';
@@ -228,7 +228,7 @@ export default function HomeScreen() {
       />
       
       {/* Main Content Container with Header Spacing */}
-      <View style={{ flex: 1, paddingTop: 130, backgroundColor: tabStyles.screen.backgroundColor }}>
+      <View style={{ flex: 1, paddingTop: 90, backgroundColor: tabStyles.screen.backgroundColor }}>
 
          {/* Tweet Feed */}
          <ScrollView 
@@ -240,7 +240,7 @@ export default function HomeScreen() {
            }
          >
           {sampleTweets.map((tweet) => (
-            <TweetCard
+            <FeedCard
               key={tweet.id}
               id={tweet.id}
               name={tweet.name}
@@ -255,7 +255,7 @@ export default function HomeScreen() {
               likes={tweet.likes}
               bookmarks={tweet.bookmarks}
               views={tweet.views}
-              onPress={() => console.log('Tweet pressed:', tweet.id)}
+              onPress={() => console.log('Feed pressed:', tweet.id)}
               onReply={() => console.log('Reply to:', tweet.id)}
               onRetweet={() => console.log('Retweet:', tweet.id)}
               onLike={() => console.log('Like:', tweet.id)}

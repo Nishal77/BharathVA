@@ -1,7 +1,8 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
-import { Dimensions, Pressable, Text, TextInput, View, useColorScheme } from 'react-native';
+import { Dimensions, Pressable, Text, TextInput, View, useColorScheme, Alert } from 'react-native';
+import { runNetworkTests } from '../../../services/api/networkTest';
 
 const { height, width } = Dimensions.get('window');
 
@@ -22,12 +23,33 @@ export default function SignInAsSupport({
   const isDark = colorScheme === 'dark';
   
   const [email, setEmail] = useState('');
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
   
   const bgColor = isDark ? '#000000' : '#FFFFFF';
   const textColor = isDark ? 'rgba(255, 255, 255, 0.87)' : '#000000';
   const secondaryTextColor = isDark ? 'rgba(255, 255, 255, 0.4)' : '#6B7280';
   const borderColor = isDark ? '#FFFFFF0D' : '#E5E7EB';
   const inputBgColor = isDark ? '#151515' : '#F9FAFB';
+
+  const handleTestConnection = async () => {
+    setIsTestingConnection(true);
+    try {
+      await runNetworkTests();
+      Alert.alert(
+        '✅ Network Tests Complete',
+        'Check the console logs for detailed test results.',
+        [{ text: 'OK', style: 'default' }]
+      );
+    } catch (error) {
+      Alert.alert(
+        '❌ Network Test Error',
+        'Failed to run network tests. Check console for details.',
+        [{ text: 'OK', style: 'default' }]
+      );
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
 
   return (
     <View className="flex-1" style={{ backgroundColor: bgColor }}>
@@ -251,6 +273,28 @@ export default function SignInAsSupport({
   Your trust and voice are protected under{' '}
   <Text className="text-blue-500 font-medium">Secure Data & Cookie Policy</Text>.
 </Text>
+
+        {/* Test Connection Button - Development Only */}
+        {__DEV__ && (
+          <View className="items-center mb-4">
+            <Pressable
+              onPress={handleTestConnection}
+              disabled={isTestingConnection}
+              className="px-4 py-2 rounded-lg border border-blue-500"
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.7 : 1,
+                backgroundColor: isTestingConnection ? '#9CA3AF' : 'transparent',
+              })}
+            >
+              <Text 
+                className="text-sm font-medium"
+                style={{ color: isTestingConnection ? '#FFFFFF' : '#3B82F6' }}
+              >
+                {isTestingConnection ? 'Testing...' : '🔍 Test API Connection'}
+              </Text>
+            </Pressable>
+          </View>
+        )}
 
         {/* Already have an account */}
         <View className="items-center">
