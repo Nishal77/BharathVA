@@ -126,6 +126,46 @@ public class UserController {
         }
     }
 
+    @GetMapping("/username/{username}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getUserByUsername(@PathVariable String username) {
+        try {
+            Optional<User> userOptional = userRepository.findByUsername(username);
+            
+            if (userOptional.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiResponse<>(
+                        false,
+                        "User not found",
+                        null,
+                        LocalDateTime.now()
+                ));
+            }
+            
+            User user = userOptional.get();
+            Map<String, Object> userData = new HashMap<>();
+            userData.put("id", user.getId());
+            userData.put("username", user.getUsername());
+            userData.put("fullName", user.getFullName());
+            userData.put("email", user.getEmail());
+            userData.put("isEmailVerified", user.getIsEmailVerified());
+            userData.put("createdAt", user.getCreatedAt());
+            
+            return ResponseEntity.ok(new ApiResponse<>(
+                    true,
+                    "User data retrieved successfully",
+                    userData,
+                    LocalDateTime.now()
+            ));
+        } catch (Exception e) {
+            log.error("Failed to retrieve user by username: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
+                    false,
+                    "An unexpected error occurred",
+                    null,
+                    LocalDateTime.now()
+            ));
+        }
+    }
+
     @PutMapping("/me/fullname")
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateFullName(@RequestBody Map<String, String> request) {
         try {

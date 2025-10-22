@@ -1,329 +1,268 @@
 # BharathVA Feed Service
 
-Microservice for managing social media feeds in the BharathVA platform. This service handles feed creation, retrieval, interactions, and provides real-time social media functionality.
-
-## Architecture
-
-- **Database**: MongoDB (Document-based storage for flexible feed data)
-- **Authentication**: JWT tokens from Auth Service
-- **Caching**: Spring Cache with Caffeine
-- **Service Discovery**: Netflix Eureka
-- **API Gateway**: Spring Cloud Gateway
+A microservice for managing social media feeds in the BharathVA platform, built with Spring Boot and MongoDB.
 
 ## Features
 
-### Core Functionality
-- ✅ Create, read, update, delete feeds
-- ✅ Like, retweet, bookmark interactions
-- ✅ Reply and thread support
-- ✅ Media content support (images, videos)
-- ✅ Search and discovery
-- ✅ Trending feeds
-- ✅ User-specific feeds
-- ✅ Public timeline
+- Create, read, update, and delete feeds
+- User authentication and authorization
+- MongoDB integration for feed storage
+- NeonDB integration for user validation
+- Caching for improved performance
+- Comprehensive logging and monitoring
 
-### Technical Features
-- ✅ MongoDB integration with proper indexing
-- ✅ JWT authentication with Auth Service
-- ✅ Caching for performance optimization
-- ✅ Soft delete functionality
-- ✅ Pagination support
-- ✅ Real-time view counting
-- ✅ Comprehensive error handling
+## Architecture
 
-## Quick Start
+### Database Configuration
 
-### Using Docker (Recommended)
+- **MongoDB**: Primary database for storing feed data
+- **NeonDB (PostgreSQL)**: User validation through auth service integration
 
-```bash
-# Start feed service with dependencies
-cd backend
-docker-compose up feed-service
+### Authentication Flow
 
-# Or start all services
-docker-compose up
-```
-
-### Local Development
-
-```bash
-# Prerequisites
-- Java 17+
-- Maven 3.9+
-- MongoDB 7.0+
-- Running Auth Service
-
-# Build and run
-cd feed-service
-mvn clean install
-mvn spring-boot:run
-```
-
-## API Endpoints
-
-### Feed Management
-```
-POST   /api/feed/create              - Create new feed
-GET    /api/feed/{feedId}            - Get feed by ID
-GET    /api/feed/user/{userId}       - Get user's feeds
-GET    /api/feed/public              - Get public feeds
-DELETE /api/feed/{feedId}            - Delete feed
-```
-
-### Feed Interactions
-```
-POST   /api/feed/{feedId}/like       - Like/Unlike feed
-POST   /api/feed/{feedId}/retweet    - Retweet/Unretweet feed
-POST   /api/feed/{feedId}/bookmark   - Bookmark/Unbookmark feed
-```
-
-### Feed Replies
-```
-POST   /api/feed/create              - Create reply (with parentFeedId)
-GET    /api/feed/{feedId}/replies    - Get replies to feed
-```
-
-### Search & Discovery
-```
-GET    /api/feed/search?q={query}    - Search feeds
-GET    /api/feed/trending            - Get trending feeds
-```
-
-### Health & Status
-```
-GET    /api/feed/health              - Service health check
-```
+1. User authenticates with Auth Service (NeonDB)
+2. Auth Service returns JWT token
+3. Feed Service validates JWT token with Auth Service
+4. Feed Service validates user exists in NeonDB
+5. Feed operations are performed on MongoDB
 
 ## Configuration
 
 ### Environment Variables
 
-```env
+Copy `env.example` to `.env` and configure:
+
+```bash
 # MongoDB Configuration
 MONGO_URI=mongodb://localhost:27017/bharathva_feed
 MONGO_DATABASE=bharathva_feed
 
+# NeonDB Configuration (for user validation)
+NEON_DB_URL=jdbc:postgresql://your-neon-host/neondb?sslmode=require
+NEON_DB_USERNAME=neondb_owner
+NEON_DB_PASSWORD=your_neon_password
+
 # Auth Service Configuration
-AUTH_SERVICE_URL=http://auth-service:8081
+AUTH_SERVICE_URL=http://localhost:8081
 AUTH_SERVICE_LOCAL_URL=http://localhost:8081
 
-# JWT Configuration
+# JWT Configuration (must match auth service)
 JWT_SECRET=your-64-character-secret-key-for-feed-service-jwt-validation-only
 JWT_EXPIRATION=3600000
+JWT_REFRESH_EXPIRATION=604800000
+
+# Eureka Configuration
+EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://localhost:8761/eureka/
 
 # Server Configuration
 SERVER_PORT=8082
+SPRING_PROFILES_ACTIVE=default
+```
 
-# Eureka Configuration
-EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service:8761/eureka/
+### Application Configuration
 
-# Cache Configuration
-CACHE_TTL=300
+The service uses `application.yml` with environment variable substitution:
 
-# Feed Configuration
-MAX_FEED_ITEMS=50
-DEFAULT_PAGE_SIZE=20
+```yaml
+spring:
+  application:
+    name: feed-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:default}
+  
+  # MongoDB Configuration
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017/bharathva_feed}
+      database: ${MONGO_DATABASE:bharathva_feed}
+      auto-index-creation: true
+  
+  # NeonDB PostgreSQL Configuration (for user validation)
+  datasource:
+    url: ${NEON_DB_URL:jdbc:postgresql://localhost:5432/neondb}
+    username: ${NEON_DB_USERNAME:neondb_owner}
+    password: ${NEON_DB_PASSWORD:your_password}
+    driver-class-name: org.postgresql.Driver
+```
+
+## API Endpoints
+
+### Feed Management
+
+- `POST /api/feed/create` - Create a new feed
+- `GET /api/feed/{feedId}` - Get feed by ID
+- `GET /api/feed/user/{userId}` - Get user's feeds (paginated)
+- `GET /api/feed/all` - Get all feeds (paginated)
+- `GET /api/feed/search?q=query` - Search feeds
+- `DELETE /api/feed/{feedId}` - Delete feed
+- `GET /api/feed/health` - Health check
+
+### Request/Response Format
+
+#### Create Feed Request
+```json
+{
+  "userId": "user-uuid-from-neondb",
+  "message": "Hello from BharathVA!"
+}
+```
+
+#### Feed Response
+```json
+{
+  "success": true,
+  "message": "Feed created successfully",
+  "data": {
+    "id": "feed-mongodb-id",
+    "userId": "user-uuid-from-neondb",
+    "message": "Hello from BharathVA!",
+    "createdAt": "2024-01-01T12:00:00",
+    "updatedAt": "2024-01-01T12:00:00"
+  },
+  "timestamp": "2024-01-01T12:00:00"
+}
 ```
 
 ## Database Schema
 
-### Feed Document Structure
-```json
+### MongoDB Collection: `feeds`
+
+```javascript
 {
-  "_id": "ObjectId",
-  "userId": "String (UUID from Auth Service)",
-  "username": "String",
-  "fullName": "String",
-  "avatarUrl": "String",
-  "verified": "Boolean",
-  "content": "String (max 280 chars)",
-  "emojis": ["String"],
-  "media": {
-    "type": "String (grid|single|carousel)",
-    "items": [
-      {
-        "id": "String",
-        "type": "String (image|video|gif)",
-        "url": "String",
-        "thumbnailUrl": "String",
-        "altText": "String",
-        "width": "Number",
-        "height": "Number",
-        "fileSize": "Number"
-      }
-    ]
-  },
-  "threadId": "String",
-  "parentFeedId": "String",
-  "repliesCount": "Number",
-  "retweetsCount": "Number",
-  "likesCount": "Number",
-  "bookmarksCount": "Number",
-  "viewsCount": "Number",
-  "isLiked": "Boolean",
-  "isRetweeted": "Boolean",
-  "isBookmarked": "Boolean",
-  "createdAt": "DateTime",
-  "updatedAt": "DateTime",
-  "isDeleted": "Boolean",
-  "feedType": "String (ORIGINAL|RETWEET|REPLY|QUOTE_TWEET)"
+  "_id": ObjectId("..."),
+  "userId": "uuid-from-neondb",
+  "message": "User's message content",
+  "createdAt": ISODate("2024-01-01T12:00:00Z"),
+  "updatedAt": ISODate("2024-01-01T12:00:00Z")
 }
 ```
 
-### MongoDB Indexes
-- `userId` - User-specific queries
-- `createdAt` - Time-based sorting
-- `threadId` - Thread conversations
-- `parentFeedId` - Reply chains
-- `isDeleted` - Soft delete filtering
-- `content` - Full-text search
-- Compound indexes for complex queries
+### Indexes
+
+- `userId` - For fast user feed queries
+- `createdAt` - For chronological ordering
+
+## Running the Service
+
+### Prerequisites
+
+1. MongoDB running on localhost:27017
+2. Auth Service running on localhost:8081
+3. Eureka Server running on localhost:8761 (optional)
+
+### Development Mode
+
+```bash
+# Copy environment configuration
+cp env.example .env
+
+# Update .env with your configuration
+nano .env
+
+# Run the service
+mvn spring-boot:run
+```
+
+### Production Mode
+
+```bash
+# Build the application
+mvn clean package
+
+# Run with environment variables
+java -jar target/feed-service-1.0.0.jar
+```
 
 ## Testing
 
-### Automated Testing
+### Unit Tests
+
 ```bash
-# Run the test script
-./TEST_FEED_SERVICE.sh
+mvn test
 ```
 
-### Manual Testing with Postman
-1. Import `POSTMAN_FEED_COLLECTION.json`
-2. Set up environment variables
-3. Run the collection tests
+### Integration Tests
 
-### Test Coverage
-- ✅ Feed creation and retrieval
-- ✅ User authentication integration
-- ✅ Feed interactions (like, retweet, bookmark)
-- ✅ Reply functionality
-- ✅ Search and discovery
-- ✅ Error handling
-- ✅ MongoDB operations
+```bash
+# Run the comprehensive test script
+./TEST_FEED_CREATION.sh
+```
 
-## Performance Optimization
+### Manual Testing
 
-### Caching Strategy
-- User information cached for 5 minutes
-- Feed data cached with TTL
-- Cache eviction on updates
+1. Start all services (Auth, Feed, Discovery)
+2. Register a user through Auth Service
+3. Login to get JWT token
+4. Create feeds using the token
+5. Verify feeds are stored in MongoDB
 
-### Database Optimization
-- Proper indexing for all query patterns
-- Compound indexes for complex queries
-- TTL index for automatic cleanup of deleted feeds
-
-### Query Optimization
-- Pagination for large result sets
-- Efficient aggregation pipelines
-- Optimized search queries
-
-## Monitoring
+## Monitoring and Logging
 
 ### Health Checks
-- Service health endpoint
-- MongoDB connection monitoring
-- Auth service connectivity
 
-### Metrics
-- Request/response times
-- Cache hit rates
-- Database query performance
-- Error rates
+- Service health: `GET /api/feed/health`
+- MongoDB connection: Checked on startup
+- Auth Service connection: Validated on each request
 
-## Security
+### Logging
 
-### Authentication
-- JWT token validation
-- User ID extraction from tokens
-- Authorization for user-specific operations
+The service provides comprehensive logging:
 
-### Data Protection
-- Input validation and sanitization
-- SQL injection prevention
-- XSS protection
+- Feed creation with MongoDB document IDs
+- User validation results
+- Authentication failures
+- Performance metrics
 
-### Rate Limiting
-- API rate limiting (configured at gateway level)
-- Per-user rate limits for feed creation
+### Example Log Output
 
-## Deployment
-
-### Docker Deployment
-```bash
-# Build and run with Docker Compose
-docker-compose up feed-service
-
-# Or build individual service
-docker build -t bharathva-feed-service .
 ```
-
-### Production Considerations
-- MongoDB replica set for high availability
-- Redis for distributed caching
-- Load balancing across multiple instances
-- Monitoring and logging setup
-
-## Integration
-
-### Auth Service Integration
-- Validates user existence before feed operations
-- Caches user information for performance
-- Handles user profile updates
-
-### Gateway Integration
-- Routes `/api/feed/*` requests to feed service
-- Handles CORS and security headers
-- Load balancing and failover
+2024-01-01 12:00:00 - Creating feed for user: user-123
+2024-01-01 12:00:00 - User validation result for userId user-123: true
+2024-01-01 12:00:00 - Feed created successfully with ID: 507f1f77bcf86cd799439011 for user: user-123 - Message: 'Hello from BharathVA!'
+2024-01-01 12:00:00 - MongoDB Storage: Document saved to collection 'feeds' with _id: 507f1f77bcf86cd799439011
+```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **MongoDB Connection Issues**
-   - Check MongoDB service status
-   - Verify connection string
-   - Check network connectivity
+1. **Authentication Error**: Check JWT secret matches between services
+2. **MongoDB Connection**: Verify MongoDB is running and accessible
+3. **User Validation Failed**: Ensure Auth Service is running and accessible
+4. **Port Conflicts**: Check if port 8082 is available
 
-2. **Auth Service Integration Issues**
-   - Verify Auth Service is running
-   - Check JWT secret configuration
-   - Validate user ID format
+### Debug Mode
 
-3. **Performance Issues**
-   - Check MongoDB indexes
-   - Monitor cache hit rates
-   - Review query patterns
+Enable debug logging:
 
-### Logs
-```bash
-# View service logs
-docker-compose logs feed-service
-
-# View MongoDB logs
-docker-compose logs mongodb
+```yaml
+logging:
+  level:
+    com.bharathva.feed: DEBUG
+    org.springframework.security: DEBUG
 ```
 
-## Development
+## Security
 
-### Adding New Features
-1. Create model classes in `model/` package
-2. Add repository methods in `repository/` package
-3. Implement service logic in `service/` package
-4. Create REST endpoints in `controller/` package
-5. Add tests and update documentation
+- JWT token validation for all authenticated endpoints
+- User validation against Auth Service
+- Input validation and sanitization
+- CORS configuration for cross-origin requests
 
-### Code Style
-- Follow Spring Boot conventions
-- Use proper logging with SLF4J
-- Implement proper error handling
-- Add comprehensive JavaDoc comments
+## Performance
+
+- MongoDB indexing for fast queries
+- Redis caching for frequently accessed data
+- Connection pooling for database connections
+- Asynchronous processing where applicable
+
+## Contributing
+
+1. Follow the coding standards
+2. Add tests for new features
+3. Update documentation
+4. Ensure all tests pass
 
 ## License
 
 Proprietary - All rights reserved
-
-## Version
-
-Current Version: 1.0.0
-Last Updated: October 2025

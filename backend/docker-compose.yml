@@ -118,10 +118,8 @@ services:
     ports:
       - "8082:8082"
     env_file:
-      - ./feed-service/.env
+      - ./feed-service/.env.local
     depends_on:
-      mongodb:
-        condition: service_healthy
       discovery-service:
         condition: service_healthy
       auth-service:

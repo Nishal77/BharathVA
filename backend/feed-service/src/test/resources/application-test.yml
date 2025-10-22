@@ -1,0 +1,33 @@
+# Test Configuration for Feed Service
+server:
+  port: 0  # Random port for testing
+
+spring:
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb+srv://nishalpoojary66_db_user:mJjqxxMVtfnb6keW@message-cluster.m8hycwy.mongodb.net/?retryWrites=true&w=majority&appName=message-cluster}
+      database: ${MONGO_DATABASE:bharathva_feed_test}
+      auto-index-creation: true
+
+  application:
+    name: feed-service-test
+
+  cache:
+    type: simple
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          secret-key: ${JWT_SECRET:m7n1lhkmwGNryojEND4kks2nzZypr2S0pGoOAcTqfFIEjXOUByV5BewPKNr0ULNlb7frcStl4MHZO0fNI6g}
+
+# Disable Eureka for testing
+eureka:
+  client:
+    enabled: false
+
+# Logging
+logging:
+  level:
+    com.bharathva.feed: DEBUG
+    root: INFO

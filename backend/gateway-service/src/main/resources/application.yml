@@ -31,7 +31,15 @@ spring:
           predicates:
             - Path=/api/auth/**
           filters:
-            - StripPrefix=1
+            - RewritePath=/api/auth/(?<path>.*), /auth/$\{path}
+        
+        # Feed Service routes
+        - id: feed-service
+          uri: lb://FEED-SERVICE
+          predicates:
+            - Path=/api/feed/**
+          filters:
+            - StripPrefix=0
         
         # Health check for Gateway itself
         - id: gateway-health
@@ -63,4 +71,14 @@ eureka:
     fetch-registry: true
   instance:
     prefer-ip-address: true
+
+# Management endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
 
