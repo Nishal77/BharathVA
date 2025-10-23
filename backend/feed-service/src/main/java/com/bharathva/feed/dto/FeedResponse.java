@@ -3,6 +3,8 @@ package com.bharathva.feed.dto;
 import com.bharathva.feed.model.Feed;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  * Simple response DTO for feed messages
@@ -12,6 +14,7 @@ public class FeedResponse {
     private String id;
     private String userId;
     private String message;
+    private List<String> imageIds = new ArrayList<>();
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     
@@ -22,6 +25,7 @@ public class FeedResponse {
         this.id = feed.getId();
         this.userId = feed.getUserId();
         this.message = feed.getMessage();
+        this.imageIds = feed.getImageIds();
         this.createdAt = feed.getCreatedAt();
         this.updatedAt = feed.getUpdatedAt();
     }
@@ -67,12 +71,21 @@ public class FeedResponse {
         this.updatedAt = updatedAt;
     }
     
+    public List<String> getImageIds() {
+        return imageIds;
+    }
+    
+    public void setImageIds(List<String> imageIds) {
+        this.imageIds = imageIds;
+    }
+    
     @Override
     public String toString() {
         return "FeedResponse{" +
                 "id='" + id + '\'' +
                 ", userId='" + userId + '\'' +
                 ", message='" + message + '\'' +
+                ", imageIds=" + imageIds +
                 ", createdAt=" + createdAt +
                 ", updatedAt=" + updatedAt +
                 '}';

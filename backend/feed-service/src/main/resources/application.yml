@@ -29,11 +29,19 @@ spring:
         jwt:
           secret-key: ${JWT_SECRET:m7n1lhkmwGNryojEND4kks2nzZypr2S0pGoOAcTqfFIEjXOUByV5BewPKNr0ULNlb7frcStl4MHZO0fNI6g}
 
+  # File upload configuration
+  servlet:
+    multipart:
+      max-file-size: ${SPRING_MULTIPART_MAX_FILE_SIZE:50MB}
+      max-request-size: ${SPRING_MULTIPART_MAX_REQUEST_SIZE:100MB}
+      enabled: true
+
 # Eureka Discovery Configuration
 eureka:
   client:
     service-url:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://discovery-service:8761/eureka/}
+    register-with-eureka: true
     fetch-registry: true
   instance:
     prefer-ip-address: ${EUREKA_INSTANCE_PREFERIPADDRESS:true}
@@ -59,7 +67,15 @@ logging:
 feed:
   migration:
     enabled: ${FEED_MIGRATION_ENABLED:true}
-    sample-data: ${FEED_MIGRATION_SAMPLE_DATA:false}
+    sample-data: ${FEED_MIGRATION_SAMPLE_DATA:true}
+
+# File Upload Configuration
+app:
+  file:
+    upload-dir: ${FILE_UPLOAD_DIR:uploads}
+    max-size: ${FILE_MAX_SIZE:52428800}  # 50MB in bytes
+    allowed-types: ${FILE_ALLOWED_TYPES:image/jpeg,image/png,image/gif,image/webp}
+
 
 # JWT Configuration
 jwt:

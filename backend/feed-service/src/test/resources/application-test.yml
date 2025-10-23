@@ -1,33 +1,57 @@
-# Test Configuration for Feed Service
+# Test Configuration for BharathVA Feed Service
+
 server:
   port: 0  # Random port for testing
 
+# Spring Configuration for Testing
 spring:
+  # MongoDB Configuration - Use embedded MongoDB for testing
   data:
     mongodb:
-      uri: ${MONGO_URI:mongodb+srv://nishalpoojary66_db_user:mJjqxxMVtfnb6keW@message-cluster.m8hycwy.mongodb.net/?retryWrites=true&w=majority&appName=message-cluster}
-      database: ${MONGO_DATABASE:bharathva_feed_test}
+      uri: mongodb://localhost:27017/bharathva_feed_test
+      database: bharathva_feed_test
       auto-index-creation: true
 
+  # Application Configuration
   application:
     name: feed-service-test
 
+  # Cache Configuration - Disable caching for tests
   cache:
-    type: simple
+    type: none
 
+  # Security Configuration - Use test JWT secret
   security:
     oauth2:
       resourceserver:
         jwt:
-          secret-key: ${JWT_SECRET:m7n1lhkmwGNryojEND4kks2nzZypr2S0pGoOAcTqfFIEjXOUByV5BewPKNr0ULNlb7frcStl4MHZO0fNI6g}
+          secret-key: test-jwt-secret-key-for-testing-purposes-only
 
-# Disable Eureka for testing
-eureka:
-  client:
-    enabled: false
+  # File upload configuration for testing
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 50MB
+      enabled: true
 
-# Logging
+# File Upload Configuration for Testing
+app:
+  file:
+    upload-dir: test-uploads
+    max-size: 10485760  # 10MB in bytes
+    allowed-types: image/jpeg,image/png,image/gif,image/webp
+
+# Logging Configuration for Tests
 logging:
   level:
     com.bharathva.feed: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
     root: INFO
+
+# Test-specific configurations
+test:
+  cleanup:
+    enabled: true
+  mongodb:
+    embedded: true

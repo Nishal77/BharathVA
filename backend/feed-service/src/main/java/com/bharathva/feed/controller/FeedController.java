@@ -2,18 +2,28 @@ package com.bharathva.feed.controller;
 
 import com.bharathva.feed.dto.CreateFeedRequest;
 import com.bharathva.feed.dto.FeedResponse;
+import com.bharathva.feed.model.ImageMetadata;
 import com.bharathva.feed.service.FeedService;
+import com.bharathva.feed.service.FileStorageService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.validation.Valid;
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +40,9 @@ public class FeedController {
     
     @Autowired
     private FeedService feedService;
+    
+    @Autowired
+    private FileStorageService fileStorageService;
     
     // Health check endpoint
     @GetMapping("/health")
@@ -183,6 +196,155 @@ public class FeedController {
             return ResponseEntity.noContent().build();
         } catch (Exception e) {
             log.error("Error deleting feed: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    // Upload single image
+    @PostMapping("/upload/image")
+    public ResponseEntity<Map<String, Object>> uploadImage(
+            @RequestParam("file") MultipartFile file,
+            Authentication authentication) {
+        
+        log.info("Uploading image file: {}", file.getOriginalFilename());
+        
+        try {
+            String userId = getUserIdFromAuthentication(authentication);
+            ImageMetadata imageMetadata = fileStorageService.storeFile(file, userId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("imageId", imageMetadata.getId());
+            response.put("imageUrl", imageMetadata.getImageUrl());
+            response.put("originalFileName", imageMetadata.getOriginalFileName());
+            response.put("fileSize", imageMetadata.getFileSize());
+            response.put("mimeType", imageMetadata.getMimeType());
+            
+            log.info("Image uploaded successfully with ID: {}", imageMetadata.getId());
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error uploading image: {}", e.getMessage(), e);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    // Upload multiple images
+    @PostMapping("/upload/images")
+    public ResponseEntity<Map<String, Object>> uploadImages(
+            @RequestParam("files") MultipartFile[] files,
+            Authentication authentication) {
+        
+        log.info("Uploading {} image files", files.length);
+        
+        try {
+            String userId = getUserIdFromAuthentication(authentication);
+            List<ImageMetadata> imageMetadataList = fileStorageService.storeFiles(files, userId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("imageCount", imageMetadataList.size());
+            response.put("images", imageMetadataList.stream().map(metadata -> {
+                Map<String, Object> imageInfo = new HashMap<>();
+                imageInfo.put("imageId", metadata.getId());
+                imageInfo.put("imageUrl", metadata.getImageUrl());
+                imageInfo.put("originalFileName", metadata.getOriginalFileName());
+                imageInfo.put("fileSize", metadata.getFileSize());
+                imageInfo.put("mimeType", metadata.getMimeType());
+                return imageInfo;
+            }).toList());
+            
+            log.info("Successfully uploaded {} images", imageMetadataList.size());
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error uploading images: {}", e.getMessage(), e);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    // Get image by ID
+    @GetMapping("/images/{imageId}")
+    public ResponseEntity<Resource> getImage(@PathVariable String imageId) {
+        log.info("Getting image with ID: {}", imageId);
+        
+        try {
+            ImageMetadata imageMetadata = fileStorageService.getImageMetadata(imageId);
+            Path imagePath = fileStorageService.getImagePath(imageId);
+            
+            Resource resource = new UrlResource(imagePath.toUri());
+            
+            if (resource.exists() && resource.isReadable()) {
+                return ResponseEntity.ok()
+                        .contentType(MediaType.parseMediaType(imageMetadata.getMimeType()))
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + imageMetadata.getOriginalFileName() + "\"")
+                        .body(resource);
+            } else {
+                log.error("Image file not found or not readable: {}", imagePath);
+                return ResponseEntity.notFound().build();
+            }
+            
+        } catch (MalformedURLException e) {
+            log.error("Error creating URL resource for image: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Error getting image: {}", e.getMessage(), e);
+            return ResponseEntity.notFound().build();
+        }
+    }
+    
+    // Delete image
+    @DeleteMapping("/images/{imageId}")
+    public ResponseEntity<Void> deleteImage(
+            @PathVariable String imageId,
+            Authentication authentication) {
+        
+        log.info("Deleting image with ID: {}", imageId);
+        
+        try {
+            String userId = getUserIdFromAuthentication(authentication);
+            fileStorageService.deleteImage(imageId, userId);
+            return ResponseEntity.noContent().build();
+            
+        } catch (Exception e) {
+            log.error("Error deleting image: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    // Get user's images
+    @GetMapping("/user/{userId}/images")
+    public ResponseEntity<List<Map<String, Object>>> getUserImages(@PathVariable String userId) {
+        log.info("Getting images for user: {}", userId);
+        
+        try {
+            List<ImageMetadata> imageMetadataList = fileStorageService.getUserImages(userId);
+            
+            List<Map<String, Object>> images = imageMetadataList.stream().map(metadata -> {
+                Map<String, Object> imageInfo = new HashMap<>();
+                imageInfo.put("imageId", metadata.getId());
+                imageInfo.put("imageUrl", metadata.getImageUrl());
+                imageInfo.put("originalFileName", metadata.getOriginalFileName());
+                imageInfo.put("fileSize", metadata.getFileSize());
+                imageInfo.put("mimeType", metadata.getMimeType());
+                imageInfo.put("createdAt", metadata.getCreatedAt());
+                return imageInfo;
+            }).toList();
+            
+            return ResponseEntity.ok(images);
+            
+        } catch (Exception e) {
+            log.error("Error getting user images: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

@@ -18,14 +18,74 @@ import * as SecureStore from 'expo-secure-store';
 export interface CreatePostRequest {
   userId: string;
   message: string;
+  imageIds?: string[];
+}
+
+export interface ImageUploadResponse {
+  success: boolean;
+  imageId?: string;
+  imageUrl?: string;
+  originalFileName?: string;
+  fileSize?: number;
+  mimeType?: string;
+  error?: string;
+}
+
+export interface MultipleImageUploadResponse {
+  success: boolean;
+  imageCount?: number;
+  images?: Array<{
+    imageId: string;
+    imageUrl: string;
+    originalFileName: string;
+    fileSize: number;
+    mimeType: string;
+  }>;
+  error?: string;
 }
 
 export interface PostResponse {
   id: string;
   userId: string;
   message: string;
+  imageIds?: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface FeedItem {
+  id: string;
+  userId: string;
+  message: string;
+  imageIds?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserFeedResponse {
+  content: FeedItem[];
+  pageable: {
+    sort: {
+      sorted: boolean;
+      unsorted: boolean;
+    };
+    pageNumber: number;
+    pageSize: number;
+    offset: number;
+    paged: boolean;
+    unpaged: boolean;
+  };
+  totalElements: number;
+  totalPages: number;
+  last: boolean;
+  first: boolean;
+  numberOfElements: number;
+  size: number;
+  number: number;
+  sort: {
+    sorted: boolean;
+    unsorted: boolean;
+  };
 }
 
 export interface ApiError {
@@ -208,8 +268,113 @@ const apiRequest = async <T>(
   }
 };
 
+// Image upload functions
+export const uploadImage = async (imageUri: string): Promise<ImageUploadResponse> => {
+  try {
+    log('Uploading image', { imageUri });
+    
+    // Get authentication token
+    const token = await getAuthToken();
+    if (!token) {
+      return {
+        success: false,
+        error: 'No authentication token found',
+      };
+    }
+    
+    // Create form data
+    const formData = new FormData();
+    formData.append('file', {
+      uri: imageUri,
+      type: 'image/jpeg',
+      name: 'image.jpg',
+    } as any);
+    
+    // Make API request
+    const response = await apiRequest<ImageUploadResponse>('/api/feed/upload/image', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      },
+      body: formData,
+    });
+    
+    if (response.success && response.data) {
+      log('✅ Image uploaded successfully', { imageId: response.data.imageId });
+      return response.data;
+    } else {
+      logError('❌ Image upload failed', response.error);
+      return {
+        success: false,
+        error: response.error?.message || 'Image upload failed',
+      };
+    }
+    
+  } catch (error) {
+    logError('❌ Unexpected error in uploadImage', error);
+    return {
+      success: false,
+      error: 'An unexpected error occurred during image upload',
+    };
+  }
+};
+
+export const uploadMultipleImages = async (imageUris: string[]): Promise<MultipleImageUploadResponse> => {
+  try {
+    log('Uploading multiple images', { count: imageUris.length });
+    
+    // Get authentication token
+    const token = await getAuthToken();
+    if (!token) {
+      return {
+        success: false,
+        error: 'No authentication token found',
+      };
+    }
+    
+    // Create form data
+    const formData = new FormData();
+    imageUris.forEach((uri, index) => {
+      formData.append('files', {
+        uri: uri,
+        type: 'image/jpeg',
+        name: `image_${index}.jpg`,
+      } as any);
+    });
+    
+    // Make API request
+    const response = await apiRequest<MultipleImageUploadResponse>('/api/feed/upload/images', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'multipart/form-data',
+      },
+      body: formData,
+    });
+    
+    if (response.success && response.data) {
+      log('✅ Multiple images uploaded successfully', { imageCount: response.data.imageCount });
+      return response.data;
+    } else {
+      logError('❌ Multiple image upload failed', response.error);
+      return {
+        success: false,
+        error: response.error?.message || 'Multiple image upload failed',
+      };
+    }
+    
+  } catch (error) {
+    logError('❌ Unexpected error in uploadMultipleImages', error);
+    return {
+      success: false,
+      error: 'An unexpected error occurred during multiple image upload',
+    };
+  }
+};
+
 // Feed service functions
-export const createPost = async (message: string): Promise<ApiResponse<PostResponse>> => {
+export const createPost = async (message: string, imageIds?: string[]): Promise<ApiResponse<PostResponse>> => {
   try {
     log('Creating post', { message: message.substring(0, 50) + '...' });
     
@@ -268,6 +433,7 @@ export const createPost = async (message: string): Promise<ApiResponse<PostRespo
     const payload: CreatePostRequest = {
       userId,
       message: message.trim(),
+      imageIds: imageIds || [],
     };
     
     // Make API request
@@ -295,6 +461,104 @@ export const createPost = async (message: string): Promise<ApiResponse<PostRespo
       error: {
         code: 'UNEXPECTED_ERROR',
         message: 'An unexpected error occurred',
+        details: error,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+};
+
+// Fetch user feeds
+export const getUserFeeds = async (userId: string, page: number = 0, size: number = 20): Promise<ApiResponse<UserFeedResponse>> => {
+  try {
+    log('Fetching user feeds', { userId, page, size });
+    
+    // Get authentication token
+    const token = await getAuthToken();
+    if (!token) {
+      return {
+        success: false,
+        error: {
+          code: 'AUTH_ERROR',
+          message: 'No authentication token found',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    // Make API request
+    const response = await apiRequest<UserFeedResponse>(`/api/feed/user/${userId}?page=${page}&size=${size}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (response.success) {
+      log('✅ User feeds fetched successfully', { count: response.data?.content.length });
+    } else {
+      logError('❌ Failed to fetch user feeds', response.error);
+    }
+    
+    return response;
+    
+  } catch (error) {
+    logError('❌ Unexpected error in getUserFeeds', error);
+    return {
+      success: false,
+      error: {
+        code: 'UNEXPECTED_ERROR',
+        message: 'An unexpected error occurred while fetching feeds',
+        details: error,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+};
+
+// Fetch all feeds (global feed)
+export const getAllFeeds = async (page: number = 0, size: number = 20): Promise<ApiResponse<UserFeedResponse>> => {
+  try {
+    log('Fetching all feeds', { page, size });
+    
+    // Get authentication token
+    const token = await getAuthToken();
+    if (!token) {
+      return {
+        success: false,
+        error: {
+          code: 'AUTH_ERROR',
+          message: 'No authentication token found',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    // Make API request
+    const response = await apiRequest<UserFeedResponse>(`/api/feed/all?page=${page}&size=${size}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (response.success) {
+      log('✅ All feeds fetched successfully', { count: response.data?.content.length });
+    } else {
+      logError('❌ Failed to fetch all feeds', response.error);
+    }
+    
+    return response;
+    
+  } catch (error) {
+    logError('❌ Unexpected error in getAllFeeds', error);
+    return {
+      success: false,
+      error: {
+        code: 'UNEXPECTED_ERROR',
+        message: 'An unexpected error occurred while fetching feeds',
         details: error,
       },
       timestamp: new Date().toISOString(),

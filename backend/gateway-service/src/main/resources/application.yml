@@ -35,7 +35,7 @@ spring:
         
         # Feed Service routes
         - id: feed-service
-          uri: lb://FEED-SERVICE
+          uri: http://feed-service:8082
           predicates:
             - Path=/api/feed/**
           filters:

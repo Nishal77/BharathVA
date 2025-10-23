@@ -55,11 +55,19 @@ public class FeedService {
         // The JWT token contains the userId and is validated by Spring Security
         log.info("Skipping user validation - JWT token already validates user: {}", request.getUserId());
         
-        // Create and save feed
+        // Create and save feed with images
         Feed feed = new Feed(request.getUserId(), request.getMessage().trim());
+        
+        // Add image IDs if provided
+        if (request.hasImages()) {
+            feed.setImageIds(request.getImageIds());
+            log.info("Feed will include {} images", request.getImageIds().size());
+        }
+        
         Feed savedFeed = feedRepository.save(feed);
         
-        log.info("Feed created successfully with ID: {}", savedFeed.getId());
+        log.info("Feed created successfully with ID: {} and {} images", 
+                savedFeed.getId(), savedFeed.getImageIds().size());
         return new FeedResponse(savedFeed);
     }
     

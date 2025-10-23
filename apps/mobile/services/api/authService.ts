@@ -554,7 +554,7 @@ export const authService = {
   getUserProfile: async (userId: string): Promise<{ fullName: string; username: string }> => {
     try {
       const response = await apiCall<{ fullName: string; username: string }>(
-        `/auth/user/${userId}`,
+        ENDPOINTS.AUTH.USER_ME,
         'GET',
         undefined,
         true // Include auth token

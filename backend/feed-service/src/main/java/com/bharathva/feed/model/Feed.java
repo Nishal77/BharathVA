@@ -6,10 +6,12 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
- * Simple Feed model for BharathVA
- * Only stores user_id, id (MongoDB UUID), and message
+ * Feed model for BharathVA
+ * Stores user_id, id (MongoDB UUID), message, and associated images
  */
 @Document(collection = "feeds")
 public class Feed {
@@ -23,6 +25,9 @@ public class Feed {
     
     @Field("message")
     private String message;
+    
+    @Field("imageIds")
+    private List<String> imageIds = new ArrayList<>();
     
     @Field("createdAt")
     @Indexed
@@ -68,6 +73,25 @@ public class Feed {
         this.message = message;
     }
     
+    public List<String> getImageIds() {
+        return imageIds;
+    }
+    
+    public void setImageIds(List<String> imageIds) {
+        this.imageIds = imageIds != null ? imageIds : new ArrayList<>();
+    }
+    
+    public void addImageId(String imageId) {
+        if (this.imageIds == null) {
+            this.imageIds = new ArrayList<>();
+        }
+        this.imageIds.add(imageId);
+    }
+    
+    public boolean hasImages() {
+        return imageIds != null && !imageIds.isEmpty();
+    }
+    
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -95,6 +119,7 @@ public class Feed {
                 "id='" + id + '\'' +
                 ", userId='" + userId + '\'' +
                 ", message='" + message + '\'' +
+                ", imageIds=" + imageIds +
                 ", createdAt=" + createdAt +
                 ", updatedAt=" + updatedAt +
                 '}';

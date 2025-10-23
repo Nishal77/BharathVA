@@ -2,9 +2,11 @@ package com.bharathva.feed.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
- * Simple request DTO for creating a feed message
+ * Request DTO for creating a feed message with optional images
  */
 public class CreateFeedRequest {
     
@@ -14,6 +16,8 @@ public class CreateFeedRequest {
     @NotBlank(message = "Message is required")
     @Size(max = 280, message = "Message must not exceed 280 characters")
     private String message;
+    
+    private List<String> imageIds = new ArrayList<>();
     
     // Constructors
     public CreateFeedRequest() {}
@@ -40,11 +44,31 @@ public class CreateFeedRequest {
         this.message = message;
     }
     
+    public List<String> getImageIds() {
+        return imageIds;
+    }
+    
+    public void setImageIds(List<String> imageIds) {
+        this.imageIds = imageIds != null ? imageIds : new ArrayList<>();
+    }
+    
+    public void addImageId(String imageId) {
+        if (this.imageIds == null) {
+            this.imageIds = new ArrayList<>();
+        }
+        this.imageIds.add(imageId);
+    }
+    
+    public boolean hasImages() {
+        return imageIds != null && !imageIds.isEmpty();
+    }
+    
     @Override
     public String toString() {
         return "CreateFeedRequest{" +
                 "userId='" + userId + '\'' +
                 ", message='" + message + '\'' +
+                ", imageIds=" + imageIds +
                 '}';
     }
 }
