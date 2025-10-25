@@ -123,7 +123,7 @@ class MongoDBAnalysisTest {
             
             // Count feeds with and without images
             long feedsWithImages = allFeeds.stream()
-                    .filter(feed -> feed.getImageIds() != null && !feed.getImageIds().isEmpty())
+                    .filter(feed -> feed.getImageUrls() != null && !feed.getImageUrls().isEmpty())
                     .count();
             
             long feedsWithoutImages = totalFeeds - feedsWithImages;
@@ -140,8 +140,8 @@ class MongoDBAnalysisTest {
                 System.out.println("    User ID: " + feed.getUserId());
                 System.out.println("    Message: " + (feed.getMessage().length() > 50 ? 
                         feed.getMessage().substring(0, 50) + "..." : feed.getMessage()));
-                System.out.println("    Image Count: " + (feed.getImageIds() != null ? feed.getImageIds().size() : 0));
-                System.out.println("    Image IDs: " + (feed.getImageIds() != null ? feed.getImageIds() : "None"));
+                System.out.println("    Image Count: " + (feed.getImageUrls() != null ? feed.getImageUrls().size() : 0));
+                System.out.println("    Image IDs: " + (feed.getImageUrls() != null ? feed.getImageUrls() : "None"));
                 System.out.println("    Created At: " + feed.getCreatedAt());
                 System.out.println();
             }
@@ -163,8 +163,8 @@ class MongoDBAnalysisTest {
         
         // Find orphaned images (images not referenced by any feed)
         java.util.Set<String> referencedImageIds = allFeeds.stream()
-                .filter(feed -> feed.getImageIds() != null)
-                .flatMap(feed -> feed.getImageIds().stream())
+                .filter(feed -> feed.getImageUrls() != null)
+                .flatMap(feed -> feed.getImageUrls().stream())
                 .collect(java.util.stream.Collectors.toSet());
         
         List<ImageMetadata> orphanedImages = allImages.stream()
@@ -188,8 +188,8 @@ class MongoDBAnalysisTest {
                 .collect(java.util.stream.Collectors.toSet());
         
         List<Feed> feedsWithInvalidReferences = allFeeds.stream()
-                .filter(feed -> feed.getImageIds() != null)
-                .filter(feed -> feed.getImageIds().stream().anyMatch(id -> !validImageIds.contains(id)))
+                .filter(feed -> feed.getImageUrls() != null)
+                .filter(feed -> feed.getImageUrls().stream().anyMatch(id -> !validImageIds.contains(id)))
                 .toList();
         
         System.out.println("Feeds with invalid image references: " + feedsWithInvalidReferences.size());
@@ -198,7 +198,7 @@ class MongoDBAnalysisTest {
             System.out.println("Feeds with invalid image references:");
             for (Feed feed : feedsWithInvalidReferences) {
                 System.out.println("  - Feed " + feed.getId() + " references invalid images: " + 
-                        feed.getImageIds().stream()
+                        feed.getImageUrls().stream()
                                 .filter(id -> !validImageIds.contains(id))
                                 .toList());
             }

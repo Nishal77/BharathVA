@@ -82,7 +82,7 @@ export default function ProfileTabs({ onTabChange }: ProfileTabsProps) {
 
   return (
     <View className="px-5 pt-4 pb-2" style={{ backgroundColor: bgColor }}>
-      <View className="flex-row items-center border-b" style={{ borderBottomColor: borderColor }}>
+      <View className={`flex-row items-center border-b ${isDark ? 'border-white/5' : 'border-gray-200'}`}>
         {tabs.map((tab, index) => (
           <Pressable
             key={tab}

@@ -8,5 +8,17 @@
     "dev:web": "pnpm --filter web dev",
     "dev:backend": "cd backend && ./gradlew bootRun",
     "dev:infra": "cd infra && docker-compose up -d"
+  },
+  "pnpm": {
+    "overrides": {
+      "react-native-css-interop": "^0.2.1",
+      "nativewind": "^4.2.1"
+    },
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "react": "19.1.0",
+        "react-native": "0.81.4"
+      }
+    }
   }
 }

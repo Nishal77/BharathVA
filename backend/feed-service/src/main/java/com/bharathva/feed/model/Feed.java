@@ -26,8 +26,8 @@ public class Feed {
     @Field("message")
     private String message;
     
-    @Field("imageIds")
-    private List<String> imageIds = new ArrayList<>();
+    @Field("imageUrls")
+    private List<String> imageUrls = new ArrayList<>();
     
     @Field("createdAt")
     @Indexed
@@ -73,23 +73,23 @@ public class Feed {
         this.message = message;
     }
     
-    public List<String> getImageIds() {
-        return imageIds;
+    public List<String> getImageUrls() {
+        return imageUrls;
     }
     
-    public void setImageIds(List<String> imageIds) {
-        this.imageIds = imageIds != null ? imageIds : new ArrayList<>();
+    public void setImageUrls(List<String> imageUrls) {
+        this.imageUrls = imageUrls != null ? imageUrls : new ArrayList<>();
     }
     
-    public void addImageId(String imageId) {
-        if (this.imageIds == null) {
-            this.imageIds = new ArrayList<>();
+    public void addImageUrl(String imageUrl) {
+        if (this.imageUrls == null) {
+            this.imageUrls = new ArrayList<>();
         }
-        this.imageIds.add(imageId);
+        this.imageUrls.add(imageUrl);
     }
     
     public boolean hasImages() {
-        return imageIds != null && !imageIds.isEmpty();
+        return imageUrls != null && !imageUrls.isEmpty();
     }
     
     public LocalDateTime getCreatedAt() {
@@ -119,7 +119,7 @@ public class Feed {
                 "id='" + id + '\'' +
                 ", userId='" + userId + '\'' +
                 ", message='" + message + '\'' +
-                ", imageIds=" + imageIds +
+                ", imageUrls=" + imageUrls +
                 ", createdAt=" + createdAt +
                 ", updatedAt=" + updatedAt +
                 '}';

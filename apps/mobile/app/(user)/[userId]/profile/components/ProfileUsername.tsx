@@ -1,37 +1,31 @@
-import { MapPinHouse } from 'lucide-react-native';
 import React from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { Text, View, useColorScheme } from 'react-native';
 import { useAuth } from '../../../../../contexts/AuthContext';
 
 export default function ProfileUsername() {
+  const { user } = useAuth();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { user } = useAuth();
-
-  const bgColor = isDark ? '#000000' : '#FFFFFF';
-  const nameColor = isDark ? '#F9FAFB' : '#111827';
-  const usernameColor = isDark ? '#9CA3AF' : '#6B7280';
-  const locationColor = isDark ? '#6B7280' : '#9CA3AF';
-  const iconColor = isDark ? '#6B7280' : '#9CA3AF';
 
   // Display full name if available, otherwise fallback to username
   const displayFullName = user?.fullName || user?.username || 'User';
   const displayUsername = user?.username || 'user';
 
   return (
-    <View className="px-5 pb-2" style={{ backgroundColor: bgColor }}>
+    <View className="px-5 pb-2 bg-white dark:bg-black">
       {/* Full Name */}
-      <Text className="text-2xl font-bold text-left" style={{ color: nameColor }}>
+      <Text className="text-2xl font-bold text-left text-gray-900 dark:text-gray-100">
         {displayFullName}
       </Text>
 
       {/* Username + Location */}
       <View className="flex-row items-center text-left">
-        <Text className="text-base mr-2" style={{ color: usernameColor }}>
+        <Text className="text-base mr-2 text-gray-500 dark:text-gray-400">
           @{displayUsername}
         </Text>
-        <MapPinHouse size={14} color={iconColor} />
-        <Text className="text-sm ml-1" style={{ color: locationColor }}>
+        <Ionicons name="location-outline" size={14} color={isDark ? '#9CA3AF' : '#6B7280'} />
+        <Text className="text-sm ml-1 text-gray-500 dark:text-gray-400">
           India
         </Text>
       </View>

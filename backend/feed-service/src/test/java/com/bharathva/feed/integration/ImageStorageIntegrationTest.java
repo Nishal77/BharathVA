@@ -119,7 +119,7 @@ class ImageStorageIntegrationTest {
         com.bharathva.feed.dto.CreateFeedRequest request = new com.bharathva.feed.dto.CreateFeedRequest();
         request.setUserId(testUserId);
         request.setMessage(feedMessage);
-        request.setImageIds(imageIds);
+        request.setImageUrls(imageIds);
 
         // Step 5: Create feed
         com.bharathva.feed.dto.FeedResponse feedResponse = feedService.createFeed(request, testUserId);
@@ -128,14 +128,14 @@ class ImageStorageIntegrationTest {
         assertNotNull(feedResponse);
         assertEquals(testUserId, feedResponse.getUserId());
         assertEquals(feedMessage, feedResponse.getMessage());
-        assertEquals(2, feedResponse.getImageIds().size());
-        assertTrue(feedResponse.getImageIds().containsAll(imageIds));
+        assertEquals(2, feedResponse.getImageUrls().size());
+        assertTrue(feedResponse.getImageUrls().containsAll(imageIds));
 
         // Step 6: Verify feed is persisted in MongoDB
         Optional<Feed> savedFeed = feedRepository.findById(feedResponse.getId());
         assertTrue(savedFeed.isPresent());
-        assertEquals(2, savedFeed.get().getImageIds().size());
-        assertTrue(savedFeed.get().getImageIds().containsAll(imageIds));
+        assertEquals(2, savedFeed.get().getImageUrls().size());
+        assertTrue(savedFeed.get().getImageUrls().containsAll(imageIds));
 
         // Step 7: Verify we can retrieve image metadata by ID
         for (String imageId : imageIds) {
@@ -259,7 +259,7 @@ class ImageStorageIntegrationTest {
 
         com.bharathva.feed.dto.FeedResponse feedWithoutImages = feedService.createFeed(requestWithoutImages, testUserId);
         assertNotNull(feedWithoutImages);
-        assertTrue(feedWithoutImages.getImageIds().isEmpty());
+        assertTrue(feedWithoutImages.getImageUrls().isEmpty());
 
         // Test 2: Create feed with images
         MockMultipartFile testImage = new MockMultipartFile(
@@ -271,12 +271,12 @@ class ImageStorageIntegrationTest {
         com.bharathva.feed.dto.CreateFeedRequest requestWithImages = new com.bharathva.feed.dto.CreateFeedRequest();
         requestWithImages.setUserId(testUserId);
         requestWithImages.setMessage("Feed with images");
-        requestWithImages.setImageIds(Arrays.asList(uploadedImage.getId()));
+        requestWithImages.setImageUrls(Arrays.asList(uploadedImage.getId()));
 
         com.bharathva.feed.dto.FeedResponse feedWithImages = feedService.createFeed(requestWithImages, testUserId);
         assertNotNull(feedWithImages);
-        assertEquals(1, feedWithImages.getImageIds().size());
-        assertTrue(feedWithImages.getImageIds().contains(uploadedImage.getId()));
+        assertEquals(1, feedWithImages.getImageUrls().size());
+        assertTrue(feedWithImages.getImageUrls().contains(uploadedImage.getId()));
 
         // Verify both feeds are stored correctly
         List<Feed> allFeeds = feedRepository.findByUserIdOrderByCreatedAtDesc(testUserId);
@@ -287,14 +287,14 @@ class ImageStorageIntegrationTest {
                 .findFirst()
                 .orElse(null);
         assertNotNull(textOnlyFeed);
-        assertTrue(textOnlyFeed.getImageIds().isEmpty());
+        assertTrue(textOnlyFeed.getImageUrls().isEmpty());
 
         Feed imageFeed = allFeeds.stream()
                 .filter(feed -> feed.getMessage().equals("Feed with images"))
                 .findFirst()
                 .orElse(null);
         assertNotNull(imageFeed);
-        assertEquals(1, imageFeed.getImageIds().size());
+        assertEquals(1, imageFeed.getImageUrls().size());
     }
 
     /**

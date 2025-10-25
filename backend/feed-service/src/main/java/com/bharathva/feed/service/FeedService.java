@@ -12,9 +12,15 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -29,17 +35,56 @@ public class FeedService {
     private FeedRepository feedRepository;
     
     @Autowired
-    private UserClient userClient;
+    private WebSocketService webSocketService;
     
     // Create a new feed message
+    @Transactional
     @CacheEvict(value = "feedCache", allEntries = true)
     public FeedResponse createFeed(CreateFeedRequest request, String authenticatedUserId) {
         log.info("Creating feed for user: {}", authenticatedUserId);
         
+        // Validate request
+        validateCreateFeedRequest(request, authenticatedUserId);
+        
+        // Create and save feed with images
+        Feed feed = new Feed(request.getUserId(), request.getMessage().trim());
+        
+        // Add image URLs if provided
+        if (request.hasImages()) {
+            validateImageUrls(request.getImageUrls());
+            feed.setImageUrls(request.getImageUrls());
+            log.info("Feed will include {} images", request.getImageUrls().size());
+        }
+        
+        // Set creation timestamp
+        feed.setCreatedAt(LocalDateTime.now());
+        
+        Feed savedFeed = feedRepository.save(feed);
+        
+        // Notify WebSocket clients about the new feed
+        try {
+            webSocketService.notifyFeedCreated(savedFeed.getUserId(), savedFeed.getId(), savedFeed.getMessage());
+        } catch (Exception e) {
+            log.warn("⚠️ Failed to send WebSocket notification for feed creation: {}", e.getMessage());
+        }
+        
+        log.info("Feed created successfully with ID: {} and {} images", 
+                savedFeed.getId(), savedFeed.getImageUrls().size());
+        return new FeedResponse(savedFeed);
+    }
+    
+    /**
+     * Validate create feed request
+     */
+    private void validateCreateFeedRequest(CreateFeedRequest request, String authenticatedUserId) {
+        if (request == null) {
+            throw new IllegalArgumentException("Feed request cannot be null");
+        }
+        
         // Validate that the authenticated user matches the request user
         if (!authenticatedUserId.equals(request.getUserId())) {
-            throw new RuntimeException("User ID mismatch: authenticated user " + authenticatedUserId + 
-                                     " cannot create feed for user " + request.getUserId());
+            throw new IllegalArgumentException("User ID mismatch: authenticated user " + authenticatedUserId + 
+                                             " cannot create feed for user " + request.getUserId());
         }
         
         // Validate message content
@@ -51,24 +96,35 @@ public class FeedService {
             throw new IllegalArgumentException("Message cannot exceed 280 characters");
         }
         
-        // Skip user validation since JWT token already validates the user
-        // The JWT token contains the userId and is validated by Spring Security
-        log.info("Skipping user validation - JWT token already validates user: {}", request.getUserId());
-        
-        // Create and save feed with images
-        Feed feed = new Feed(request.getUserId(), request.getMessage().trim());
-        
-        // Add image IDs if provided
-        if (request.hasImages()) {
-            feed.setImageIds(request.getImageIds());
-            log.info("Feed will include {} images", request.getImageIds().size());
+        // Validate message content for inappropriate content (basic check)
+        String message = request.getMessage().toLowerCase();
+        if (message.contains("spam") || message.contains("scam")) {
+            log.warn("Potentially inappropriate content detected in feed from user: {}", authenticatedUserId);
+        }
+    }
+    
+    /**
+     * Validate image URLs
+     */
+    private void validateImageUrls(List<String> imageUrls) {
+        if (imageUrls == null || imageUrls.isEmpty()) {
+            return;
         }
         
-        Feed savedFeed = feedRepository.save(feed);
+        if (imageUrls.size() > 10) {
+            throw new IllegalArgumentException("Maximum 10 images allowed per feed");
+        }
         
-        log.info("Feed created successfully with ID: {} and {} images", 
-                savedFeed.getId(), savedFeed.getImageIds().size());
-        return new FeedResponse(savedFeed);
+        for (String url : imageUrls) {
+            if (url == null || url.trim().isEmpty()) {
+                throw new IllegalArgumentException("Image URL cannot be empty");
+            }
+            
+            // Basic URL validation
+            if (!url.startsWith("http://") && !url.startsWith("https://")) {
+                throw new IllegalArgumentException("Invalid image URL format: " + url);
+            }
+        }
     }
     
     // Get all feeds (global feed)
@@ -76,9 +132,18 @@ public class FeedService {
     public Page<FeedResponse> getAllFeeds(int page, int size) {
         log.info("Getting all feeds, page: {}, size: {}", page, size);
         
-        Pageable pageable = PageRequest.of(page, size);
+        // Validate pagination parameters
+        if (page < 0) {
+            throw new IllegalArgumentException("Page number cannot be negative");
+        }
+        if (size <= 0 || size > 1000) {
+            throw new IllegalArgumentException("Page size must be between 1 and 1000");
+        }
+        
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Feed> feeds = feedRepository.findAll(pageable);
         
+        log.info("Retrieved {} feeds from database", feeds.getTotalElements());
         return feeds.map(FeedResponse::new);
     }
     
@@ -87,9 +152,21 @@ public class FeedService {
     public Page<FeedResponse> getUserFeeds(String userId, int page, int size) {
         log.info("Getting feeds for user: {}, page: {}, size: {}", userId, page, size);
         
-        Pageable pageable = PageRequest.of(page, size);
+        // Validate parameters
+        if (userId == null || userId.trim().isEmpty()) {
+            throw new IllegalArgumentException("User ID cannot be null or empty");
+        }
+        if (page < 0) {
+            throw new IllegalArgumentException("Page number cannot be negative");
+        }
+        if (size <= 0 || size > 1000) {
+            throw new IllegalArgumentException("Page size must be between 1 and 1000");
+        }
+        
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Feed> feeds = feedRepository.findByUserId(userId, pageable);
         
+        log.info("Retrieved {} feeds for user {} from database", feeds.getTotalElements(), userId);
         return feeds.map(FeedResponse::new);
     }
     
@@ -98,7 +175,14 @@ public class FeedService {
     public List<FeedResponse> getUserFeedsList(String userId) {
         log.info("Getting feeds list for user: {}", userId);
         
+        // Validate parameters
+        if (userId == null || userId.trim().isEmpty()) {
+            throw new IllegalArgumentException("User ID cannot be null or empty");
+        }
+        
         List<Feed> feeds = feedRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        log.info("Retrieved {} feeds for user {} from database", feeds.size(), userId);
+        
         return feeds.stream()
                 .map(FeedResponse::new)
                 .collect(Collectors.toList());
@@ -109,9 +193,19 @@ public class FeedService {
     public FeedResponse getFeedById(String feedId) {
         log.info("Getting feed by ID: {}", feedId);
         
-        Feed feed = feedRepository.findById(feedId)
-                .orElseThrow(() -> new RuntimeException("Feed not found with ID: " + feedId));
+        // Validate parameters
+        if (feedId == null || feedId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Feed ID cannot be null or empty");
+        }
         
+        Optional<Feed> feedOptional = feedRepository.findById(feedId);
+        if (feedOptional.isEmpty()) {
+            log.warn("Feed not found with ID: {}", feedId);
+            throw new RuntimeException("Feed not found with ID: " + feedId);
+        }
+        
+        Feed feed = feedOptional.get();
+        log.info("Retrieved feed with ID: {} for user: {}", feedId, feed.getUserId());
         return new FeedResponse(feed);
     }
     
@@ -120,32 +214,110 @@ public class FeedService {
     public Page<FeedResponse> searchFeeds(String query, int page, int size) {
         log.info("Searching feeds with query: {}, page: {}, size: {}", query, page, size);
         
-        Pageable pageable = PageRequest.of(page, size);
-        Page<Feed> feeds = feedRepository.findByMessageContainingIgnoreCase(query, pageable);
+        // Validate parameters
+        if (query == null || query.trim().isEmpty()) {
+            throw new IllegalArgumentException("Search query cannot be null or empty");
+        }
+        if (page < 0) {
+            throw new IllegalArgumentException("Page number cannot be negative");
+        }
+        if (size <= 0 || size > 1000) {
+            throw new IllegalArgumentException("Page size must be between 1 and 1000");
+        }
         
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Feed> feeds = feedRepository.findByMessageContainingIgnoreCase(query.trim(), pageable);
+        
+        log.info("Found {} feeds matching query: {}", feeds.getTotalElements(), query);
         return feeds.map(FeedResponse::new);
     }
     
     // Count feeds by user
     public long countFeedsByUser(String userId) {
         log.info("Counting feeds for user: {}", userId);
-        return feedRepository.countByUserId(userId);
+        
+        // Validate parameters
+        if (userId == null || userId.trim().isEmpty()) {
+            throw new IllegalArgumentException("User ID cannot be null or empty");
+        }
+        
+        long count = feedRepository.countByUserId(userId);
+        log.info("User {} has {} feeds", userId, count);
+        return count;
     }
     
     // Delete feed
+    @Transactional
     @CacheEvict(value = "feedCache", allEntries = true)
     public void deleteFeed(String feedId, String userId) {
         log.info("Deleting feed: {} for user: {}", feedId, userId);
         
-        Feed feed = feedRepository.findById(feedId)
-                .orElseThrow(() -> new RuntimeException("Feed not found with ID: " + feedId));
+        // Validate parameters
+        if (feedId == null || feedId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Feed ID cannot be null or empty");
+        }
+        if (userId == null || userId.trim().isEmpty()) {
+            throw new IllegalArgumentException("User ID cannot be null or empty");
+        }
+        
+        Optional<Feed> feedOptional = feedRepository.findById(feedId);
+        if (feedOptional.isEmpty()) {
+            log.warn("Feed not found with ID: {}", feedId);
+            throw new RuntimeException("Feed not found with ID: " + feedId);
+        }
+        
+        Feed feed = feedOptional.get();
         
         // Check if user owns the feed
         if (!feed.getUserId().equals(userId)) {
+            log.warn("User {} attempted to delete feed {} owned by {}", userId, feedId, feed.getUserId());
             throw new RuntimeException("User " + userId + " is not authorized to delete feed " + feedId);
         }
         
         feedRepository.delete(feed);
-        log.info("Feed deleted successfully: {}", feedId);
+        
+        // Notify WebSocket clients about the feed deletion
+        try {
+            webSocketService.notifyFeedDeleted(userId, feedId);
+        } catch (Exception e) {
+            log.warn("⚠️ Failed to send WebSocket notification for feed deletion: {}", e.getMessage());
+        }
+        
+        log.info("Feed deleted successfully: {} by user: {}", feedId, userId);
+    }
+    
+    // Get recent feeds (last 24 hours)
+    @Cacheable(value = "feedCache", key = "'recent_' + #page + '_' + #size")
+    public Page<FeedResponse> getRecentFeeds(int page, int size) {
+        log.info("Getting recent feeds, page: {}, size: {}", page, size);
+        
+        // Validate pagination parameters
+        if (page < 0) {
+            throw new IllegalArgumentException("Page number cannot be negative");
+        }
+        if (size <= 0 || size > 1000) {
+            throw new IllegalArgumentException("Page size must be between 1 and 1000");
+        }
+        
+        LocalDateTime yesterday = LocalDateTime.now().minusDays(1);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<Feed> feeds = feedRepository.findByCreatedAtAfter(yesterday, pageable);
+        
+        log.info("Retrieved {} recent feeds from database", feeds.getTotalElements());
+        return feeds.map(FeedResponse::new);
+    }
+    
+    // Get feed statistics
+    public Map<String, Object> getFeedStatistics() {
+        log.info("Getting feed statistics");
+        
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalFeeds", feedRepository.count());
+        stats.put("totalUsers", feedRepository.countDistinctUsers());
+        stats.put("feedsWithImages", feedRepository.countByImageUrlsIsNotNull());
+        stats.put("averageFeedsPerUser", feedRepository.count() / Math.max(1, feedRepository.countDistinctUsers()));
+        
+        log.info("Feed statistics: {}", stats);
+        return stats;
     }
 }

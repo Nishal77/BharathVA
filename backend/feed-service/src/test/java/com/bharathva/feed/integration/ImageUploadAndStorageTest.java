@@ -119,7 +119,7 @@ class ImageUploadAndStorageTest {
         com.bharathva.feed.dto.CreateFeedRequest request = new com.bharathva.feed.dto.CreateFeedRequest();
         request.setUserId(testUserId);
         request.setMessage(feedMessage);
-        request.setImageIds(imageIds);
+        request.setImageUrls(imageIds);
 
         com.bharathva.feed.dto.FeedResponse feedResponse = feedService.createFeed(request, testUserId);
 
@@ -127,13 +127,13 @@ class ImageUploadAndStorageTest {
         assertNotNull(feedResponse, "Feed response should not be null");
         assertEquals(testUserId, feedResponse.getUserId(), "Feed user ID should match");
         assertEquals(feedMessage, feedResponse.getMessage(), "Feed message should match");
-        assertEquals(2, feedResponse.getImageIds().size(), "Feed should have 2 image references");
+        assertEquals(2, feedResponse.getImageUrls().size(), "Feed should have 2 image references");
 
         System.out.println("✅ Feed created successfully:");
         System.out.println("  - Feed ID: " + feedResponse.getId());
         System.out.println("  - User ID: " + feedResponse.getUserId());
         System.out.println("  - Message: " + feedResponse.getMessage());
-        System.out.println("  - Image IDs: " + feedResponse.getImageIds());
+        System.out.println("  - Image IDs: " + feedResponse.getImageUrls());
 
         // Step 5: Verify feed is stored in MongoDB
         System.out.println("\nStep 5: Verifying feed is stored in MongoDB...");
@@ -141,13 +141,13 @@ class ImageUploadAndStorageTest {
         
         assertEquals(1, userFeeds.size(), "Should have 1 feed in MongoDB");
         Feed storedFeed = userFeeds.get(0);
-        assertEquals(2, storedFeed.getImageIds().size(), "Stored feed should have 2 image references");
+        assertEquals(2, storedFeed.getImageUrls().size(), "Stored feed should have 2 image references");
 
         System.out.println("✅ Feed verified in MongoDB:");
         System.out.println("  - Feed ID: " + storedFeed.getId());
         System.out.println("  - User ID: " + storedFeed.getUserId());
         System.out.println("  - Message: " + storedFeed.getMessage());
-        System.out.println("  - Image IDs: " + storedFeed.getImageIds());
+        System.out.println("  - Image IDs: " + storedFeed.getImageUrls());
 
         // Step 6: Verify image-file relationships
         System.out.println("\nStep 6: Verifying image-file relationships...");

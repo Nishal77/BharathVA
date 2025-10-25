@@ -41,6 +41,14 @@ spring:
           filters:
             - StripPrefix=0
         
+        # WebSocket routes for real-time feed updates
+        - id: websocket-feed
+          uri: ws://feed-service:8082
+          predicates:
+            - Path=/ws/**
+          filters:
+            - RewritePath=/ws/(?<path>.*), /ws/$\{path}
+        
         # Health check for Gateway itself
         - id: gateway-health
           uri: http://localhost:8080

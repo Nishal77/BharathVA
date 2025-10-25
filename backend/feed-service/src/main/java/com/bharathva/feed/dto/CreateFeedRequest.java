@@ -17,7 +17,7 @@ public class CreateFeedRequest {
     @Size(max = 280, message = "Message must not exceed 280 characters")
     private String message;
     
-    private List<String> imageIds = new ArrayList<>();
+    private List<String> imageUrls = new ArrayList<>();
     
     // Constructors
     public CreateFeedRequest() {}
@@ -44,23 +44,23 @@ public class CreateFeedRequest {
         this.message = message;
     }
     
-    public List<String> getImageIds() {
-        return imageIds;
+    public List<String> getImageUrls() {
+        return imageUrls;
     }
     
-    public void setImageIds(List<String> imageIds) {
-        this.imageIds = imageIds != null ? imageIds : new ArrayList<>();
+    public void setImageUrls(List<String> imageUrls) {
+        this.imageUrls = imageUrls != null ? imageUrls : new ArrayList<>();
     }
     
-    public void addImageId(String imageId) {
-        if (this.imageIds == null) {
-            this.imageIds = new ArrayList<>();
+    public void addImageUrl(String imageUrl) {
+        if (this.imageUrls == null) {
+            this.imageUrls = new ArrayList<>();
         }
-        this.imageIds.add(imageId);
+        this.imageUrls.add(imageUrl);
     }
     
     public boolean hasImages() {
-        return imageIds != null && !imageIds.isEmpty();
+        return imageUrls != null && !imageUrls.isEmpty();
     }
     
     @Override
@@ -68,7 +68,7 @@ public class CreateFeedRequest {
         return "CreateFeedRequest{" +
                 "userId='" + userId + '\'' +
                 ", message='" + message + '\'' +
-                ", imageIds=" + imageIds +
+                ", imageUrls=" + imageUrls +
                 '}';
     }
 }

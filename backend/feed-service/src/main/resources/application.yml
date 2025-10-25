@@ -67,7 +67,13 @@ logging:
 feed:
   migration:
     enabled: ${FEED_MIGRATION_ENABLED:true}
-    sample-data: ${FEED_MIGRATION_SAMPLE_DATA:true}
+    sample-data: ${FEED_MIGRATION_SAMPLE_DATA:false}
+
+# Cloudinary Configuration
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:dqmryiyhz}
+  api-key: ${CLOUDINARY_API_KEY:397473723639954}
+  api-secret: ${CLOUDINARY_API_SECRET:FM-U9FOM6wm1KWDjS_vc39dngCg}
 
 # File Upload Configuration
 app:

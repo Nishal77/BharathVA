@@ -60,6 +60,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        
+        <!-- WebSocket Support -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
 
         <!-- Spring Cloud -->
         <dependency>
@@ -94,6 +100,13 @@
             <groupId>com.bharathva</groupId>
             <artifactId>shared</artifactId>
             <version>1.0.0</version>
+        </dependency>
+
+        <!-- Cloudinary -->
+        <dependency>
+            <groupId>com.cloudinary</groupId>
+            <artifactId>cloudinary-http44</artifactId>
+            <version>1.36.0</version>
         </dependency>
 
         <!-- Test Dependencies -->

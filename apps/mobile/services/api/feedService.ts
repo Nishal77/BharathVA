@@ -18,16 +18,20 @@ import * as SecureStore from 'expo-secure-store';
 export interface CreatePostRequest {
   userId: string;
   message: string;
-  imageIds?: string[];
+  imageUrls?: string[];
 }
 
 export interface ImageUploadResponse {
   success: boolean;
-  imageId?: string;
+  publicId?: string;
+  imageId?: string; // Add imageId for compatibility
   imageUrl?: string;
+  url?: string; // Add url for compatibility
   originalFileName?: string;
   fileSize?: number;
   mimeType?: string;
+  width?: number;
+  height?: number;
   error?: string;
 }
 
@@ -35,11 +39,15 @@ export interface MultipleImageUploadResponse {
   success: boolean;
   imageCount?: number;
   images?: Array<{
-    imageId: string;
+    publicId: string;
+    imageId: string; // Add imageId for compatibility
     imageUrl: string;
+    url?: string; // Add url for compatibility
     originalFileName: string;
     fileSize: number;
     mimeType: string;
+    width?: number;
+    height?: number;
   }>;
   error?: string;
 }
@@ -48,7 +56,7 @@ export interface PostResponse {
   id: string;
   userId: string;
   message: string;
-  imageIds?: string[];
+  imageUrls?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -57,7 +65,7 @@ export interface FeedItem {
   id: string;
   userId: string;
   message: string;
-  imageIds?: string[];
+  imageUrls?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -284,10 +292,55 @@ export const uploadImage = async (imageUri: string): Promise<ImageUploadResponse
     
     // Create form data
     const formData = new FormData();
+    
+    // Detect file type from URI
+    const fileExtension = imageUri.split('.').pop()?.toLowerCase();
+    let mimeType = 'image/jpeg'; // Default fallback
+    let fileName = 'image.jpg';
+    
+    // Map file extensions to MIME types
+    switch (fileExtension) {
+      case 'heic':
+        mimeType = 'image/heic';
+        fileName = 'image.heic';
+        break;
+      case 'heif':
+        mimeType = 'image/heif';
+        fileName = 'image.heif';
+        break;
+      case 'png':
+        mimeType = 'image/png';
+        fileName = 'image.png';
+        break;
+      case 'gif':
+        mimeType = 'image/gif';
+        fileName = 'image.gif';
+        break;
+      case 'webp':
+        mimeType = 'image/webp';
+        fileName = 'image.webp';
+        break;
+      case 'bmp':
+        mimeType = 'image/bmp';
+        fileName = 'image.bmp';
+        break;
+      case 'tiff':
+      case 'tif':
+        mimeType = 'image/tiff';
+        fileName = 'image.tiff';
+        break;
+      case 'jpg':
+      case 'jpeg':
+      default:
+        mimeType = 'image/jpeg';
+        fileName = 'image.jpg';
+        break;
+    }
+    
     formData.append('file', {
       uri: imageUri,
-      type: 'image/jpeg',
-      name: 'image.jpg',
+      type: mimeType,
+      name: fileName,
     } as any);
     
     // Make API request
@@ -301,7 +354,7 @@ export const uploadImage = async (imageUri: string): Promise<ImageUploadResponse
     });
     
     if (response.success && response.data) {
-      log('✅ Image uploaded successfully', { imageId: response.data.imageId });
+      log('✅ Image uploaded successfully', { publicId: response.data.publicId });
       return response.data;
     } else {
       logError('❌ Image upload failed', response.error);
@@ -336,10 +389,54 @@ export const uploadMultipleImages = async (imageUris: string[]): Promise<Multipl
     // Create form data
     const formData = new FormData();
     imageUris.forEach((uri, index) => {
+      // Detect file type from URI
+      const fileExtension = uri.split('.').pop()?.toLowerCase();
+      let mimeType = 'image/jpeg'; // Default fallback
+      let fileName = `image_${index}.jpg`;
+      
+      // Map file extensions to MIME types
+      switch (fileExtension) {
+        case 'heic':
+          mimeType = 'image/heic';
+          fileName = `image_${index}.heic`;
+          break;
+        case 'heif':
+          mimeType = 'image/heif';
+          fileName = `image_${index}.heif`;
+          break;
+        case 'png':
+          mimeType = 'image/png';
+          fileName = `image_${index}.png`;
+          break;
+        case 'gif':
+          mimeType = 'image/gif';
+          fileName = `image_${index}.gif`;
+          break;
+        case 'webp':
+          mimeType = 'image/webp';
+          fileName = `image_${index}.webp`;
+          break;
+        case 'bmp':
+          mimeType = 'image/bmp';
+          fileName = `image_${index}.bmp`;
+          break;
+        case 'tiff':
+        case 'tif':
+          mimeType = 'image/tiff';
+          fileName = `image_${index}.tiff`;
+          break;
+        case 'jpg':
+        case 'jpeg':
+        default:
+          mimeType = 'image/jpeg';
+          fileName = `image_${index}.jpg`;
+          break;
+      }
+      
       formData.append('files', {
         uri: uri,
-        type: 'image/jpeg',
-        name: `image_${index}.jpg`,
+        type: mimeType,
+        name: fileName,
       } as any);
     });
     
@@ -374,7 +471,7 @@ export const uploadMultipleImages = async (imageUris: string[]): Promise<Multipl
 };
 
 // Feed service functions
-export const createPost = async (message: string, imageIds?: string[]): Promise<ApiResponse<PostResponse>> => {
+export const createPost = async (message: string, imageUrls?: string[]): Promise<ApiResponse<PostResponse>> => {
   try {
     log('Creating post', { message: message.substring(0, 50) + '...' });
     
@@ -433,7 +530,7 @@ export const createPost = async (message: string, imageIds?: string[]): Promise<
     const payload: CreatePostRequest = {
       userId,
       message: message.trim(),
-      imageIds: imageIds || [],
+      imageUrls: imageUrls || [],
     };
     
     // Make API request
@@ -559,6 +656,103 @@ export const getAllFeeds = async (page: number = 0, size: number = 20): Promise<
       error: {
         code: 'UNEXPECTED_ERROR',
         message: 'An unexpected error occurred while fetching feeds',
+        details: error,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+};
+
+// Delete post function
+export const deletePost = async (feedId: string): Promise<ApiResponse<{ success: boolean; message: string }>> => {
+  try {
+    log('Deleting post', { feedId });
+    
+    // Get authentication token
+    const token = await getAuthToken();
+    if (!token) {
+      return {
+        success: false,
+        error: {
+          code: 'AUTH_ERROR',
+          message: 'No authentication token found',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    // Make API request - DELETE endpoint returns 204 No Content on success
+    const baseUrl = getGatewayURL();
+    const fullUrl = `${baseUrl}/api/feed/${feedId}`;
+    
+    log(`🌐 API Request: DELETE ${fullUrl}`);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.timeout);
+    
+    const fetchResponse = await fetch(fullUrl, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    log(`📥 API Response: ${fetchResponse.status}`);
+    
+    if (fetchResponse.status === 204) {
+      // 204 No Content means successful deletion
+      log('✅ Post deleted successfully', { feedId });
+      return {
+        success: true,
+        data: { success: true, message: 'Post deleted successfully' },
+        timestamp: new Date().toISOString(),
+      };
+    } else if (!fetchResponse.ok) {
+      // Handle error responses
+      const errorText = await fetchResponse.text();
+      logError(`API Error: ${fetchResponse.status}`, errorText);
+      
+      return {
+        success: false,
+        error: {
+          code: `HTTP_${fetchResponse.status}`,
+          message: `Request failed with status ${fetchResponse.status}`,
+          details: errorText,
+        },
+        timestamp: new Date().toISOString(),
+      };
+    } else {
+      // Handle other success responses (200, 201, etc.)
+      try {
+        const data = await fetchResponse.json();
+        log('✅ Post deleted successfully', { feedId });
+        return {
+          success: true,
+          data: data || { success: true, message: 'Post deleted successfully' },
+          timestamp: new Date().toISOString(),
+        };
+      } catch (parseError) {
+        // If JSON parsing fails but status is OK, consider it successful
+        log('✅ Post deleted successfully (no JSON response)', { feedId });
+        return {
+          success: true,
+          data: { success: true, message: 'Post deleted successfully' },
+          timestamp: new Date().toISOString(),
+        };
+      }
+    }
+    
+  } catch (error) {
+    logError('❌ Unexpected error in deletePost', error);
+    return {
+      success: false,
+      error: {
+        code: 'UNEXPECTED_ERROR',
+        message: 'An unexpected error occurred while deleting the post',
         details: error,
       },
       timestamp: new Date().toISOString(),

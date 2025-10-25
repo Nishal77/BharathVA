@@ -2,18 +2,15 @@ package com.bharathva.feed.controller;
 
 import com.bharathva.feed.dto.CreateFeedRequest;
 import com.bharathva.feed.dto.FeedResponse;
-import com.bharathva.feed.model.ImageMetadata;
 import com.bharathva.feed.service.FeedService;
-import com.bharathva.feed.service.FileStorageService;
+import com.bharathva.feed.service.CloudinaryService;
+import com.bharathva.feed.service.ImageUploadService;
+import com.bharathva.feed.model.ImageMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.data.domain.Page;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -21,9 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.validation.Valid;
-import java.io.IOException;
-import java.net.MalformedURLException;
-import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +37,10 @@ public class FeedController {
     private FeedService feedService;
     
     @Autowired
-    private FileStorageService fileStorageService;
+    private CloudinaryService cloudinaryService;
+    
+    @Autowired
+    private ImageUploadService imageUploadService;
     
     // Health check endpoint
     @GetMapping("/health")
@@ -54,6 +52,190 @@ public class FeedController {
         response.put("message", "Feed service is running");
         response.put("timestamp", java.time.Instant.now().toString());
         return ResponseEntity.ok(response);
+    }
+    
+    // Cloudinary test endpoint
+    @GetMapping("/test/cloudinary")
+    public ResponseEntity<Map<String, Object>> testCloudinary() {
+        log.info("Cloudinary test requested");
+        
+        try {
+            Map<String, Object> testResult = cloudinaryService.testConnection();
+            return ResponseEntity.ok(testResult);
+        } catch (Exception e) {
+            log.error("Error testing Cloudinary: {}", e.getMessage(), e);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            response.put("timestamp", java.time.Instant.now().toString());
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    // Test endpoint for creating feed without authentication (for testing only)
+    @PostMapping("/test/create-feed")
+    public ResponseEntity<Map<String, Object>> testCreateFeed(@RequestBody Map<String, Object> request) {
+        log.info("Test feed creation requested");
+        
+        try {
+            String userId = (String) request.get("userId");
+            String message = (String) request.get("message");
+            @SuppressWarnings("unchecked")
+            List<String> imageUrls = (List<String>) request.get("imageUrls");
+            
+            if (userId == null || message == null) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("error", "userId and message are required");
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+            // Create feed request
+            CreateFeedRequest createRequest = new CreateFeedRequest();
+            createRequest.setUserId(userId);
+            createRequest.setMessage(message);
+            if (imageUrls != null) {
+                createRequest.setImageUrls(imageUrls);
+            }
+            
+            // Create feed
+            FeedResponse feedResponse = feedService.createFeed(createRequest, userId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Feed created successfully");
+            response.put("feed", feedResponse);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error creating test feed: {}", e.getMessage(), e);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    // Test endpoint for getting feed without authentication (for testing only)
+    @GetMapping("/test/feed/{feedId}")
+    public ResponseEntity<Map<String, Object>> testGetFeed(@PathVariable String feedId) {
+        log.info("Test feed retrieval requested for ID: {}", feedId);
+        
+        try {
+            FeedResponse feedResponse = feedService.getFeedById(feedId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Feed retrieved successfully");
+            response.put("feed", feedResponse);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error retrieving test feed: {}", e.getMessage(), e);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        }
+    }
+    
+    // Test endpoint for getting user feeds without pagination (for debugging)
+    @GetMapping("/test/user/{userId}/feeds")
+    public ResponseEntity<Map<String, Object>> testGetUserFeeds(@PathVariable String userId) {
+        log.info("Test user feeds retrieval requested for user: {}", userId);
+        
+        try {
+            List<FeedResponse> feeds = feedService.getUserFeedsList(userId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "User feeds retrieved successfully");
+            response.put("feeds", feeds);
+            response.put("count", feeds.size());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error retrieving test user feeds: {}", e.getMessage(), e);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    // Test endpoint for getting user feeds with pagination (for debugging)
+    @GetMapping("/test/user/{userId}/feeds-paginated")
+    public ResponseEntity<Map<String, Object>> testGetUserFeedsPaginated(
+            @PathVariable String userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        log.info("Test paginated user feeds retrieval requested for user: {}, page: {}, size: {}", userId, page, size);
+        
+        try {
+            Page<FeedResponse> feeds = feedService.getUserFeeds(userId, page, size);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "User feeds retrieved successfully");
+            response.put("feeds", feeds.getContent());
+            response.put("totalElements", feeds.getTotalElements());
+            response.put("totalPages", feeds.getTotalPages());
+            response.put("currentPage", feeds.getNumber());
+            response.put("size", feeds.getSize());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error retrieving test paginated user feeds: {}", e.getMessage(), e);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            response.put("stackTrace", e.getStackTrace());
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    // Test endpoint for deleting a feed (for debugging)
+    @DeleteMapping("/test/delete-feed/{feedId}")
+    public ResponseEntity<Map<String, Object>> testDeleteFeed(
+            @PathVariable String feedId,
+            @RequestParam String userId) {
+        log.info("Test feed deletion requested for feed: {} by user: {}", feedId, userId);
+        
+        try {
+            feedService.deleteFeed(feedId, userId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Feed deleted successfully");
+            response.put("feedId", feedId);
+            response.put("userId", userId);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error deleting test feed: {}", e.getMessage(), e);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            response.put("stackTrace", e.getStackTrace());
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
     }
     
     // Create a new feed message
@@ -115,6 +297,7 @@ public class FeedController {
         
         try {
             Page<FeedResponse> feeds = feedService.getUserFeeds(userId, page, size);
+            log.info("Successfully retrieved {} feeds for user {}", feeds.getTotalElements(), userId);
             return ResponseEntity.ok(feeds);
         } catch (Exception e) {
             log.error("Error getting user feeds: {}", e.getMessage(), e);
@@ -206,25 +389,32 @@ public class FeedController {
             @RequestParam("file") MultipartFile file,
             Authentication authentication) {
         
-        log.info("Uploading image file: {}", file.getOriginalFilename());
+        log.info("Uploading image file to Cloudinary and storing metadata: {}", file.getOriginalFilename());
         
         try {
             String userId = getUserIdFromAuthentication(authentication);
-            ImageMetadata imageMetadata = fileStorageService.storeFile(file, userId);
+            ImageMetadata imageMetadata = imageUploadService.uploadAndStoreImage(file, userId);
             
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("imageId", imageMetadata.getId());
-            response.put("imageUrl", imageMetadata.getImageUrl());
+            response.put("publicId", imageMetadata.getCloudinaryPublicId());
+            response.put("imageUrl", imageMetadata.getCloudinarySecureUrl());
+            response.put("url", imageMetadata.getCloudinarySecureUrl()); // For mobile compatibility
             response.put("originalFileName", imageMetadata.getOriginalFileName());
             response.put("fileSize", imageMetadata.getFileSize());
             response.put("mimeType", imageMetadata.getMimeType());
+            response.put("width", imageMetadata.getWidth());
+            response.put("height", imageMetadata.getHeight());
+            response.put("cloudinaryFormat", imageMetadata.getCloudinaryFormat());
+            response.put("cloudinaryBytes", imageMetadata.getCloudinaryBytes());
             
-            log.info("Image uploaded successfully with ID: {}", imageMetadata.getId());
+            log.info("Image uploaded and stored successfully with ID: {} and Cloudinary public ID: {}", 
+                    imageMetadata.getId(), imageMetadata.getCloudinaryPublicId());
             return ResponseEntity.ok(response);
             
         } catch (Exception e) {
-            log.error("Error uploading image: {}", e.getMessage(), e);
+            log.error("Error uploading image to Cloudinary and storing metadata: {}", e.getMessage(), e);
             
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
@@ -240,112 +430,263 @@ public class FeedController {
             @RequestParam("files") MultipartFile[] files,
             Authentication authentication) {
         
-        log.info("Uploading {} image files", files.length);
+        log.info("Uploading {} image files to Cloudinary and storing metadata", files.length);
         
         try {
+            // Validate files
+            if (files == null || files.length == 0) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("error", "No files provided");
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+            // Check file count limit
+            if (files.length > 10) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("error", "Maximum 10 images allowed per upload");
+                return ResponseEntity.badRequest().body(response);
+            }
+            
             String userId = getUserIdFromAuthentication(authentication);
-            List<ImageMetadata> imageMetadataList = fileStorageService.storeFiles(files, userId);
+            List<ImageMetadata> uploadedImages = imageUploadService.uploadAndStoreImages(files, userId);
+            
+            // Convert to response format
+            List<Map<String, Object>> imageResponses = new ArrayList<>();
+            for (ImageMetadata imageMetadata : uploadedImages) {
+                Map<String, Object> imageResponse = new HashMap<>();
+                imageResponse.put("imageId", imageMetadata.getId());
+                imageResponse.put("publicId", imageMetadata.getCloudinaryPublicId());
+                imageResponse.put("imageUrl", imageMetadata.getCloudinarySecureUrl());
+                imageResponse.put("url", imageMetadata.getCloudinarySecureUrl()); // For mobile compatibility
+                imageResponse.put("originalFileName", imageMetadata.getOriginalFileName());
+                imageResponse.put("fileSize", imageMetadata.getFileSize());
+                imageResponse.put("mimeType", imageMetadata.getMimeType());
+                imageResponse.put("width", imageMetadata.getWidth());
+                imageResponse.put("height", imageMetadata.getHeight());
+                imageResponse.put("cloudinaryFormat", imageMetadata.getCloudinaryFormat());
+                imageResponse.put("cloudinaryBytes", imageMetadata.getCloudinaryBytes());
+                imageResponses.add(imageResponse);
+            }
             
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("imageCount", imageMetadataList.size());
-            response.put("images", imageMetadataList.stream().map(metadata -> {
-                Map<String, Object> imageInfo = new HashMap<>();
-                imageInfo.put("imageId", metadata.getId());
-                imageInfo.put("imageUrl", metadata.getImageUrl());
-                imageInfo.put("originalFileName", metadata.getOriginalFileName());
-                imageInfo.put("fileSize", metadata.getFileSize());
-                imageInfo.put("mimeType", metadata.getMimeType());
-                return imageInfo;
-            }).toList());
+            response.put("imageCount", uploadedImages.size());
+            response.put("images", imageResponses);
+            response.put("message", "Images uploaded and stored successfully");
             
-            log.info("Successfully uploaded {} images", imageMetadataList.size());
+            log.info("Successfully uploaded and stored {} images", uploadedImages.size());
+            return ResponseEntity.ok(response);
+            
+        } catch (IllegalArgumentException e) {
+            log.error("Validation error uploading images: {}", e.getMessage());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            
+            return ResponseEntity.badRequest().body(response);
+            
+        } catch (Exception e) {
+            log.error("Error uploading images to Cloudinary and storing metadata: {}", e.getMessage(), e);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "Failed to upload images: " + e.getMessage());
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    // Upload image with custom transformations
+    @PostMapping("/upload/image/transform")
+    public ResponseEntity<Map<String, Object>> uploadImageWithTransformations(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "width", defaultValue = "1200") int width,
+            @RequestParam(value = "height", defaultValue = "1200") int height,
+            @RequestParam(value = "crop", defaultValue = "limit") String crop,
+            Authentication authentication) {
+        
+        log.info("Uploading image with transformations to Cloudinary: {}", file.getOriginalFilename());
+        
+        try {
+            String userId = getUserIdFromAuthentication(authentication);
+            
+            // Create transformation map
+            Map<String, Object> transformations = new HashMap<>();
+            transformations.put("width", width);
+            transformations.put("height", height);
+            transformations.put("crop", crop);
+            transformations.put("quality", "auto:good");
+            transformations.put("format", "auto");
+            
+            Map<String, Object> uploadResult = cloudinaryService.uploadImageWithTransformations(file, userId, transformations);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("publicId", uploadResult.get("publicId"));
+            response.put("imageUrl", uploadResult.get("url"));
+            response.put("originalFileName", uploadResult.get("originalFileName"));
+            response.put("fileSize", uploadResult.get("fileSize"));
+            response.put("mimeType", uploadResult.get("mimeType"));
+            response.put("width", uploadResult.get("width"));
+            response.put("height", uploadResult.get("height"));
+            response.put("format", uploadResult.get("format"));
+            response.put("bytes", uploadResult.get("bytes"));
+            response.put("transformations", transformations);
+            
+            log.info("Image uploaded successfully with transformations to Cloudinary with public ID: {}", uploadResult.get("publicId"));
+            return ResponseEntity.ok(response);
+            
+        } catch (IllegalArgumentException e) {
+            log.error("Validation error uploading image: {}", e.getMessage());
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            
+            return ResponseEntity.badRequest().body(response);
+            
+        } catch (Exception e) {
+            log.error("Error uploading image to Cloudinary: {}", e.getMessage(), e);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "Failed to upload image: " + e.getMessage());
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    // Generate optimized image URL
+    @GetMapping("/images/{publicId}/url")
+    public ResponseEntity<Map<String, Object>> generateOptimizedUrl(
+            @PathVariable String publicId,
+            @RequestParam(value = "width", defaultValue = "800") int width,
+            @RequestParam(value = "height", defaultValue = "600") int height,
+            @RequestParam(value = "crop", defaultValue = "limit") String crop) {
+        
+        log.info("Generating optimized URL for public ID: {}", publicId);
+        
+        try {
+            String optimizedUrl = cloudinaryService.generateOptimizedUrl(publicId, width, height, crop);
+            
+            if (optimizedUrl == null) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("success", false);
+                response.put("error", "Failed to generate optimized URL");
+                return ResponseEntity.badRequest().body(response);
+            }
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("publicId", publicId);
+            response.put("optimizedUrl", optimizedUrl);
+            response.put("transformations", Map.of(
+                "width", width,
+                "height", height,
+                "crop", crop
+            ));
+            
             return ResponseEntity.ok(response);
             
         } catch (Exception e) {
-            log.error("Error uploading images: {}", e.getMessage(), e);
+            log.error("Error generating optimized URL: {}", e.getMessage(), e);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "Failed to generate optimized URL: " + e.getMessage());
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    // Delete image from Cloudinary
+    @DeleteMapping("/images/{publicId}")
+    public ResponseEntity<Void> deleteImage(
+            @PathVariable String publicId,
+            Authentication authentication) {
+        
+        log.info("Deleting image from Cloudinary with public ID: {}", publicId);
+        
+        try {
+            cloudinaryService.deleteImage(publicId);
+            return ResponseEntity.noContent().build();
+            
+        } catch (Exception e) {
+            log.error("Error deleting image from Cloudinary: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    // Get recent feeds (last 24 hours)
+    @GetMapping("/recent")
+    public ResponseEntity<Page<FeedResponse>> getRecentFeeds(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        
+        log.info("Getting recent feeds, page: {}, size: {}", page, size);
+        
+        try {
+            Page<FeedResponse> feeds = feedService.getRecentFeeds(page, size);
+            return ResponseEntity.ok(feeds);
+        } catch (Exception e) {
+            log.error("Error getting recent feeds: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    // Get feed statistics
+    @GetMapping("/statistics")
+    public ResponseEntity<Map<String, Object>> getFeedStatistics() {
+        log.info("Getting feed statistics");
+        
+        try {
+            Map<String, Object> stats = feedService.getFeedStatistics();
+            return ResponseEntity.ok(stats);
+        } catch (Exception e) {
+            log.error("Error getting feed statistics: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    // Test image upload without authentication (for testing purposes)
+    @PostMapping("/test/upload/image")
+    public ResponseEntity<Map<String, Object>> testUploadImage(@RequestParam("file") MultipartFile file) {
+        log.info("Testing image upload to Cloudinary: {}", file.getOriginalFilename());
+        
+        try {
+            // Use a test user ID
+            String testUserId = "test-user-123";
+            ImageMetadata imageMetadata = imageUploadService.uploadAndStoreImage(file, testUserId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("imageId", imageMetadata.getId());
+            response.put("publicId", imageMetadata.getCloudinaryPublicId());
+            response.put("imageUrl", imageMetadata.getCloudinarySecureUrl());
+            response.put("url", imageMetadata.getCloudinarySecureUrl());
+            response.put("originalFileName", imageMetadata.getOriginalFileName());
+            response.put("fileSize", imageMetadata.getFileSize());
+            response.put("mimeType", imageMetadata.getMimeType());
+            response.put("width", imageMetadata.getWidth());
+            response.put("height", imageMetadata.getHeight());
+            response.put("cloudinaryFormat", imageMetadata.getCloudinaryFormat());
+            response.put("cloudinaryBytes", imageMetadata.getCloudinaryBytes());
+            
+            log.info("Test image uploaded and stored successfully with ID: {} and Cloudinary public ID: {}", 
+                    imageMetadata.getId(), imageMetadata.getCloudinaryPublicId());
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error testing image upload to Cloudinary: {}", e.getMessage(), e);
             
             Map<String, Object> response = new HashMap<>();
             response.put("success", false);
             response.put("error", e.getMessage());
             
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-        }
-    }
-    
-    // Get image by ID
-    @GetMapping("/images/{imageId}")
-    public ResponseEntity<Resource> getImage(@PathVariable String imageId) {
-        log.info("Getting image with ID: {}", imageId);
-        
-        try {
-            ImageMetadata imageMetadata = fileStorageService.getImageMetadata(imageId);
-            Path imagePath = fileStorageService.getImagePath(imageId);
-            
-            Resource resource = new UrlResource(imagePath.toUri());
-            
-            if (resource.exists() && resource.isReadable()) {
-                return ResponseEntity.ok()
-                        .contentType(MediaType.parseMediaType(imageMetadata.getMimeType()))
-                        .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + imageMetadata.getOriginalFileName() + "\"")
-                        .body(resource);
-            } else {
-                log.error("Image file not found or not readable: {}", imagePath);
-                return ResponseEntity.notFound().build();
-            }
-            
-        } catch (MalformedURLException e) {
-            log.error("Error creating URL resource for image: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().build();
-        } catch (Exception e) {
-            log.error("Error getting image: {}", e.getMessage(), e);
-            return ResponseEntity.notFound().build();
-        }
-    }
-    
-    // Delete image
-    @DeleteMapping("/images/{imageId}")
-    public ResponseEntity<Void> deleteImage(
-            @PathVariable String imageId,
-            Authentication authentication) {
-        
-        log.info("Deleting image with ID: {}", imageId);
-        
-        try {
-            String userId = getUserIdFromAuthentication(authentication);
-            fileStorageService.deleteImage(imageId, userId);
-            return ResponseEntity.noContent().build();
-            
-        } catch (Exception e) {
-            log.error("Error deleting image: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-    
-    // Get user's images
-    @GetMapping("/user/{userId}/images")
-    public ResponseEntity<List<Map<String, Object>>> getUserImages(@PathVariable String userId) {
-        log.info("Getting images for user: {}", userId);
-        
-        try {
-            List<ImageMetadata> imageMetadataList = fileStorageService.getUserImages(userId);
-            
-            List<Map<String, Object>> images = imageMetadataList.stream().map(metadata -> {
-                Map<String, Object> imageInfo = new HashMap<>();
-                imageInfo.put("imageId", metadata.getId());
-                imageInfo.put("imageUrl", metadata.getImageUrl());
-                imageInfo.put("originalFileName", metadata.getOriginalFileName());
-                imageInfo.put("fileSize", metadata.getFileSize());
-                imageInfo.put("mimeType", metadata.getMimeType());
-                imageInfo.put("createdAt", metadata.getCreatedAt());
-                return imageInfo;
-            }).toList();
-            
-            return ResponseEntity.ok(images);
-            
-        } catch (Exception e) {
-            log.error("Error getting user images: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
     

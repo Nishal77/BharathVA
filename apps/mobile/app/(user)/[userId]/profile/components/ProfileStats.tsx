@@ -1,14 +1,103 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image, Text, View, useColorScheme } from 'react-native';
+import { getUserFeeds } from '../../../../../services/api/feedService';
+import { useLocalSearchParams } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
 
-export default function ProfileStats() {
+interface ProfileStatsProps {
+  postCount?: number;
+  onPostCountChange?: (count: number) => void;
+}
+
+export default function ProfileStats({ postCount: externalPostCount, onPostCountChange }: ProfileStatsProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { userId } = useLocalSearchParams<{ userId: string }>();
   
   const bgColor = isDark ? '#000000' : '#FFFFFF';
   const numberColor = isDark ? '#F9FAFB' : '#111827';
   const labelColor = isDark ? '#9CA3AF' : '#6B7280';
   const borderColor = isDark ? '#374151' : '#E5E7EB';
+
+  const [internalPostCount, setInternalPostCount] = useState<number>(0);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  // Use external post count if provided, otherwise use internal state
+  const displayPostCount = externalPostCount !== undefined ? externalPostCount : internalPostCount;
+
+  // Fetch post count from API
+  const fetchPostCount = async () => {
+    try {
+      setLoading(true);
+      const token = await SecureStore.getItemAsync('accessToken');
+      if (!token) {
+        console.log('No access token found for post count');
+        return;
+      }
+
+      // Decode JWT to get user ID
+      const payload = decodeJWT(token);
+      if (!payload) {
+        console.log('Failed to decode JWT token for post count');
+        return;
+      }
+
+      const authenticatedUserId = payload.userId || payload.sub;
+      console.log('Fetching post count for user:', authenticatedUserId);
+
+      // Get user feeds to count posts
+      const response = await getUserFeeds(authenticatedUserId, 0, 1000); // Get a large number to count all
+      if (response.success && response.data) {
+        const feedItems = response.data.content || [];
+        const userFeeds = feedItems.filter(feed => feed.userId === authenticatedUserId);
+        const count = userFeeds.length;
+        
+        console.log('📊 Fetched post count:', count);
+        setInternalPostCount(count);
+        
+        // Notify parent component if callback provided
+        if (onPostCountChange) {
+          onPostCountChange(count);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching post count:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // JWT decode function
+  const decodeJWT = (token: string): any => {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      return JSON.parse(jsonPayload);
+    } catch (error) {
+      console.error('Failed to decode JWT token:', error);
+      return null;
+    }
+  };
+
+  // Fetch post count on component mount
+  useEffect(() => {
+    if (!externalPostCount) {
+      fetchPostCount();
+    }
+  }, [userId]);
+
+  // Update internal count when external count changes
+  useEffect(() => {
+    if (externalPostCount !== undefined) {
+      setInternalPostCount(externalPostCount);
+    }
+  }, [externalPostCount]);
 
   return (
     <View className="px-5 pt-1 pb-4" style={{ backgroundColor: bgColor }}>
@@ -22,7 +111,7 @@ export default function ProfileStats() {
               className="w-6 h-6 rounded-full overflow-hidden"
             >
               <Image
-                source={{ uri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80' }}
+                source={{ uri: `https://randomuser.me/api/portraits/men/${Math.floor(Math.random() * 100)}.jpg` }}
                 className="w-full h-full"
                 resizeMode="cover"
               />
@@ -36,7 +125,7 @@ export default function ProfileStats() {
               }}
             >
               <Image
-                source={{ uri: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80' }}
+                source={{ uri: `https://randomuser.me/api/portraits/men/${Math.floor(Math.random() * 100)}.jpg` }}
                 className="w-full h-full"
                 resizeMode="cover"
               />
@@ -50,7 +139,7 @@ export default function ProfileStats() {
               }}
             >
               <Image
-                source={{ uri: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80' }}
+                source={{ uri: `https://randomuser.me/api/portraits/men/${Math.floor(Math.random() * 100)}.jpg` }}
                 className="w-full h-full"
                 resizeMode="cover"
               />
@@ -106,7 +195,7 @@ export default function ProfileStats() {
             className="text-base font-bold mr-2"
             style={{ color: numberColor }}
           >
-            156
+            {loading ? '...' : displayPostCount}
           </Text>
           <Text 
             className="text-base"

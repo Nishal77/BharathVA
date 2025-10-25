@@ -96,28 +96,28 @@ class SampleDataMigrationTest {
         Feed feed1 = new Feed();
         feed1.setUserId(user1);
         feed1.setMessage("Beautiful sunset at the beach today! 🌅");
-        feed1.setImageIds(Arrays.asList(savedImage1.getId()));
+        feed1.setImageUrls(Arrays.asList("https://res.cloudinary.com/dqmryiyhz/image/upload/v1234567890/sample-beach-sunset.jpg"));
         feed1.setCreatedAt(LocalDateTime.now());
         feed1.setUpdatedAt(LocalDateTime.now());
         
         Feed feed2 = new Feed();
         feed2.setUserId(user1);
         feed2.setMessage("Amazing mountain landscape from my hiking trip 🏔️");
-        feed2.setImageIds(Arrays.asList(savedImage2.getId()));
+        feed2.setImageUrls(Arrays.asList("https://res.cloudinary.com/dqmryiyhz/image/upload/v1234567890/sample-mountain-landscape.jpg"));
         feed2.setCreatedAt(LocalDateTime.now());
         feed2.setUpdatedAt(LocalDateTime.now());
         
         Feed feed3 = new Feed();
         feed3.setUserId(user2);
         feed3.setMessage("Peaceful forest walk in nature 🌲");
-        feed3.setImageIds(Arrays.asList(savedImage3.getId()));
+        feed3.setImageUrls(Arrays.asList("https://res.cloudinary.com/dqmryiyhz/image/upload/v1234567890/unsplash-nature-forest.jpg"));
         feed3.setCreatedAt(LocalDateTime.now());
         feed3.setUpdatedAt(LocalDateTime.now());
         
         Feed feed4 = new Feed();
         feed4.setUserId(user1);
         feed4.setMessage("Testing text-only post without images");
-        feed4.setImageIds(Arrays.asList()); // Empty image list
+        feed4.setImageUrls(Arrays.asList()); // Empty image list
         feed4.setCreatedAt(LocalDateTime.now());
         feed4.setUpdatedAt(LocalDateTime.now());
         
@@ -156,14 +156,14 @@ class SampleDataMigrationTest {
         
         // Verify feeds with images
         List<Feed> feedsWithImages = allFeeds.stream()
-                .filter(feed -> feed.getImageIds() != null && !feed.getImageIds().isEmpty())
+                .filter(feed -> feed.getImageUrls() != null && !feed.getImageUrls().isEmpty())
                 .toList();
         
         assertEquals(3, feedsWithImages.size(), "Should have 3 feeds with images");
         
         // Verify feeds without images
         List<Feed> feedsWithoutImages = allFeeds.stream()
-                .filter(feed -> feed.getImageIds() == null || feed.getImageIds().isEmpty())
+                .filter(feed -> feed.getImageUrls() == null || feed.getImageUrls().isEmpty())
                 .toList();
         
         assertEquals(1, feedsWithoutImages.size(), "Should have 1 feed without images");
@@ -230,7 +230,7 @@ class SampleDataMigrationTest {
         System.out.println("Feeds:");
         for (Feed feed : allFeeds) {
             System.out.println("  - \"" + feed.getMessage() + "\" (" + 
-                    (feed.getImageIds() != null ? feed.getImageIds().size() : 0) + " images)");
+                    (feed.getImageUrls() != null ? feed.getImageUrls().size() : 0) + " images)");
         }
     }
     

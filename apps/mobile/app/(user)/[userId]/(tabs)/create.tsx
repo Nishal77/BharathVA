@@ -313,7 +313,7 @@ export default function CreateScreen() {
         return;
       }
       
-      let imageIds: string[] = [];
+      let imageUrls: string[] = [];
       
       // Upload images first if any are selected
       if (selectedImages.length > 0) {
@@ -323,8 +323,10 @@ export default function CreateScreen() {
           const uploadResult = await uploadMultipleImages(selectedImages);
           
           if (uploadResult.success && uploadResult.images) {
-            imageIds = uploadResult.images.map(img => img.imageId);
-            console.log(`Successfully uploaded ${imageIds.length} images`);
+            imageUrls = uploadResult.images
+              .map(img => img.imageUrl || img.url)
+              .filter((url): url is string => url !== undefined);
+            console.log(`Successfully uploaded ${imageUrls.length} images`);
           } else {
             Alert.alert('Image Upload Error', uploadResult.error || 'Failed to upload images. Please try again.');
             return;
@@ -337,7 +339,7 @@ export default function CreateScreen() {
       }
       
       // Create post with images
-      const result = await createPost(content.trim(), imageIds);
+      const result = await createPost(content.trim(), imageUrls);
       
       if (result.success) {
         // Success - clear content and show success message
@@ -345,7 +347,7 @@ export default function CreateScreen() {
         setSelectedImages([]);
         Alert.alert(
           'Post Published!', 
-          `Your post has been successfully published${imageIds.length > 0 ? ` with ${imageIds.length} image${imageIds.length > 1 ? 's' : ''}` : ''}.`,
+          `Your post has been successfully published${imageUrls.length > 0 ? ` with ${imageUrls.length} image${imageUrls.length > 1 ? 's' : ''}` : ''}.!!!!!!`,
           [{ text: 'OK' }]
         );
       } else {

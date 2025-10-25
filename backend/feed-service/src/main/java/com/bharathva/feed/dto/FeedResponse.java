@@ -14,7 +14,7 @@ public class FeedResponse {
     private String id;
     private String userId;
     private String message;
-    private List<String> imageIds = new ArrayList<>();
+    private List<String> imageUrls = new ArrayList<>();
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     
@@ -25,7 +25,7 @@ public class FeedResponse {
         this.id = feed.getId();
         this.userId = feed.getUserId();
         this.message = feed.getMessage();
-        this.imageIds = feed.getImageIds();
+        this.imageUrls = feed.getImageUrls();
         this.createdAt = feed.getCreatedAt();
         this.updatedAt = feed.getUpdatedAt();
     }
@@ -71,12 +71,12 @@ public class FeedResponse {
         this.updatedAt = updatedAt;
     }
     
-    public List<String> getImageIds() {
-        return imageIds;
+    public List<String> getImageUrls() {
+        return imageUrls;
     }
     
-    public void setImageIds(List<String> imageIds) {
-        this.imageIds = imageIds;
+    public void setImageUrls(List<String> imageUrls) {
+        this.imageUrls = imageUrls;
     }
     
     @Override
@@ -85,7 +85,7 @@ public class FeedResponse {
                 "id='" + id + '\'' +
                 ", userId='" + userId + '\'' +
                 ", message='" + message + '\'' +
-                ", imageIds=" + imageIds +
+                ", imageUrls=" + imageUrls +
                 ", createdAt=" + createdAt +
                 ", updatedAt=" + updatedAt +
                 '}';

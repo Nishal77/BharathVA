@@ -8,14 +8,13 @@ import org.springframework.data.mongodb.core.mapping.Field;
 import java.time.LocalDateTime;
 
 /**
- * Image metadata model for BharathVA
- * Stores image information including file path, size, type, and user association
+ * Stores image info including file path, size, type, and user association this is how itt works here
  */
 @Document(collection = "image_metadata")
 public class ImageMetadata {
     
     @Id
-    private String id; // MongoDB will auto-generate UUID
+    private String id; // MongoDB will auto-generate UUID and so on
     
     @Field("userId")
     @Indexed
@@ -41,6 +40,28 @@ public class ImageMetadata {
     
     @Field("height")
     private Integer height;
+    
+    // Cloudinary-specific fields
+    @Field("cloudinaryPublicId")
+    private String cloudinaryPublicId;
+    
+    @Field("cloudinaryUrl")
+    private String cloudinaryUrl;
+    
+    @Field("cloudinarySecureUrl")
+    private String cloudinarySecureUrl;
+    
+    @Field("cloudinaryFormat")
+    private String cloudinaryFormat;
+    
+    @Field("cloudinaryBytes")
+    private Long cloudinaryBytes;
+    
+    @Field("cloudinaryFolder")
+    private String cloudinaryFolder;
+    
+    @Field("isCloudinaryUploaded")
+    private Boolean isCloudinaryUploaded = false;
     
     @Field("createdAt")
     @Indexed
@@ -139,6 +160,63 @@ public class ImageMetadata {
         this.height = height;
     }
     
+    // Cloudinary getters and setters
+    public String getCloudinaryPublicId() {
+        return cloudinaryPublicId;
+    }
+    
+    public void setCloudinaryPublicId(String cloudinaryPublicId) {
+        this.cloudinaryPublicId = cloudinaryPublicId;
+    }
+    
+    public String getCloudinaryUrl() {
+        return cloudinaryUrl;
+    }
+    
+    public void setCloudinaryUrl(String cloudinaryUrl) {
+        this.cloudinaryUrl = cloudinaryUrl;
+    }
+    
+    public String getCloudinarySecureUrl() {
+        return cloudinarySecureUrl;
+    }
+    
+    public void setCloudinarySecureUrl(String cloudinarySecureUrl) {
+        this.cloudinarySecureUrl = cloudinarySecureUrl;
+    }
+    
+    public String getCloudinaryFormat() {
+        return cloudinaryFormat;
+    }
+    
+    public void setCloudinaryFormat(String cloudinaryFormat) {
+        this.cloudinaryFormat = cloudinaryFormat;
+    }
+    
+    public Long getCloudinaryBytes() {
+        return cloudinaryBytes;
+    }
+    
+    public void setCloudinaryBytes(Long cloudinaryBytes) {
+        this.cloudinaryBytes = cloudinaryBytes;
+    }
+    
+    public String getCloudinaryFolder() {
+        return cloudinaryFolder;
+    }
+    
+    public void setCloudinaryFolder(String cloudinaryFolder) {
+        this.cloudinaryFolder = cloudinaryFolder;
+    }
+    
+    public Boolean getIsCloudinaryUploaded() {
+        return isCloudinaryUploaded;
+    }
+    
+    public void setIsCloudinaryUploaded(Boolean isCloudinaryUploaded) {
+        this.isCloudinaryUploaded = isCloudinaryUploaded;
+    }
+    
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -161,6 +239,10 @@ public class ImageMetadata {
     }
     
     public String getImageUrl() {
+        // Return Cloudinary URL if available, otherwise fallback to local URL
+        if (isCloudinaryUploaded && cloudinarySecureUrl != null) {
+            return cloudinarySecureUrl;
+        }
         return "/api/feed/images/" + this.id;
     }
     
@@ -187,6 +269,13 @@ public class ImageMetadata {
                 ", mimeType='" + mimeType + '\'' +
                 ", width=" + width +
                 ", height=" + height +
+                ", cloudinaryPublicId='" + cloudinaryPublicId + '\'' +
+                ", cloudinaryUrl='" + cloudinaryUrl + '\'' +
+                ", cloudinarySecureUrl='" + cloudinarySecureUrl + '\'' +
+                ", cloudinaryFormat='" + cloudinaryFormat + '\'' +
+                ", cloudinaryBytes=" + cloudinaryBytes +
+                ", cloudinaryFolder='" + cloudinaryFolder + '\'' +
+                ", isCloudinaryUploaded=" + isCloudinaryUploaded +
                 ", createdAt=" + createdAt +
                 ", updatedAt=" + updatedAt +
                 '}';

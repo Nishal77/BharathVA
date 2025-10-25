@@ -1,25 +1,22 @@
 package com.bharathva.feed.repository;
 
 import com.bharathva.feed.model.ImageMetadata;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 
 /**
- * Repository interface for ImageMetadata operations
+ * Repository for ImageMetadata operations
  */
 @Repository
 public interface ImageMetadataRepository extends MongoRepository<ImageMetadata, String> {
     
     /**
-     * Find images by user ID
+     * Find all images for a specific user
      */
-    Page<ImageMetadata> findByUserId(String userId, Pageable pageable);
+    List<ImageMetadata> findByUserId(String userId);
     
     /**
      * Find images by user ID ordered by creation date descending
@@ -27,14 +24,24 @@ public interface ImageMetadataRepository extends MongoRepository<ImageMetadata, 
     List<ImageMetadata> findByUserIdOrderByCreatedAtDesc(String userId);
     
     /**
-     * Find image by stored file name
+     * Find image files by user ID (alias for findByUserId for backward compatibility)
      */
-    Optional<ImageMetadata> findByStoredFileName(String storedFileName);
+    List<ImageMetadata> findImageFilesByUserId(String userId);
     
     /**
-     * Find images by user ID and file path
+     * Find images by Cloudinary public ID
      */
-    List<ImageMetadata> findByUserIdAndFilePath(String userId, String filePath);
+    ImageMetadata findByCloudinaryPublicId(String cloudinaryPublicId);
+    
+    /**
+     * Find images that are uploaded to Cloudinary
+     */
+    List<ImageMetadata> findByIsCloudinaryUploaded(Boolean isCloudinaryUploaded);
+    
+    /**
+     * Find images by user ID and Cloudinary upload status
+     */
+    List<ImageMetadata> findByUserIdAndIsCloudinaryUploaded(String userId, Boolean isCloudinaryUploaded);
     
     /**
      * Count images by user ID
@@ -44,17 +51,37 @@ public interface ImageMetadataRepository extends MongoRepository<ImageMetadata, 
     /**
      * Find images by MIME type
      */
-    @Query("{'mimeType': {$regex: '^image/', $options: 'i'}}")
-    List<ImageMetadata> findImageFiles();
+    List<ImageMetadata> findByMimeType(String mimeType);
     
     /**
      * Find images by user ID and MIME type
      */
-    @Query("{'userId': ?0, 'mimeType': {$regex: '^image/', $options: 'i'}}")
-    List<ImageMetadata> findImageFilesByUserId(String userId);
+    List<ImageMetadata> findByUserIdAndMimeType(String userId, String mimeType);
+    
+    /**
+     * Find images created after a specific date
+     */
+    @Query("{ 'userId': ?0, 'createdAt': { $gte: ?1 } }")
+    List<ImageMetadata> findByUserIdAndCreatedAtAfter(String userId, java.time.LocalDateTime createdAt);
+    
+    /**
+     * Find images with file size greater than specified value
+     */
+    @Query("{ 'userId': ?0, 'fileSize': { $gte: ?1 } }")
+    List<ImageMetadata> findByUserIdAndFileSizeGreaterThan(String userId, Long fileSize);
+    
+    /**
+     * Find images by Cloudinary folder
+     */
+    List<ImageMetadata> findByCloudinaryFolder(String cloudinaryFolder);
     
     /**
      * Delete images by user ID
      */
     void deleteByUserId(String userId);
+    
+    /**
+     * Delete images that are not uploaded to Cloudinary (cleanup)
+     */
+    void deleteByIsCloudinaryUploaded(Boolean isCloudinaryUploaded);
 }

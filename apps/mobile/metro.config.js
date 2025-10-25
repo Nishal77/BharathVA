@@ -21,4 +21,15 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
+// Add specific resolution for problematic packages
+config.resolver.alias = {
+  'react-native-css-interop': path.resolve(workspaceRoot, 'node_modules/react-native-css-interop'),
+  'nativewind': path.resolve(workspaceRoot, 'node_modules/nativewind'),
+  '@expo/vector-icons': path.resolve(workspaceRoot, 'node_modules/@expo/vector-icons'),
+  'lucide-react-native': path.resolve(workspaceRoot, 'node_modules/lucide-react-native'),
+};
+
+// Ensure proper module resolution
+config.resolver.platforms = ['ios', 'android', 'native', 'web'];
+
 module.exports = withNativeWind(config, { input: './global.css' });

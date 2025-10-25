@@ -28,24 +28,42 @@ export default function ProfileTab() {
         return <Feed />;
       case 'Media':
         return (
-          <View className="px-5 py-8 items-center" style={{ paddingBottom: 100 }}>
-            <Text className="text-gray-500 text-center">
+          <View 
+            className="px-5 py-8 items-center" 
+            style={{ 
+              paddingBottom: 100,
+              backgroundColor: bgColor
+            }}
+          >
+            <Text className={`text-center ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
               Media content will appear here
             </Text>
           </View>
         );
       case 'Video':
         return (
-          <View className="px-5 py-8 items-center" style={{ paddingBottom: 100 }}>
-            <Text className="text-gray-500 text-center">
+          <View 
+            className="px-5 py-8 items-center" 
+            style={{ 
+              paddingBottom: 100,
+              backgroundColor: bgColor
+            }}
+          >
+            <Text className={`text-center ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
               Video content will appear here
             </Text>
           </View>
         );
       case 'Replies':
         return (
-          <View className="px-5 py-8 items-center" style={{ paddingBottom: 100 }}>
-            <Text className="text-gray-500 text-center">
+          <View 
+            className="px-5 py-8 items-center" 
+            style={{ 
+              paddingBottom: 100,
+              backgroundColor: bgColor
+            }}
+          >
+            <Text className={`text-center ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
               Replies content will appear here
             </Text>
           </View>
@@ -61,7 +79,11 @@ export default function ProfileTab() {
         onBackPress={() => router.back()}
         onMenuPress={() => console.log('Menu pressed')}
       />
-      <ScrollView className="flex-1">
+      <ScrollView 
+        className="flex-1" 
+        style={{ backgroundColor: bgColor }}
+        showsVerticalScrollIndicator={false}
+      >
         <ProfileInfo />
         <ProfileUsername />
         <ProfileBio />
