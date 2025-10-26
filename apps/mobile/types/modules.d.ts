@@ -69,7 +69,4 @@ declare module 'lucide-react-native' {
   export const User: ComponentType<LucideProps>;
   export const Users: ComponentType<LucideProps>;
   export const X: ComponentType<LucideProps>;
-  
-  // Index signature for dynamic icon access
-  export const [key: string]: ComponentType<LucideProps>;
 }

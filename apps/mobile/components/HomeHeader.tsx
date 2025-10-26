@@ -2,7 +2,6 @@ import { BlurView } from 'expo-blur';
 import { Image } from 'expo-image';
 import React from 'react';
 import { Pressable, ScrollView, Text, View, useColorScheme } from 'react-native';
-import { useTabStyles } from '../hooks/useTabStyles';
 import { Svg, Path } from 'react-native-svg';
 
 interface HomeHeaderProps {
@@ -18,7 +17,6 @@ export default function HomeHeader({
   onMessagesPress,
   tabs 
 }: HomeHeaderProps) {
-  const tabStyles = useTabStyles();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -36,7 +34,7 @@ export default function HomeHeader({
           paddingBottom: 0,
           paddingHorizontal: 24,
           borderBottomWidth: 1,
-          borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : tabStyles.border.bottom,
+          borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
           marginHorizontal: 0,
           // Shadow removed
         }}
@@ -49,7 +47,7 @@ export default function HomeHeader({
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: tabStyles.background.primary,
+          backgroundColor: isDark ? 'rgba(0, 0, 0, 0.95)' : 'rgba(255, 255, 255, 0.35)',
         }}
       />
       
@@ -61,7 +59,7 @@ export default function HomeHeader({
           right: 0,
           top: 0,
           height: 72,
-          backgroundColor: tabStyles.background.secondary,
+          backgroundColor: isDark ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.25)',
         }}
       />
       
@@ -73,7 +71,7 @@ export default function HomeHeader({
           right: 0,
           top: 0,
           height: 40,
-          backgroundColor: tabStyles.background.tertiary,
+          backgroundColor: isDark ? 'rgba(0, 0, 0, 0.9)' : 'rgba(255, 255, 255, 0.4)',
         }}
       />
       
@@ -207,7 +205,7 @@ export default function HomeHeader({
                   style={{
                     fontSize: 14,
                     fontWeight: '600',
-                    color: activeTab === tab ? tabStyles.text.active : tabStyles.text.inactive,
+                    color: activeTab === tab ? (isDark ? '#FFFFFF' : '#000000') : (isDark ? '#9CA3AF' : '#6B7280'),
                   }}
                 >
                   {tab}

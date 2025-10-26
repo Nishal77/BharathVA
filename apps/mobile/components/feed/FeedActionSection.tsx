@@ -2,19 +2,23 @@ import React, { useState } from 'react';
 import { Pressable, Text, View, useColorScheme } from 'react-native';
 // Removed MessageCircle import - using custom SVG
 import { Svg, Path, Line } from 'react-native-svg';
+import EmojiPickerModal from '../../components/EmojiPickerModal';
+import ReactionsPicker from '../../components/ReactionsPicker';
 
 interface FeedActionSectionProps {
   onLike?: () => void;
   onReply?: () => void;
   onShare?: () => void;
   onBookmark?: () => void;
+  onEmojiSelect?: (emoji: string) => void;
 }
 
 export default function FeedActionSection({ 
   onLike, 
   onReply, 
   onShare, 
-  onBookmark 
+  onBookmark,
+  onEmojiSelect
 }: FeedActionSectionProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -23,9 +27,16 @@ export default function FeedActionSection({
   const [isSendActive, setIsSendActive] = useState(false);
   const [isHeartActive, setIsHeartActive] = useState(false);
   const [isMessageActive, setIsMessageActive] = useState(false);
+  const [isEmojiPickerVisible, setIsEmojiPickerVisible] = useState(false);
+  const [isReactionsPickerVisible, setIsReactionsPickerVisible] = useState(false);
   
   // Theme-aware colors: white in dark mode, black in light mode
   const textColor = isDark ? '#FFFFFF' : '#000000';
+
+  const handleEmojiSelect = (emoji: string) => {
+    onEmojiSelect?.(emoji);
+    setIsEmojiPickerVisible(false);
+  };
 
   return (
     <View className="mb-3 pr-0">
@@ -103,7 +114,7 @@ export default function FeedActionSection({
         
         {/* Secondary Actions - Less Frequent */}
         <View className="flex-row items-center space-x-4">
-          <Pressable className="px-2" onPress={() => setIsSmileActive(!isSmileActive)}>
+          <Pressable className="px-2" onPress={() => setIsReactionsPickerVisible(true)}>
             <Svg
               width={22}
               height={22}
@@ -240,6 +251,19 @@ export default function FeedActionSection({
         </View>
       </View>
 
+      {/* Reactions Picker */}
+      <ReactionsPicker
+        visible={isReactionsPickerVisible}
+        onClose={() => setIsReactionsPickerVisible(false)}
+        onReactionSelect={handleEmojiSelect}
+      />
+
+      {/* Emoji Picker Modal */}
+      <EmojiPickerModal
+        visible={isEmojiPickerVisible}
+        onClose={() => setIsEmojiPickerVisible(false)}
+        onEmojiSelect={handleEmojiSelect}
+      />
     </View>
   );
 }

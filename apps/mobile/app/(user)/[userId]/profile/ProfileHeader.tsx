@@ -35,8 +35,14 @@ export default function ProfileHeader({
 
   return (
     <View 
-      className="pt-[60px] pb-4 px-5 flex-row items-center justify-between h-[100px]"
       style={{ 
+        paddingTop: 60,
+        paddingBottom: 16,
+        paddingHorizontal: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        height: 100,
         backgroundColor: bgColor,
         borderBottomColor: borderColor 
       }}
@@ -44,7 +50,12 @@ export default function ProfileHeader({
       {/* Back Arrow */}
       <Pressable
         onPress={onBackPress}
-        className="w-10 h-10 items-center justify-center active:opacity-70"
+        style={{ 
+          width: 40, 
+          height: 40, 
+          alignItems: 'center', 
+          justifyContent: 'center' 
+        }}
       >
         <Image
           source={require('../../../../assets/logo/arrow.png')}
@@ -59,8 +70,13 @@ export default function ProfileHeader({
       
       {/* Username - Centered */}
       <Text 
-        className="text-lg font-semibold text-center flex-1"
-        style={{ color: textColor }}
+        style={{ 
+          fontSize: 18, 
+          fontWeight: '600', 
+          textAlign: 'center', 
+          flex: 1,
+          color: textColor 
+        }}
       >
         {displayUsername}
       </Text>
@@ -68,7 +84,12 @@ export default function ProfileHeader({
       {/* Category Menu */}
       <Pressable
         onPress={onMenuPress}
-        className="w-10 h-10 items-center justify-center active:opacity-70"
+        style={{ 
+          width: 40, 
+          height: 40, 
+          alignItems: 'center', 
+          justifyContent: 'center' 
+        }}
       >
         <Image
           source={require('../../../../assets/logo/Category.png')}

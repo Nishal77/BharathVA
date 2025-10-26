@@ -31,6 +31,7 @@ interface FeedCardProps {
   onLike?: () => void;
   onBookmark?: () => void;
   onShare?: () => void;
+  onProfilePress?: () => void;
   onFeedPress?: (feedId: string) => void;
 }
 
@@ -56,6 +57,7 @@ export default function FeedCard({
   onLike,
   onBookmark,
   onShare,
+  onProfilePress,
   onFeedPress
 }: FeedCardProps) {
   const colorScheme = useColorScheme();
@@ -63,14 +65,25 @@ export default function FeedCard({
 
 
   return (
-    <View className="border-b relative dark:border-[#2B2B2B] border-[#E5E5E5]">
+    <View style={{ 
+      borderBottomWidth: 1, 
+      position: 'relative', 
+      borderBottomColor: isDark ? '#2B2B2B' : '#E5E5E5' 
+    }}>
       {/* Two Column Layout */}
-      <View className="flex-row px-4 py-3">
+      <View style={{ 
+        flexDirection: 'row', 
+        paddingHorizontal: 16, 
+        paddingVertical: 12 
+      }}>
         {/* Left Column - Profile Picture and Vertical Line */}
-        <FeedProfileSection avatar={avatar} />
+        <FeedProfileSection 
+          avatar={avatar} 
+          onProfilePress={onProfilePress || (() => console.log('Profile clicked'))}
+        />
 
         {/* Right Column - All Content */}
-        <View className="flex-1">
+        <View style={{ flex: 1 }}>
           <FeedContentSection
             name={name}
             handle={handle}
@@ -88,6 +101,7 @@ export default function FeedCard({
             onReply={onReply}
             onShare={onShare}
             onBookmark={onBookmark}
+            onEmojiSelect={(emoji) => console.log('Emoji selected:', emoji)}
           />
 
           <FeedStatsSection

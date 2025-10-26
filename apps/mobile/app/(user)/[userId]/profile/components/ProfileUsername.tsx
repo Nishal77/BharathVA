@@ -13,19 +13,36 @@ export default function ProfileUsername() {
   const displayUsername = user?.username || 'user';
 
   return (
-    <View className="px-5 pb-2 bg-white dark:bg-[#0A0A0A]">
+    <View style={{ 
+      paddingHorizontal: 20, 
+      paddingBottom: 8, 
+      backgroundColor: isDark ? '#0A0A0A' : '#FFFFFF' 
+    }}>
       {/* Full Name */}
-      <Text className="text-2xl font-bold text-left text-gray-900 dark:text-[#E5E5E5]">
+      <Text style={{ 
+        fontSize: 24, 
+        fontWeight: 'bold', 
+        textAlign: 'left', 
+        color: isDark ? '#E5E5E5' : '#111827' 
+      }}>
         {displayFullName}
       </Text>
 
       {/* Username + Location */}
-      <View className="flex-row items-center text-left">
-        <Text className="text-base mr-2 text-gray-500 dark:text-[#71767B]">
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Text style={{ 
+          fontSize: 16, 
+          marginRight: 8, 
+          color: isDark ? '#71767B' : '#6B7280' 
+        }}>
           @{displayUsername}
         </Text>
         <Ionicons name="pin-outline" size={14} color={isDark ? '#71767B' : '#6B7280'} />
-        <Text className="text-sm ml-1 text-gray-500 dark:text-[#71767B]">
+        <Text style={{ 
+          fontSize: 14, 
+          marginLeft: 4, 
+          color: isDark ? '#71767B' : '#6B7280' 
+        }}>
           India
         </Text>
       </View>

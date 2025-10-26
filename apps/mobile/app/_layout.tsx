@@ -71,9 +71,9 @@ function ThemedRootLayout() {
 
   if (isLoading) {
     return (
-      <View className="flex-1 bg-white justify-center items-center">
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#3B82F6" />
-        <Text className="text-gray-600 text-base mt-4">Loading...</Text>
+        <Text style={{ marginTop: 16, color: '#666' }}>Loading...</Text>
       </View>
     );
   }
