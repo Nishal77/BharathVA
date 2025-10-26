@@ -780,6 +780,164 @@ export const checkFeedServiceHealth = async (): Promise<boolean> => {
   }
 };
 
+// Enhanced feed item with user data
+export interface EnhancedFeedItem extends FeedItem {
+  userProfile?: {
+    fullName: string;
+    username: string;
+    profilePicture?: string;
+  };
+}
+
+// Simple in-memory cache for user profiles
+const userProfileCache = new Map<string, { fullName: string; username: string; profilePicture?: string; timestamp: number }>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Helper function to get cached user profile
+const getCachedUserProfile = (userId: string): { fullName: string; username: string; profilePicture?: string } | null => {
+  const cached = userProfileCache.get(userId);
+  if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+    return {
+      fullName: cached.fullName,
+      username: cached.username,
+      profilePicture: cached.profilePicture
+    };
+  }
+  return null;
+};
+
+// Helper function to cache user profile
+const cacheUserProfile = (userId: string, profile: { fullName: string; username: string; profilePicture?: string }) => {
+  userProfileCache.set(userId, {
+    ...profile,
+    timestamp: Date.now()
+  });
+};
+
+// Fetch all feeds with real user data from backend
+export const getAllFeedsWithUserData = async (page: number = 0, size: number = 20): Promise<ApiResponse<EnhancedFeedItem[]>> => {
+  try {
+    log('Fetching all feeds with user data', { page, size });
+    
+    // Get authentication token
+    const token = await getAuthToken();
+    if (!token) {
+      return {
+        success: false,
+        error: {
+          code: 'AUTH_ERROR',
+          message: 'No authentication token found',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    // Fetch all feeds
+    const feedsResponse = await getAllFeeds(page, size);
+    if (!feedsResponse.success || !feedsResponse.data) {
+      return feedsResponse as ApiResponse<EnhancedFeedItem[]>;
+    }
+    
+    const feeds = feedsResponse.data.content;
+    log('Fetched feeds', { count: feeds.length });
+    
+    // Get unique user IDs
+    const userIds = [...new Set(feeds.map(feed => feed.userId))];
+    log('Unique user IDs', { count: userIds.length, userIds });
+    
+    // Fetch user profiles for all unique users
+    const userProfiles = new Map<string, { fullName: string; username: string; profilePicture?: string }>();
+    
+    for (const userId of userIds) {
+      // Check cache first
+      const cachedProfile = getCachedUserProfile(userId);
+      if (cachedProfile) {
+        userProfiles.set(userId, cachedProfile);
+        log('✅ Using cached user profile', { userId, profile: cachedProfile });
+        continue;
+      }
+      
+      try {
+        // Import userService and get user profile
+        const { getUserProfileById } = await import('./userService');
+        const userResponse = await getUserProfileById(userId);
+        
+        if (userResponse.success && userResponse.data) {
+          const profile = {
+            fullName: userResponse.data.fullName || `User ${userId.substring(0, 8)}`,
+            username: userResponse.data.username || `user_${userId.substring(0, 8)}`,
+            profilePicture: userResponse.data.profilePicture || `https://randomuser.me/api/portraits/men/${Math.floor(Math.random() * 100)}.jpg`
+          };
+          
+          userProfiles.set(userId, profile);
+          cacheUserProfile(userId, profile); // Cache the result
+          
+          log('✅ Fetched real user profile', { 
+            userId, 
+            rawData: userResponse.data,
+            processedProfile: profile 
+          });
+        } else {
+          // Set fallback profile data
+          const shortUserId = userId.substring(0, 8);
+          const fallbackProfile = {
+            fullName: `User ${shortUserId}`,
+            username: `user_${shortUserId}`,
+            profilePicture: `https://randomuser.me/api/portraits/men/${Math.floor(Math.random() * 100)}.jpg`
+          };
+          
+          userProfiles.set(userId, fallbackProfile);
+          cacheUserProfile(userId, fallbackProfile); // Cache fallback too
+          
+          logError('Failed to fetch user profile, using fallback', { userId, error: userResponse.error });
+        }
+      } catch (error) {
+        logError('Failed to fetch user profile', { userId, error });
+        // Set fallback profile data
+        const shortUserId = userId.substring(0, 8);
+        const fallbackProfile = {
+          fullName: `User ${shortUserId}`,
+          username: `user_${shortUserId}`,
+          profilePicture: `https://randomuser.me/api/portraits/men/${Math.floor(Math.random() * 100)}.jpg`
+        };
+        
+        userProfiles.set(userId, fallbackProfile);
+        cacheUserProfile(userId, fallbackProfile); // Cache fallback too
+      }
+    }
+    
+    // Create enhanced feeds with real user profile data
+    const enhancedFeeds: EnhancedFeedItem[] = feeds.map(feed => ({
+      ...feed,
+      userProfile: userProfiles.get(feed.userId) || {
+        fullName: `User ${feed.userId.substring(0, 8)}`,
+        username: `user_${feed.userId.substring(0, 8)}`,
+        profilePicture: `https://randomuser.me/api/portraits/men/${Math.floor(Math.random() * 100)}.jpg`
+      }
+    }));
+    
+    log('✅ Enhanced feeds created successfully', { count: enhancedFeeds.length });
+    
+    return {
+      success: true,
+      data: enhancedFeeds,
+      timestamp: new Date().toISOString(),
+    };
+    
+  } catch (error) {
+    logError('❌ Unexpected error in getAllFeedsWithUserData', error);
+    return {
+      success: false,
+      error: {
+        code: 'UNEXPECTED_ERROR',
+        message: 'An unexpected error occurred while fetching feeds with user data',
+        details: error,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+};
+
 // Export configuration for debugging
 export const getFeedServiceConfig = () => ({
   baseUrl: getGatewayURL(),

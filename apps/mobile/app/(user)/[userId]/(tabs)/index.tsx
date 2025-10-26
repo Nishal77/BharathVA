@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import {
   Animated,
   Dimensions,
@@ -8,14 +8,17 @@ import {
   RefreshControl,
   ScrollView,
   Text,
-  View
+  View,
+  ActivityIndicator,
+  Alert,
+  useColorScheme
 } from 'react-native';
+import { Svg, Line } from 'react-native-svg';
 import HomeHeader from '../../../../components/HomeHeader';
 import MessagesScreen from '../../../../components/messages/MessagesScreen';
 import FeedCard from '../../../../components/feed/FeedCard';
-import { Sidebar } from '../../../../components/ui';
-import { useSidebar } from '../../../../contexts/SidebarContext';
 import { useTabStyles } from '../../../../hooks/useTabStyles';
+import { getAllFeedsWithUserData, EnhancedFeedItem } from '../../../../services/api/feedService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -24,131 +27,231 @@ const ANIMATION_DURATION = 300;
 
 export default function HomeScreen() {
   const { userId } = useLocalSearchParams();
-  const { sidebarVisible, setSidebarVisible, sidebarWidth } = useSidebar();
-  const slideAnim = useRef(new Animated.Value(-sidebarWidth)).current;
   const [activeTab, setActiveTab] = useState('For you');
   const [refreshing, setRefreshing] = useState(false);
   const [messagesVisible, setMessagesVisible] = useState(false);
   const messagesSlideAnim = useRef(new Animated.Value(width)).current;
   const tabStyles = useTabStyles();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const spinValue = useRef(new Animated.Value(0)).current;
+
+  // Real feed data from MongoDB
+  const [feeds, setFeeds] = useState<EnhancedFeedItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [hasMoreData, setHasMoreData] = useState(true);
 
   const tabs = ['For you', 'Following', 'Local', 'Communities', 'Shorts/Video', 'Space(Live)'];
 
-  // Sample tweet data with Indian names and content - No images
-  const [sampleTweets, setSampleTweets] = useState([
-    {
-      id: '1',
-      name: 'Priya Sharma',
-      handle: 'priya_tech',
-      time: '2h',
-      avatar: 'https://picsum.photos/seed/priya/300/300?random=1',
-      verified: true,
-      content: "Building the next generation of fintech solutions from Bangalore! India's startup ecosystem is truly inspiring. #StartupIndia #TechForGood",
-      emojis: ['🚀', '🇮🇳'],
-      replies: 45,
-      retweets: 28,
-      likes: 234,
-      bookmarks: 12,
-      views: 128
-    },
-    {
-      id: '2',
-      name: 'Arjun Patel',
-      handle: 'arjun_dev',
-      time: '4h',
-      avatar: 'https://picsum.photos/seed/arjun/300/300?random=2',
-      verified: false,
-      content: "Just witnessed the most beautiful sunrise over the Ganges in Varanasi. The spiritual energy here is unmatched. 🙏 #IncredibleIndia",
-      emojis: ['🌅', '🙏'],
-      replies: 32,
-      retweets: 15,
-      likes: 189,
-      bookmarks: 8,
-      views: 128
-    },
-    {
-      id: '3',
-      name: 'Kavya Reddy',
-      handle: 'kavya_music',
-      time: '6h',
-      avatar: 'https://picsum.photos/seed/kavya/300/300?random=3',
-      verified: false,
-      content: "Performing at the Mysore Palace this evening! Classical music has such deep roots in our culture. Feeling blessed to be part of this tradition.",
-      emojis: ['🎵', '🏛️'],
-      replies: 28,
-      retweets: 42,
-      likes: 167,
-      bookmarks: 15,
-      views: 128
-    },
-    {
-      id: '4',
-      name: 'Rohit Kumar',
-      handle: 'rohit_cricket',
-      time: '8h',
-      avatar: 'https://picsum.photos/seed/rohit/300/300?random=4',
-      verified: true,
-      content: "Another day of training at the National Cricket Academy! The passion for cricket in India is unmatched. Dreaming of representing the country one day! 🏏",
-      emojis: ['🏏', '💪'],
-      replies: 67,
-      retweets: 89,
-      likes: 456,
-      bookmarks: 23,
-      views: 128
-    },
-    {
-      id: '5',
-      name: 'Sneha Gupta',
-      handle: 'sneha_art',
-      time: '10h',
-      avatar: 'https://picsum.photos/seed/sneha/300/300?random=5',
-      verified: false,
-      content: "Working on a new series inspired by the vibrant colors of Rajasthan. Indian art and culture are a constant source of inspiration for my work.",
-      emojis: ['🎨', '🌈'],
-      replies: 19,
-      retweets: 31,
-      likes: 145,
-      bookmarks: 9,
-      views: 128
-    },
-    {
-      id: '6',
-      name: 'Vikram Singh',
-      handle: 'vikram_space',
-      time: '12h',
-      avatar: 'https://picsum.photos/seed/vikram/300/300?random=6',
-      verified: true,
-      content: "ISRO's achievements make every Indian proud! From Mars Mission to Chandrayaan, we're reaching for the stars. The future of space exploration is bright! 🚀",
-      emojis: ['🚀', '🌕'],
-      replies: 89,
-      retweets: 156,
-      likes: 789,
-      bookmarks: 45,
-      views: 128
-    }
-  ]);
-
-  const handleProfilePress = React.useCallback(() => {
-    setSidebarVisible(true);
-    
-    // Animate sidebar sliding in
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: ANIMATION_DURATION,
-      useNativeDriver: true,
-    }).start();
-  }, [slideAnim, setSidebarVisible]);
-
-  const handleCloseSidebar = React.useCallback(() => {
-    // Animate sidebar sliding out
-    Animated.timing(slideAnim, {
-      toValue: -sidebarWidth,
-      duration: ANIMATION_DURATION,
-      useNativeDriver: true,
-    }).start(() => {
-      setSidebarVisible(false);
+  // Custom Loader Component
+  const CustomLoader = () => {
+    const spin = spinValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['0deg', '360deg'],
     });
-  }, [slideAnim, sidebarWidth, setSidebarVisible]);
+
+    return (
+      <Animated.View style={{ transform: [{ rotate: spin }] }}>
+        <Svg width={18} height={18} viewBox="0 0 18 18">
+          <Line
+            x1="9"
+            y1="1.75"
+            x2="9"
+            y2="4.25"
+            fill="none"
+            stroke={isDark ? '#FFFFFF' : '#000000'}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.5"
+          />
+          <Line
+            x1="14.127"
+            y1="3.873"
+            x2="12.359"
+            y2="5.641"
+            fill="none"
+            opacity="0.88"
+            stroke={isDark ? '#FFFFFF' : '#000000'}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.5"
+          />
+          <Line
+            x1="16.25"
+            y1="9"
+            x2="13.75"
+            y2="9"
+            fill="none"
+            opacity="0.75"
+            stroke={isDark ? '#FFFFFF' : '#000000'}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.5"
+          />
+          <Line
+            x1="14.127"
+            y1="14.127"
+            x2="12.359"
+            y2="12.359"
+            fill="none"
+            opacity="0.63"
+            stroke={isDark ? '#FFFFFF' : '#000000'}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.5"
+          />
+          <Line
+            x1="9"
+            y1="16.25"
+            x2="9"
+            y2="13.75"
+            fill="none"
+            opacity="0.5"
+            stroke={isDark ? '#FFFFFF' : '#000000'}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.5"
+          />
+          <Line
+            x1="3.873"
+            y1="14.127"
+            x2="5.641"
+            y2="12.359"
+            fill="none"
+            opacity="0.38"
+            stroke={isDark ? '#FFFFFF' : '#000000'}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.5"
+          />
+          <Line
+            x1="1.75"
+            y1="9"
+            x2="4.25"
+            y2="9"
+            fill="none"
+            opacity="0.25"
+            stroke={isDark ? '#FFFFFF' : '#000000'}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.5"
+          />
+          <Line
+            x1="3.873"
+            y1="3.873"
+            x2="5.641"
+            y2="5.641"
+            fill="none"
+            opacity="0.13"
+            stroke={isDark ? '#FFFFFF' : '#000000'}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="1.5"
+          />
+        </Svg>
+      </Animated.View>
+    );
+  };
+
+  // Fetch feeds from MongoDB
+  const fetchFeeds = useCallback(async (page: number = 0, isRefresh: boolean = false) => {
+    try {
+      console.log('🔄 Fetching feeds from MongoDB...', { page, isRefresh });
+      
+      const response = await getAllFeedsWithUserData(page, 20);
+      
+      if (response.success && response.data) {
+        const newFeeds = response.data;
+        console.log('✅ Feeds fetched successfully', { count: newFeeds.length });
+        
+        if (isRefresh) {
+          setFeeds(newFeeds);
+        } else {
+          setFeeds(prevFeeds => [...prevFeeds, ...newFeeds]);
+        }
+        
+        // Check if we have more data
+        setHasMoreData(newFeeds.length === 20);
+        setCurrentPage(page);
+        setError(null);
+      } else {
+        console.error('❌ Failed to fetch feeds', response.error);
+        setError(response.error?.message || 'Failed to fetch feeds');
+      }
+    } catch (err) {
+      console.error('❌ Error fetching feeds', err);
+      setError('An unexpected error occurred');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+      
+      // Stop spinner animation
+      spinValue.stopAnimation();
+      spinValue.setValue(0);
+    }
+  }, []);
+
+  // Load feeds on component mount
+  useEffect(() => {
+    fetchFeeds(0, true);
+  }, [fetchFeeds]);
+
+  // Convert feed data to FeedCard format
+  const convertToFeedCardFormat = (feed: EnhancedFeedItem) => {
+    const createdAt = new Date(feed.createdAt);
+    const now = new Date();
+    const diffInHours = Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60));
+    
+    let timeAgo = '';
+    if (diffInHours < 1) {
+      timeAgo = 'now';
+    } else if (diffInHours < 24) {
+      timeAgo = `${diffInHours}h`;
+    } else {
+      const diffInDays = Math.floor(diffInHours / 24);
+      timeAgo = `${diffInDays}d`;
+    }
+
+    // Convert imageUrls to media format
+    const media = feed.imageUrls && feed.imageUrls.length > 0 ? {
+      type: feed.imageUrls.length === 1 ? 'single' : 'grid' as 'single' | 'grid',
+      items: feed.imageUrls.map((url, index) => ({
+        id: `${feed.id}_${index}`,
+        type: 'image',
+        url: url
+      }))
+    } : undefined;
+
+    const feedCardData = {
+      id: feed.id,
+      name: feed.userProfile?.fullName || 'Unknown User',
+      handle: feed.userProfile?.username || 'unknown',
+      time: timeAgo,
+      avatar: feed.userProfile?.profilePicture || 'https://randomuser.me/api/portraits/men/1.jpg',
+      verified: false,
+      content: feed.message,
+      emojis: [],
+      media: media,
+      replies: 0, // Real engagement data would come from backend
+      retweets: 0,
+      likes: 0,
+      bookmarks: 0,
+      views: 0
+    };
+
+    // Debug logging
+    console.log('🔄 Converting feed to FeedCard format:', {
+      feedId: feed.id,
+      userId: feed.userId,
+      userProfile: feed.userProfile,
+      finalName: feedCardData.name,
+      finalHandle: feedCardData.handle
+    });
+
+    return feedCardData;
+  };
 
   const handleMessagesPress = useCallback(() => {
     // Set initial position off-screen to the right
@@ -181,39 +284,24 @@ export default function HomeScreen() {
   const onRefresh = useCallback(() => {
     setRefreshing(true);
 
-    // Simulate API call - add new tweet to the top
-    setTimeout(() => {
-      const indianNames = [
-        { name: 'Amit Kumar', handle: 'amit_tech', content: "Just finished building an AI chatbot for Indian languages! Making technology more accessible for everyone. #DigitalIndia #AI" },
-        { name: 'Deepika Singh', handle: 'deepika_food', content: "Made the most delicious biryani today! Nothing beats the aroma of authentic Indian spices. Sharing the recipe with my followers soon! 🍛" },
-        { name: 'Rajesh Verma', handle: 'rajesh_business', content: "Attending the Startup India event in Delhi today. The energy and innovation in our ecosystem is incredible! Proud to be part of this journey." },
-        { name: 'Anjali Mehta', handle: 'anjali_yoga', content: "Morning yoga session overlooking the Himalayas. The peace and serenity here is unmatched. This is what inner peace feels like! 🧘‍♀️" },
-        { name: 'Suresh Reddy', handle: 'suresh_education', content: "Teaching coding to underprivileged children in Hyderabad. Every child deserves access to quality education and technology. #EducationForAll" }
-      ];
-      
-      const randomUser = indianNames[Math.floor(Math.random() * indianNames.length)];
-      
-      const newTweet = {
-        id: Date.now().toString(),
-        name: randomUser.name,
-        handle: randomUser.handle,
-        time: 'now',
-        avatar: `https://picsum.photos/seed/${randomUser.handle}/300/300`,
-        verified: Math.random() > 0.7,
-        content: randomUser.content,
-        emojis: ['🇮🇳', '✨'],
-        replies: Math.floor(Math.random() * 50),
-        retweets: Math.floor(Math.random() * 30),
-        likes: Math.floor(Math.random() * 200),
-        bookmarks: Math.floor(Math.random() * 20),
-        views: 128
-      };
+    // Start spinner animation
+    Animated.loop(
+      Animated.timing(spinValue, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      })
+    ).start();
+    
+    fetchFeeds(0, true);
+  }, [fetchFeeds, spinValue]);
 
-      // Add new tweet to the beginning of the array
-      setSampleTweets(prevTweets => [newTweet, ...prevTweets]);
-      setRefreshing(false);
-    }, 1500);
-  }, []);
+  // Load more data for pagination
+  const loadMoreData = useCallback(() => {
+    if (!loading && hasMoreData) {
+      fetchFeeds(currentPage + 1, false);
+    }
+  }, [loading, hasMoreData, currentPage, fetchFeeds]);
 
 
   return (
@@ -222,7 +310,6 @@ export default function HomeScreen() {
       <HomeHeader
         activeTab={activeTab}
         onTabPress={setActiveTab}
-        onProfilePress={handleProfilePress}
         onMessagesPress={handleMessagesPress}
         tabs={tabs}
       />
@@ -230,62 +317,97 @@ export default function HomeScreen() {
       {/* Main Content Container with Header Spacing */}
       <View style={{ flex: 1, paddingTop: 90, backgroundColor: tabStyles.screen.backgroundColor }}>
 
-         {/* Tweet Feed */}
+         {/* Feed from MongoDB */}
          <ScrollView 
            style={{ flex: 1, backgroundColor: tabStyles.content.backgroundColor }}
            showsVerticalScrollIndicator={false}
            contentContainerStyle={{ paddingTop: 32, paddingBottom: 100 }}
            refreshControl={
-             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+             <RefreshControl 
+               refreshing={refreshing} 
+               onRefresh={onRefresh}
+               tintColor={isDark ? '#FFFFFF' : '#000000'}
+               colors={[isDark ? '#FFFFFF' : '#000000']}
+             />
            }
+           onScroll={({ nativeEvent }) => {
+             const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+             const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 20;
+             if (isCloseToBottom) {
+               loadMoreData();
+             }
+           }}
+           scrollEventThrottle={400}
          >
-          {sampleTweets.map((tweet) => (
+          {loading && feeds.length === 0 ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 }}>
+              <ActivityIndicator size="large" color="#1DA1F2" />
+              <Text style={{ marginTop: 16, fontSize: 16, color: '#657786' }}>
+                Loading feeds from BharathVA...
+              </Text>
+            </View>
+          ) : error ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 }}>
+              <Text style={{ fontSize: 16, color: '#E0245E', textAlign: 'center', marginBottom: 16 }}>
+                {error}
+              </Text>
+              <Pressable
+                onPress={() => fetchFeeds(0, true)}
+                style={{
+                  backgroundColor: '#1DA1F2',
+                  paddingHorizontal: 20,
+                  paddingVertical: 10,
+                  borderRadius: 20,
+                }}
+              >
+                <Text style={{ color: 'white', fontWeight: 'bold' }}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : feeds.length === 0 ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 }}>
+              <Text style={{ fontSize: 16, color: '#657786', textAlign: 'center' }}>
+                No feeds available yet. Be the first to post!
+              </Text>
+            </View>
+          ) : (
+            feeds.map((feed) => {
+              const feedCardData = convertToFeedCardFormat(feed);
+              return (
             <FeedCard
-              key={tweet.id}
-              id={tweet.id}
-              name={tweet.name}
-              handle={tweet.handle}
-              time={tweet.time}
-              avatar={tweet.avatar}
-              verified={tweet.verified}
-              content={tweet.content}
-              emojis={tweet.emojis}
-              replies={tweet.replies}
-              retweets={tweet.retweets}
-              likes={tweet.likes}
-              bookmarks={tweet.bookmarks}
-              views={tweet.views}
-              onPress={() => console.log('Feed pressed:', tweet.id)}
-              onReply={() => console.log('Reply to:', tweet.id)}
-              onRetweet={() => console.log('Retweet:', tweet.id)}
-              onLike={() => console.log('Like:', tweet.id)}
-              onBookmark={() => console.log('Bookmark:', tweet.id)}
-              onShare={() => console.log('Share:', tweet.id)}
-            />
-          ))}
+                  key={feed.id}
+                  id={feedCardData.id}
+                  name={feedCardData.name}
+                  handle={feedCardData.handle}
+                  time={feedCardData.time}
+                  avatar={feedCardData.avatar}
+                  verified={feedCardData.verified}
+                  content={feedCardData.content}
+                  emojis={feedCardData.emojis}
+                  media={feedCardData.media}
+                  replies={feedCardData.replies}
+                  retweets={feedCardData.retweets}
+                  likes={feedCardData.likes}
+                  bookmarks={feedCardData.bookmarks}
+                  views={feedCardData.views}
+                  onPress={() => console.log('Feed pressed:', feed.id)}
+                  onReply={() => console.log('Reply to:', feed.id)}
+                  onRetweet={() => console.log('Retweet:', feed.id)}
+                  onLike={() => console.log('Like:', feed.id)}
+                  onBookmark={() => console.log('Bookmark:', feed.id)}
+                  onShare={() => console.log('Share:', feed.id)}
+                />
+              );
+            })
+          )}
+          
+          {/* Loading indicator for pagination */}
+          {loading && feeds.length > 0 && (
+            <View style={{ padding: 20, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color="#1DA1F2" />
+            </View>
+          )}
         </ScrollView>
       </View>
-
-      {/* Backdrop when sidebar is open - Above main content, below sidebar */}
-      {sidebarVisible && (
-        <Pressable
-          className="absolute inset-0 bg-black/40"
-          style={{
-            zIndex: 1000, // Above main content but below sidebar
-            elevation: 1000, // For Android
-          }}
-          onPress={handleCloseSidebar}
-        />
-      )}
-
-      {/* Sidebar Component */}
-      <Sidebar 
-        sidebarVisible={sidebarVisible}
-        setSidebarVisible={setSidebarVisible}
-        sidebarWidth={sidebarWidth}
-        slideAnim={slideAnim}
-        userId={userId as string}
-      />
 
       {/* Messages Modal */}
       <Modal

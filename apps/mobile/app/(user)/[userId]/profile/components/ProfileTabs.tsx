@@ -18,7 +18,7 @@ export default function ProfileTabs({ onTabChange }: ProfileTabsProps) {
 
   const bgColor = isDark ? '#000000' : '#FFFFFF';
   const activeTextColor = isDark ? '#F9FAFB' : '#111827';
-  const inactiveTextColor = isDark ? '#6B7280' : '#9CA3AF';
+  const inactiveTextColor = isDark ? '#71767B' : '#9CA3AF';
   const borderColor = isDark ? '#374151' : '#E5E7EB';
 
   // Indian-inspired gradient colors
@@ -81,7 +81,7 @@ export default function ProfileTabs({ onTabChange }: ProfileTabsProps) {
   };
 
   return (
-    <View className="px-5 pt-4 pb-2" style={{ backgroundColor: bgColor }}>
+    <View className="px-5 pt-4 pb-2 bg-white dark:bg-[#000000]" >
       <View className={`flex-row items-center border-b ${isDark ? 'border-white/5' : 'border-gray-200'}`}>
         {tabs.map((tab, index) => (
           <Pressable

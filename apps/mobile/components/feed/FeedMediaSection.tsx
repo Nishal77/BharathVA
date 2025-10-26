@@ -17,14 +17,13 @@ export default function FeedMediaSection({ media }: FeedMediaSectionProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  // Generate random images using Picsum Photos (more reliable)
-  const getRandomImage = () => {
-    const randomId = Math.floor(Math.random() * 1000);
-    return `https://picsum.photos/400/400?random=${randomId}`;
-  };
+  // Only show media if there are actual images from MongoDB
+  if (!media || !media.items || media.items.length === 0) {
+    return null; // Don't render anything if no images
+  }
 
   // Get image URL from media items - check for both 'image' and 'url' properties
-  const getImageUrl = (): string => {
+  const getImageUrl = (): string | null => {
     if (media && media.items && media.items.length > 0) {
       const firstItem = media.items[0];
       // Check for 'image' property first (from sample data), then 'url' property
@@ -32,10 +31,15 @@ export default function FeedMediaSection({ media }: FeedMediaSectionProps) {
       if (typeof firstItem.url === 'string') return firstItem.url;
       if (typeof firstItem === 'string') return firstItem;
     }
-    return getRandomImage();
+    return null;
   };
 
   const imageUrl = getImageUrl();
+  
+  // If no valid image URL, don't render
+  if (!imageUrl) {
+    return null;
+  }
 
   return (
     <View 

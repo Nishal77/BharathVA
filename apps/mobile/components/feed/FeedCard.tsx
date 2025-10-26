@@ -60,11 +60,10 @@ export default function FeedCard({
 }: FeedCardProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  
-  const borderColor = isDark ? '#374151' : '#E5E7EB';
+
 
   return (
-    <View className="border-b relative" style={{ borderBottomColor: borderColor }}>
+    <View className="border-b relative dark:border-[#2B2B2B] border-[#E5E5E5]">
       {/* Two Column Layout */}
       <View className="flex-row px-4 py-3">
         {/* Left Column - Profile Picture and Vertical Line */}

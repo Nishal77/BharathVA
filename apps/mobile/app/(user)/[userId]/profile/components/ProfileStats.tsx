@@ -16,8 +16,6 @@ export default function ProfileStats({ postCount: externalPostCount, onPostCount
   
   const bgColor = isDark ? '#000000' : '#FFFFFF';
   const numberColor = isDark ? '#F9FAFB' : '#111827';
-  const labelColor = isDark ? '#9CA3AF' : '#6B7280';
-  const borderColor = isDark ? '#374151' : '#E5E7EB';
 
   const [internalPostCount, setInternalPostCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
@@ -100,7 +98,7 @@ export default function ProfileStats({ postCount: externalPostCount, onPostCount
   }, [externalPostCount]);
 
   return (
-    <View className="px-5 pt-1 pb-4" style={{ backgroundColor: bgColor }}>
+    <View className="px-5 pt-1 pb-4 dark:bg-[#000000] bg-white" >
       <View className="flex-row items-center">
         {/* Followers Count with Avatars */}
         <View className="flex-row items-center">
@@ -148,14 +146,10 @@ export default function ProfileStats({ postCount: externalPostCount, onPostCount
 
           {/* Followers Text */}
           <Text 
-            className="text-base font-bold mr-2"
-            style={{ color: numberColor }}
-          >
+            className="text-base font-bold mr-2 text-black dark:text-[#E5E5E5]"          >
             26
           </Text>
-          <Text 
-            className="text-base"
-            style={{ color: labelColor }}
+          <Text className="text-base text-gray-500 dark:text-[#71767B]"
           >
             followers
           </Text>
@@ -163,21 +157,16 @@ export default function ProfileStats({ postCount: externalPostCount, onPostCount
 
         {/* Vertical Separator */}
         <View 
-          className="w-px h-6 mx-4"
-          style={{ backgroundColor: borderColor }}
+          className="w-px h-6 mx-4 bg-gray-300 dark:bg-white/20"
         />
 
         {/* Following Count */}
         <View className="flex-row items-center">
-          <Text 
-            className="text-base font-bold mr-2"
-            style={{ color: numberColor }}
-          >
+          <Text  className="text-base font-bold mr-2 text-black dark:text-[#E5E5E5]"          >
             9
           </Text>
           <Text 
-            className="text-base"
-            style={{ color: labelColor }}
+            className="text-base text-gray-500 dark:text-[#71767B]"
           >
             Following
           </Text>
@@ -185,21 +174,17 @@ export default function ProfileStats({ postCount: externalPostCount, onPostCount
 
         {/* Vertical Separator */}
         <View 
-          className="w-px h-6 mx-4"
-          style={{ backgroundColor: borderColor }}
+           className="w-px h-6 mx-4 bg-gray-300 dark:bg-white/20"
         />
 
         {/* Posts Count */}
         <View className="flex-row items-center">
-          <Text 
-            className="text-base font-bold mr-2"
-            style={{ color: numberColor }}
-          >
-            {loading ? '...' : displayPostCount}
+          <Text className="text-base font-bold mr-2 text-black dark:text-[#E5E5E5]">
+            {loading ? '---' : displayPostCount}
           </Text>
           <Text 
-            className="text-base"
-            style={{ color: labelColor }}
+           className="text-base text-gray-500 dark:text-[#71767B]"
+            // style={{ color: labelColor }}
           >
             Posts
           </Text>
