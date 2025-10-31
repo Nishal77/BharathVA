@@ -6,12 +6,14 @@ interface ProfileHeaderProps {
   username?: string;
   onBackPress?: () => void;
   onMenuPress?: () => void;
+  onPrivacyPress?: () => void;
 }
 
 export default function ProfileHeader({ 
   username,
   onBackPress, 
-  onMenuPress 
+  onMenuPress,
+  onPrivacyPress 
 }: ProfileHeaderProps) {
   const { user } = useAuth();
   const [displayUsername, setDisplayUsername] = useState(`@${user?.username || 'user'}`);
@@ -83,7 +85,13 @@ export default function ProfileHeader({
       
       {/* Category Menu */}
       <Pressable
-        onPress={onMenuPress}
+        onPress={() => {
+          if (onPrivacyPress) {
+            onPrivacyPress();
+          } else if (onMenuPress) {
+            onMenuPress();
+          }
+        }}
         style={{ 
           width: 40, 
           height: 40, 

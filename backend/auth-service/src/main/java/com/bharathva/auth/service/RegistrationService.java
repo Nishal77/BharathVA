@@ -179,15 +179,76 @@ public class RegistrationService {
             throw new BusinessException("Username is already taken. Please choose another.");
         }
 
+        // Save username into session and move to PROFILE step
+        session.setUsername(username);
+        session.setCurrentStep("PROFILE");
+        registrationSessionRepository.save(session);
+
+        RegistrationResponse response = new RegistrationResponse();
+        response.setSessionToken(session.getSessionToken());
+        response.setCurrentStep("PROFILE");
+        response.setMessage("Username saved. Please complete your profile.");
+        return response;
+    }
+
+    @Transactional
+    public RegistrationResponse saveProfile(RegisterProfileRequest request) {
+        RegistrationSession session = getValidSession(request.getSessionToken());
+
+        // Allow calling profile step right after password or username in case client is slightly out-of-order
+        String step = session.getCurrentStep();
+        if (!("PROFILE".equals(step) || "PASSWORD".equals(step) || "USERNAME".equals(step))) {
+            throw new BusinessException("Invalid registration step. Please choose a username first.");
+        }
+
+        String gender = request.getGender() != null ? request.getGender().trim() : null;
+        if (gender == null || gender.isEmpty()) {
+            throw new BusinessException("Gender is required");
+        }
+
+        String normalized = gender.toLowerCase();
+        // tolerant mapping for common typos/variants from client
+        if (normalized.equals("prefer no to say") || normalized.equals("prefer not to say")) {
+            normalized = "prefer not to say";
+        }
+        if (!(normalized.equals("male") || normalized.equals("female") || normalized.equals("custom") || normalized.equals("prefer not to say"))) {
+            throw new BusinessException("Invalid gender value");
+        }
+
+        session.setGender(normalized);
+        session.setBio(request.getBio());
+        session.setProfileImageUrl(request.getProfileImageUrl());
+        // Ensure we are in PROFILE step after saving
+        session.setCurrentStep("PROFILE");
+        registrationSessionRepository.save(session);
+
+        RegistrationResponse response = new RegistrationResponse();
+        response.setSessionToken(session.getSessionToken());
+        response.setCurrentStep("PROFILE");
+        response.setMessage("Profile saved");
+        return response;
+    }
+
+    @Transactional
+    public RegistrationResponse completeRegistration(CompleteRegistrationRequest request) {
+        RegistrationSession session = getValidSession(request.getSessionToken());
+
+        if (!session.getCurrentStep().equals("PROFILE")) {
+            throw new BusinessException("Invalid registration step. Please complete profile first.");
+        }
+
         User user = new User();
         user.setFullName(session.getFullName());
-        user.setUsername(username);
+        user.setUsername(session.getUsername());
         user.setEmail(session.getEmail());
         user.setPhoneNumber(session.getPhoneNumber());
         user.setCountryCode(session.getCountryCode());
         user.setDateOfBirth(session.getDateOfBirth());
         user.setPasswordHash(session.getPasswordHash());
         user.setIsEmailVerified(true);
+        user.setGender(session.getGender());
+        user.setBio(session.getBio());
+        user.setProfileImageUrl(session.getProfileImageUrl());
 
         userRepository.save(user);
 

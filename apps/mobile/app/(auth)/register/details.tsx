@@ -36,6 +36,8 @@ export default function Details({ email, onBack, onComplete }: DetailsProps) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
+  const [gender, setGender] = useState('');
+  const [showGenderPicker, setShowGenderPicker] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedCountryCode, setSelectedCountryCode] = useState('+91');
   const [showCountryPicker, setShowCountryPicker] = useState(false);
@@ -261,33 +263,94 @@ export default function Details({ email, onBack, onComplete }: DetailsProps) {
               </View>
             </View>
 
-            {/* Date of Birth Input */}
-            <View className="mb-4">
-              <Text 
-                className="text-base font-medium mb-2"
-                style={{ color: textColor }}
-              >
-                Date of Birth
-              </Text>
-              <Pressable
-                onPress={() => setShowDatePicker(true)}
-                className="rounded-xl px-4 py-3 flex-row items-center"
-                style={{ 
-                  backgroundColor: inputBgColor,
-                  borderWidth: 1,
-                  borderColor: borderColor,
-                }}
-              >
-                <Calendar size={20} color={secondaryTextColor} style={{ marginRight: 12 }} />
-                <Text
-                  className="text-base flex-1"
+            {/* Date of Birth + Gender (side-by-side) */}
+            <View className="mb-4 flex-row" style={{ gap: 12 }}>
+              {/* DOB */}
+              <View style={{ flex: 1 }}>
+                <Text 
+                  className="text-base font-medium mb-2"
+                  style={{ color: textColor }}
+                >
+                  Date of Birth
+                </Text>
+                <Pressable
+                  onPress={() => setShowDatePicker(true)}
+                  className="rounded-xl px-4 py-3 flex-row items-center"
                   style={{ 
-                    color: dateOfBirth ? textColor : secondaryTextColor 
+                    backgroundColor: inputBgColor,
+                    borderWidth: 1,
+                    borderColor: borderColor,
                   }}
                 >
-                  {dateOfBirth || 'DD/MM/YYYY'}
+                  <Calendar size={20} color={secondaryTextColor} style={{ marginRight: 12 }} />
+                  <Text
+                    className="text-base flex-1"
+                    style={{ 
+                      color: dateOfBirth ? textColor : secondaryTextColor 
+                    }}
+                  >
+                    {dateOfBirth || 'DD/MM/YYYY'}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* Gender */}
+              <View style={{ flex: 1 }}>
+                <Text 
+                  className="text-base font-medium mb-2"
+                  style={{ color: textColor }}
+                >
+                  Gender
                 </Text>
-              </Pressable>
+                <Pressable
+                  onPress={() => setShowGenderPicker((v) => !v)}
+                  className="rounded-xl px-4 py-3 flex-row items-center justify-between"
+                  style={{ 
+                    backgroundColor: inputBgColor,
+                    borderWidth: 1,
+                    borderColor: borderColor,
+                  }}
+                >
+                  <Text
+                    className="text-base"
+                    style={{ color: gender ? textColor : secondaryTextColor }}
+                    numberOfLines={1}
+                  >
+                    {gender ? gender.charAt(0).toUpperCase() + gender.slice(1) : 'Choose gender'}
+                  </Text>
+                  <Text style={{ color: secondaryTextColor }}>▾</Text>
+                </Pressable>
+                {showGenderPicker && (
+                  <View
+                    style={{
+                      backgroundColor: bgColor,
+                      borderWidth: 1,
+                      borderColor: borderColor,
+                      borderRadius: 12,
+                      marginTop: 6,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {['male','female','custom','prefer not to say'].map((g, idx) => (
+                      <Pressable
+                        key={g}
+                        onPress={() => { setGender(g); setShowGenderPicker(false); }}
+                        style={({ pressed }) => ({
+                          paddingVertical: 12,
+                          paddingHorizontal: 14,
+                          backgroundColor: pressed || gender === g ? inputBgColor : 'transparent',
+                          borderBottomWidth: idx === 3 ? 0 : 1,
+                          borderBottomColor: borderColor,
+                        })}
+                      >
+                        <Text style={{ color: textColor, fontSize: 15 }}>
+                          {g.charAt(0).toUpperCase() + g.slice(1)}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </View>
             </View>
 
             {/* Next Button */}

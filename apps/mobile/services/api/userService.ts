@@ -12,7 +12,8 @@ export interface UserProfile {
   fullName: string;
   username: string;
   email?: string;
-  profilePicture?: string;
+  profilePicture?: string | null;
+  profileImageUrl?: string | null;
   bio?: string;
   verified?: boolean;
   followersCount?: number;
@@ -191,40 +192,55 @@ export const getUserProfileById = async (userId: string): Promise<ApiResponse<Us
         });
         
         if (response.success && response.data) {
-          // Handle different response formats from backend
-          let userProfile: UserProfile;
+          // Backend returns ApiResponse<T> where T is Map<String, Object>
+          // Structure: { success: true, message: "...", data: { id: "...", profileImageUrl: "...", ... }, timestamp: "..." }
+          // So response.data is the entire ApiResponse object, and response.data.data is the actual user data Map
           
+          let userData: any;
+          
+          // Check if response.data has a nested 'data' property (ApiResponse structure)
           if (response.data.data) {
-            // If response has nested data structure
-            userProfile = {
-              id: response.data.data.id || userId,
-              fullName: response.data.data.fullName || response.data.data.full_name,
-              username: response.data.data.username,
-              email: response.data.data.email,
-              profilePicture: response.data.data.profilePicture || response.data.data.profile_picture,
-              bio: response.data.data.bio,
-              verified: response.data.data.verified || response.data.data.isEmailVerified,
-              followersCount: response.data.data.followersCount || response.data.data.followers_count,
-              followingCount: response.data.data.followingCount || response.data.data.following_count,
-              postsCount: response.data.data.postsCount || response.data.data.posts_count
-            };
+            userData = response.data.data;
+            log(`📦 Using nested data structure from ApiResponse`);
+          } else if (response.data.success !== undefined || response.data.message !== undefined) {
+            // This shouldn't happen, but if it does, the response.data itself might be the ApiResponse
+            log(`⚠️ Unexpected response structure, trying to extract user data`);
+            userData = response.data;
           } else {
-            // If response is direct user data
-            userProfile = {
-              id: response.data.id || userId,
-              fullName: response.data.fullName || response.data.full_name,
-              username: response.data.username,
-              email: response.data.email,
-              profilePicture: response.data.profilePicture || response.data.profile_picture,
-              bio: response.data.bio,
-              verified: response.data.verified || response.data.isEmailVerified,
-              followersCount: response.data.followersCount || response.data.followers_count,
-              followingCount: response.data.followingCount || response.data.following_count,
-              postsCount: response.data.postsCount || response.data.posts_count
-            };
+            // Direct user data (shouldn't happen with current backend, but handle it)
+            userData = response.data;
+            log(`📦 Using direct user data structure`);
           }
           
-          log('✅ User profile fetched successfully', { userId, endpoint, userProfile });
+          // Extract profileImageUrl with multiple fallback options
+          const profileImageUrl = userData.profileImageUrl || 
+                                  userData.profilePicture || 
+                                  userData.profile_picture || 
+                                  null;
+          
+          const userProfile: UserProfile = {
+            id: userData.id || userId,
+            fullName: userData.fullName || userData.full_name || `User ${userId.substring(0, 8)}`,
+            username: userData.username || `user_${userId.substring(0, 8)}`,
+            email: userData.email,
+            profilePicture: profileImageUrl,
+            profileImageUrl: profileImageUrl, // Primary field from NeonDB users.profile_image_url
+            bio: userData.bio,
+            verified: userData.verified || userData.isEmailVerified || false,
+            followersCount: userData.followersCount || userData.followers_count,
+            followingCount: userData.followingCount || userData.following_count,
+            postsCount: userData.postsCount || userData.posts_count
+          };
+          
+          log('✅ User profile fetched successfully from NeonDB', { 
+            userId, 
+            endpoint, 
+            profileImageUrl: userProfile.profileImageUrl,
+            hasImage: !!userProfile.profileImageUrl,
+            fullName: userProfile.fullName,
+            username: userProfile.username
+          });
+          
           return {
             success: true,
             data: userProfile,

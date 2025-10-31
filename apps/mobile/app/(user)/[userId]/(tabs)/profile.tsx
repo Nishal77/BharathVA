@@ -8,6 +8,7 @@ import ProfileInfo from '../profile/components/ProfileInfo';
 import ProfileStats from '../profile/components/ProfileStats';
 import ProfileTabs from '../profile/components/ProfileTabs';
 import ProfileUsername from '../profile/components/ProfileUsername';
+import PrivacySecurity from '../profile/components/settings/PrivacySecurity';
 import Feed from '../profile/tabs/Feed';
 
 export default function ProfileTab() {
@@ -16,6 +17,7 @@ export default function ProfileTab() {
   const isDark = colorScheme === 'dark';
   const [activeTab, setActiveTab] = useState('Feed');
   const [refreshing, setRefreshing] = useState(false);
+  const [showPrivacySettings, setShowPrivacySettings] = useState(false);
   const spinValue = useRef(new Animated.Value(0)).current;
   
   const bgColor = isDark ? '#000000' : '#FFFFFF';
@@ -23,6 +25,22 @@ export default function ProfileTab() {
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     console.log('Active tab:', tab);
+  };
+
+  const handleBackPress = () => {
+    if (showPrivacySettings) {
+      setShowPrivacySettings(false);
+    } else {
+      router.back();
+    }
+  };
+
+  const handlePrivacyPress = () => {
+    setShowPrivacySettings(true);
+  };
+
+  const handleMenuPress = () => {
+    handlePrivacyPress();
   };
 
   const onRefresh = async () => {
@@ -216,11 +234,19 @@ export default function ProfileTab() {
     }
   };
 
+  // Show privacy settings if enabled
+  if (showPrivacySettings) {
+    return (
+      <PrivacySecurity onBackPress={handleBackPress} />
+    );
+  }
+
   return (
     <View className="flex-1" style={{ backgroundColor: bgColor }}>
       <ProfileHeader 
-        onBackPress={() => router.back()}
-        onMenuPress={() => console.log('Menu pressed')}
+        onBackPress={handleBackPress}
+        onMenuPress={handleMenuPress}
+        onPrivacyPress={handlePrivacyPress}
       />
       <ScrollView 
         className="flex-1" 

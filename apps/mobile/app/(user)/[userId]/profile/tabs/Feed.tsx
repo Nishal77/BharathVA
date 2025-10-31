@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Pressable, Text, View, useColorScheme, Refres
 import { useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { getUserFeeds, FeedItem, deletePost } from '../../../../../services/api/feedService';
 import { authService } from '../../../../../services/api/authService';
+import { profileService } from '../../../../../services/api/profileService';
 import { webSocketService, FeedEvent } from '../../../../../services/api/websocketService';
 import FeedItemComponent from '../../../../../components/feed/FeedItem';
 import * as SecureStore from 'expo-secure-store';
@@ -100,19 +101,43 @@ export default function Feed() {
         return;
       }
       
-      if (userId && userId !== loggedInUserId) {
-        setError('Access denied. You can only view your own profile.');
-        setLoading(false);
-        return;
+      // Normalize IDs for comparison (handle UUID format differences)
+      const normalizeId = (id: string | null | undefined): string | null => {
+        if (!id) return null;
+        // Remove dashes, convert to lowercase for consistent comparison
+        return id.replace(/-/g, '').toLowerCase();
+      };
+      
+      const normalizedRouteUserId = normalizeId(userId);
+      const normalizedLoggedInUserId = normalizeId(loggedInUserId);
+      
+      console.log('🔍 [Feed] ID Comparison:', {
+        routeUserId: userId,
+        loggedInUserId,
+        normalizedRoute: normalizedRouteUserId,
+        normalizedLoggedIn: normalizedLoggedInUserId,
+        match: normalizedRouteUserId === normalizedLoggedInUserId
+      });
+      
+      // If route userId doesn't match logged-in user, use logged-in user ID
+      // This allows users to view their own profile even if route parameter differs
+      if (normalizedRouteUserId && normalizedRouteUserId !== normalizedLoggedInUserId) {
+        console.warn('⚠️ [Feed] Route userId does not match logged-in user. Using logged-in user ID.');
+        console.warn('   Route userId:', userId);
+        console.warn('   Logged-in userId:', loggedInUserId);
+        // Don't block access - use logged-in user ID instead
+        // This handles cases where the route parameter might be stale or incorrect
       }
       
+      // Always use the authenticated user's ID for security
+      // This ensures users can only see their own profile data
       setCurrentUserId(loggedInUserId);
       await fetchFeeds(loggedInUserId);
       await fetchUserData(loggedInUserId);
       
     } catch (error) {
-      console.error('Error initializing user:', error);
-      setError('Failed to initialize user data');
+      console.error('❌ [Feed] Error initializing user:', error);
+      setError('Failed to initialize user data. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -121,14 +146,36 @@ export default function Feed() {
   const getCurrentLoggedInUserId = async (): Promise<string | null> => {
     try {
       const token = await SecureStore.getItemAsync('accessToken');
-      if (!token) return null;
+      if (!token) {
+        console.warn('⚠️ [Feed] No access token found');
+        return null;
+      }
       
       const payload = decodeJWT(token);
-      if (!payload) return null;
+      if (!payload) {
+        console.warn('⚠️ [Feed] Failed to decode JWT token');
+        return null;
+      }
       
-      return payload.userId || payload.sub;
+      // Try multiple possible field names for user ID in JWT
+      const userId = payload.userId || payload.sub || payload.id || payload.user_id;
+      
+      console.log('🔑 [Feed] Extracted user ID from JWT:', {
+        userId,
+        payloadKeys: Object.keys(payload),
+        hasUserId: !!payload.userId,
+        hasSub: !!payload.sub,
+        hasId: !!payload.id
+      });
+      
+      if (!userId) {
+        console.warn('⚠️ [Feed] No user ID found in JWT payload');
+        return null;
+      }
+      
+      return userId;
     } catch (error) {
-      console.error('Error getting current user ID:', error);
+      console.error('❌ [Feed] Error getting current user ID:', error);
       return null;
     }
   };
@@ -152,12 +199,29 @@ export default function Feed() {
 
   const fetchUserData = async (authenticatedUserId: string) => {
     try {
-      const userProfile = await authService.getUserProfile(authenticatedUserId);
+      // Fetch user profile including profileImageUrl from NeonDB
+      const userProfile = await profileService.getCurrentUserProfile();
       
-      if (userProfile && userProfile.fullName) {
-        setUserData(userProfile);
+      if (userProfile) {
+        setUserData({
+          fullName: userProfile.fullName,
+          username: userProfile.username,
+          profilePicture: (userProfile as any)?.profileImageUrl || null,
+          profileImageUrl: (userProfile as any)?.profileImageUrl || null,
+        });
       } else {
-        setUserData(null);
+        // Fallback to authService if profileService fails
+        const authProfile = await authService.getUserProfile(authenticatedUserId);
+        if (authProfile && authProfile.fullName) {
+          setUserData({
+            fullName: authProfile.fullName,
+            username: authProfile.username,
+            profilePicture: null,
+            profileImageUrl: null,
+          });
+        } else {
+          setUserData(null);
+        }
       }
     } catch (error) {
       console.error('Error fetching user data:', error);

@@ -54,7 +54,7 @@ public class RegistrationController {
     public ResponseEntity<ApiResponse<RegistrationResponse>> createUsername(
             @Valid @RequestBody CreateUsernameRequest request) {
         RegistrationResponse response = registrationService.createUsername(request);
-        return ResponseEntity.ok(ApiResponse.success("Registration completed successfully!", response));
+        return ResponseEntity.ok(ApiResponse.success("Username saved successfully", response));
     }
 
     @PostMapping("/resend-otp")
@@ -77,5 +77,19 @@ public class RegistrationController {
     @GetMapping("/health")
     public ResponseEntity<ApiResponse<String>> health() {
         return ResponseEntity.ok(ApiResponse.success("Registration service is running", "OK"));
+    }
+
+    @PostMapping("/profile")
+    public ResponseEntity<ApiResponse<RegistrationResponse>> saveProfile(
+            @Valid @RequestBody RegisterProfileRequest request) {
+        RegistrationResponse response = registrationService.saveProfile(request);
+        return ResponseEntity.ok(ApiResponse.success("Profile saved", response));
+    }
+
+    @PostMapping("/complete")
+    public ResponseEntity<ApiResponse<RegistrationResponse>> complete(
+            @Valid @RequestBody CompleteRegistrationRequest request) {
+        RegistrationResponse response = registrationService.completeRegistration(request);
+        return ResponseEntity.ok(ApiResponse.success("Registration completed successfully!", response));
     }
 }

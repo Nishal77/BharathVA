@@ -8,9 +8,16 @@ spring:
   # MongoDB Configuration
   data:
     mongodb:
-      uri: ${MONGO_URI:mongodb+srv://nishalpoojary66_db_user:mJjqxxMVtfnb6keW@message-cluster.m8hycwy.mongodb.net/?retryWrites=true&w=majority&appName=message-cluster}
+      uri: ${MONGO_URI:mongodb+srv://nishalpoojary66_db_user:mJjqxxMVtfnb6keW@message-cluster.m8hycwy.mongodb.net/?retryWrites=true&w=majority&appName=message-cluster&ssl=true&authSource=admin}
       database: ${MONGO_DATABASE:bharathva_feed}
-      auto-index-creation: true
+      auto-index-creation: false
+  
+  # NeonDB PostgreSQL Configuration (for user validation)
+  datasource:
+    url: ${NEONDB_URI:jdbc:postgresql://ep-summer-bar-a1bv6p9u-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require}
+    username: ${NEONDB_USERNAME:neondb_owner}
+    password: ${NEONDB_PASSWORD:npg_Dtqy63pieawz}
+    driver-class-name: org.postgresql.Driver
 
   # Application Configuration
   application:

@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import { deviceInfoService } from './deviceInfoService';
 
 // API Response type
-interface ApiResponse<T> {
+export interface ApiResponse<T> {
   success: boolean;
   message: string;
   data: T;
@@ -112,7 +112,7 @@ export const tokenManager = {
 };
 
 // Internal API call function without token refresh (to prevent infinite loops)
-async function internalApiCall<T>(
+export async function internalApiCall<T>(
   endpoint: string,
   method: 'GET' | 'POST' = 'GET',
   body?: any,
@@ -224,7 +224,7 @@ async function internalApiCall<T>(
 }
 
 // Generic API call function with automatic token refresh
-async function apiCall<T>(
+export async function apiCall<T>(
   endpoint: string,
   method: 'GET' | 'POST' = 'GET',
   body?: any,
@@ -378,6 +378,35 @@ export const authService = {
       throw new ApiError(response.message);
     }
     
+    return response.data;
+  },
+
+  /** Save registration profile to registration_sessions */
+  saveRegistrationProfile: async (
+    sessionToken: string,
+    payload: { profileImageUrl?: string | null; bio?: string | null; gender: string }
+  ): Promise<RegistrationResponse> => {
+    const response = await apiCall<RegistrationResponse>(
+      ENDPOINTS.AUTH.REGISTER_PROFILE,
+      'POST',
+      { sessionToken, ...payload }
+    );
+    if (!response.success) {
+      throw new ApiError(response.message);
+    }
+    return response.data;
+  },
+
+  /** Complete registration: move session data to users table */
+  completeRegistration: async (sessionToken: string): Promise<RegistrationResponse> => {
+    const response = await apiCall<RegistrationResponse>(
+      ENDPOINTS.AUTH.REGISTER_COMPLETE,
+      'POST',
+      { sessionToken }
+    );
+    if (!response.success) {
+      throw new ApiError(response.message);
+    }
     return response.data;
   },
 
@@ -542,7 +571,7 @@ export const authService = {
         throw new ApiError(response.message);
       }
       
-      return response;
+      return response.data;
     } catch (error) {
       throw error;
     }

@@ -229,7 +229,7 @@ export default function HomeScreen() {
       name: feed.userProfile?.fullName || 'Unknown User',
       handle: feed.userProfile?.username || 'unknown',
       time: timeAgo,
-      avatar: feed.userProfile?.profilePicture || 'https://randomuser.me/api/portraits/men/1.jpg',
+      avatar: feed.userProfile?.profileImageUrl || feed.userProfile?.profilePicture || null,
       verified: false,
       content: feed.message,
       emojis: [],
@@ -246,6 +246,9 @@ export default function HomeScreen() {
       feedId: feed.id,
       userId: feed.userId,
       userProfile: feed.userProfile,
+      profileImageUrl: feed.userProfile?.profileImageUrl,
+      profilePicture: feed.userProfile?.profilePicture,
+      finalAvatar: feedCardData.avatar,
       finalName: feedCardData.name,
       finalHandle: feedCardData.handle
     });

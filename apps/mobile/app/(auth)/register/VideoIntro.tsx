@@ -1,5 +1,5 @@
 import { ResizeMode, Video } from 'expo-av';
-import { Volume2, VolumeX } from 'lucide-react-native';
+import { Svg, Path as SvgPath } from 'react-native-svg';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     Animated,
@@ -8,7 +8,13 @@ import {
     StatusBar,
     Text,
     View,
+    Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import { profileService } from '../../../services/api/profileService';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -23,6 +29,10 @@ export default function VideoIntro({ onSkip }: VideoIntroProps) {
   const [isMuted, setIsMuted] = useState(false);
   const skipButtonOpacity = useRef(new Animated.Value(0)).current;
   const skipButtonScale = useRef(new Animated.Value(0.8)).current;
+  const router = useRouter();
+  const [finishing, setFinishing] = useState(false);
+  const insets = useSafeAreaInsets();
+  const { user } = useAuth();
 
   console.log('VideoIntro component rendered');
 
@@ -53,6 +63,35 @@ export default function VideoIntro({ onSkip }: VideoIntroProps) {
     setIsMuted(!isMuted);
   };
 
+  const goToHomeTabs = () => {
+    if (user?.userId) {
+      router.replace(`/(user)/${user.userId}/(tabs)`);
+    } else {
+      router.replace('/'); // Fallback
+    }
+  };
+
+  const finishOnboarding = async () => {
+    if (finishing) return;
+    setFinishing(true);
+    try {
+      // Profile data is already saved in profile-setup step. Just proceed.
+      try { await AsyncStorage.removeItem('registration_profile_draft'); } catch {}
+      setFinishing(false);
+      goToHomeTabs();
+    } catch (e: any) {
+      setFinishing(false);
+      goToHomeTabs();
+    }
+  };
+
+  const handleSkip = async () => {
+    try {
+      await AsyncStorage.removeItem('registration_profile_draft');
+    } catch {}
+    goToHomeTabs();
+  };
+
   return (
     <View className="flex-1 bg-black">
       {/* Hide status bar for full screen experience */}
@@ -76,13 +115,18 @@ export default function VideoIntro({ onSkip }: VideoIntroProps) {
         }}
         resizeMode={ResizeMode.COVER}
         shouldPlay
-        isLooping
+        isLooping={false}
         isMuted={isMuted}
         onPlaybackStatusUpdate={(status) => {
           setVideoStatus(() => status);
           if (status.isLoaded && !videoLoaded) {
             setVideoLoaded(true);
             console.log('Video loaded successfully');
+          }
+          // Auto-redirect when video finishes
+          // Expo AV sets didJustFinish on completion when not looping
+          if ((status as any)?.didJustFinish) {
+            handleSkip();
           }
         }}
         onLoad={() => {
@@ -123,9 +167,16 @@ export default function VideoIntro({ onSkip }: VideoIntroProps) {
           }}
         >
           {isMuted ? (
-            <VolumeX size={24} color="#FFFFFF" />
+            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+              <SvgPath d="M11 5L6 9H3v6h3l5 4V5z" stroke="#FFFFFF" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              <SvgPath d="M16 9l4 4m0-4l-4 4" stroke="#FFFFFF" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
           ) : (
-            <Volume2 size={24} color="#FFFFFF" />
+            <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+              <SvgPath d="M11 5L6 9H3v6h3l5 4V5z" stroke="#FFFFFF" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              <SvgPath d="M15 9.5a4 4 0 010 5" stroke="#FFFFFF" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+              <SvgPath d="M17 7a7 7 0 010 10" stroke="#FFFFFF" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
           )}
         </Pressable>
       </View>
@@ -157,6 +208,26 @@ export default function VideoIntro({ onSkip }: VideoIntroProps) {
         </Animated.View>
       )}
 
+      {/* Top-right Skip overlay */}
+      <Pressable
+        onPress={handleSkip}
+        style={({ pressed }) => [{
+          position: 'absolute',
+          top: insets.top + 12,
+          right: 16,
+          zIndex: 50,
+          paddingHorizontal: 14,
+          paddingVertical: 10,
+          borderRadius: 20,
+          backgroundColor: 'rgba(17, 17, 17, 0.72)',
+          borderWidth: 1,
+          borderColor: 'rgba(255,255,255,0.15)',
+          opacity: pressed ? 0.9 : 1,
+        }]}
+      >
+        <Text style={{ color: '#FFFFFF', fontWeight: '800' }}>Skip</Text>
+      </Pressable>
+
       {/* Welcome Message Overlay */}
       <View className="absolute bottom-16 left-0 right-0 items-center">
         {showSkipButton && (
@@ -172,6 +243,33 @@ export default function VideoIntro({ onSkip }: VideoIntroProps) {
             </Text>
           </Animated.View>
         )}
+      </View>
+
+      {/* Footer actions */}
+      <View style={{ marginTop: 24, paddingHorizontal: 20 }}>
+        <Pressable onPress={finishOnboarding} style={({ pressed }) => [{
+          height: 50,
+          borderRadius: 12,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#E5E7EB',
+          opacity: pressed ? 0.95 : 1,
+        }]}>
+          <Text style={{ color: '#111827', fontSize: 16, fontWeight: '800' }}>{finishing ? 'Finishing…' : 'Continue'}</Text>
+        </Pressable>
+        <Pressable onPress={handleSkip} style={({ pressed }) => [{
+          height: 50,
+          borderRadius: 12,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginTop: 10,
+          backgroundColor: 'transparent',
+          borderWidth: 1,
+          borderColor: '#D1D5DB',
+          opacity: pressed ? 0.95 : 1,
+        }]}>
+          <Text style={{ color: '#111827', fontSize: 16, fontWeight: '700' }}>Skip</Text>
+        </Pressable>
       </View>
     </View>
   );

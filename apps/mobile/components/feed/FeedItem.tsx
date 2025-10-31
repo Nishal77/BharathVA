@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Image, Pressable, Text, View, useColorScheme, Modal, Animated, Dimensions, ActivityIndicator, Alert } from 'react-native';
 import { MoreHorizontal, Trash2, Edit, X, ChevronUp, Users } from 'lucide-react-native';
-import { Svg, Path, Line } from 'react-native-svg';
+import { Svg, Path, Line, Circle } from 'react-native-svg';
 import { FeedItem as FeedItemType } from '../../services/api/feedService';
 import { useTimeAgo } from '../../hooks/useTimeAgo';
 
@@ -26,9 +26,18 @@ export default function FeedItem({ feed, userData, onImageError, onDeletePost, o
   const [isCommented, setIsCommented] = useState(false);
   const [isShared, setIsShared] = useState(false);
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [profileImageError, setProfileImageError] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const ellipsisRef = useRef<View>(null);
+
+  // Reset error state when userData profile image changes
+  useEffect(() => {
+    const currentImageUrl = userData?.profileImageUrl || userData?.profilePicture;
+    if (currentImageUrl) {
+      setProfileImageError(false);
+    }
+  }, [userData?.profileImageUrl, userData?.profilePicture]);
 
   // Use real-time time ago hook
   const timeAgo = useTimeAgo(feed.createdAt);
@@ -153,29 +162,53 @@ export default function FeedItem({ feed, userData, onImageError, onDeletePost, o
         {/* Left Column - Profile Picture and Vertical Line */}
         <View className="w-12 items-center pt-0 relative mr-3">
           {/* Profile Picture */}
-          <View className="w-10 h-10 rounded-full overflow-hidden bg-gray-300">
-            <Image
-              source={{ 
-                uri: userData?.profilePicture || 
-                     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?ixlib=rb-4.0.3&auto=format&fit=crop&w=100&q=80' 
-              }}
-              className="w-full h-full"
-              resizeMode="cover"
-            />
+          <View className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700">
+            {(() => {
+              const neonDbImageUrl = userData?.profileImageUrl || userData?.profilePicture;
+              
+              // Show NeonDB image if available, otherwise show SVG placeholder
+              if (neonDbImageUrl && !profileImageError) {
+                // Try to load NeonDB image
+                return (
+                  <Image
+                    source={{ uri: neonDbImageUrl }}
+                    className="w-full h-full"
+                    resizeMode="cover"
+                    onError={() => {
+                      console.log('Profile image from NeonDB failed to load');
+                      setProfileImageError(true);
+                    }}
+                  />
+                );
+              } else {
+                // No NeonDB image or failed to load, show SVG placeholder
+                return (
+                  <View className="w-full h-full items-center justify-center">
+                    <Svg width={24} height={24} viewBox="0 0 24 24">
+                      <Circle cx="12" cy="8" r="4" fill={isDark ? '#6B7280' : '#9CA3AF'} />
+                      <Path
+                        d="M12 12c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+                        fill={isDark ? '#6B7280' : '#9CA3AF'}
+                      />
+                    </Svg>
+                  </View>
+                );
+              }
+            })()}
           </View>
           
-          {/* Vertical Line - Connecting Main Profile to Top Avatar */}
+          {/* Vertical Line - Connecting Main Profile to Follower Avatars */}
           <View
             className="absolute w-px bg-black/15 dark:bg-[#2B2B2B]"
             style={{
               left: 19, // Centered on the profile images
               top: 44, // Below the main profile image with small gap (40px height + 8px space)
-              bottom: 40, // Above the top small avatar (20px from bottom + 20px avatar height)
+              bottom: 40, // Above the follower avatars
             }}
           />
           
-          {/* Three Images in Horizontal Row Formation - Aligned with Stats */}
-          {/* Left Image */}
+          {/* Three Follower Avatars in Horizontal Row Formation - Aligned with Stats */}
+          {/* Left Avatar */}
           <View
             className="absolute"
             style={{
@@ -183,16 +216,16 @@ export default function FeedItem({ feed, userData, onImageError, onDeletePost, o
               bottom: 12, // Same spacing as pb-3 (12px) from stats text
             }}
           >
-            <View className="w-5 h-5 rounded-full overflow-hidden border-1 border-white">
+            <View className="w-5 h-5 rounded-full overflow-hidden border border-white dark:border-gray-800">
               <Image
-                source={{ uri: `https://picsum.photos/100/100?random=${Math.floor(Math.random() * 1000)}` }}
+                source={{ uri: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=100&q=80' }}
                 className="w-full h-full"
                 resizeMode="cover"
               />
             </View>
           </View>
 
-          {/* Center Image */}
+          {/* Center Avatar */}
           <View
             className="absolute"
             style={{
@@ -200,16 +233,16 @@ export default function FeedItem({ feed, userData, onImageError, onDeletePost, o
               bottom: 12, // Same spacing as pb-3 (12px) from stats text
             }}
           >
-            <View className="w-5 h-5 rounded-full overflow-hidden border-1 border-white">
+            <View className="w-5 h-5 rounded-full overflow-hidden border border-white dark:border-gray-800">
               <Image
-                source={{ uri: `https://picsum.photos/100/100?random=${Math.floor(Math.random() * 1000)}` }}
+                source={{ uri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&q=80' }}
                 className="w-full h-full"
                 resizeMode="cover"
               />
             </View>
           </View>
 
-          {/* Right Image */}
+          {/* Right Avatar */}
           <View
             className="absolute"
             style={{
@@ -217,9 +250,9 @@ export default function FeedItem({ feed, userData, onImageError, onDeletePost, o
               bottom: 12, // Same spacing as pb-3 (12px) from stats text
             }}
           >
-            <View className="w-5 h-5 rounded-full overflow-hidden border-1 border-white">
+            <View className="w-5 h-5 rounded-full overflow-hidden border border-white dark:border-gray-800">
               <Image
-                source={{ uri: `https://picsum.photos/100/100?random=${Math.floor(Math.random() * 1000)}` }}
+                source={{ uri: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&q=80' }}
                 className="w-full h-full"
                 resizeMode="cover"
               />

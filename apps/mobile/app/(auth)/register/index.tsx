@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { View, useColorScheme, Alert, ActivityIndicator } from 'react-native';
 import CreatePassword from './CreatePassword';
@@ -6,11 +6,12 @@ import Details from './details';
 import OTPVerification from './OTPVerification';
 import SignInAsSupport from './SignInAsSupport';
 import Username from './Username';
-import VideoIntro from './VideoIntro';
+import ProfileSetup from './profile-setup';
 import { authService, ApiError } from '../../../services/api/authService';
 import { useAuth } from '../../../contexts/AuthContext';
 
 export default function RegisterMain() {
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { login: authLogin } = useAuth();
@@ -180,72 +181,8 @@ export default function RegisterMain() {
       
       console.log('Username creation response:', response);
       
-      // Clear session token (no longer needed)
-      setSessionToken('');
-      
-      // AUTO-LOGIN after successful registration
-      console.log('\n╔═══════════════════════════════════════════╗');
-      console.log('║  AUTO-LOGIN AFTER REGISTRATION STARTED    ║');
-      console.log('╚═══════════════════════════════════════════╝');
-      console.log('📧 Email:', userEmail);
-      console.log('🔑 Password Stored:', userPassword ? 'Yes ✅' : 'No ❌');
-      console.log('🔑 Password Length:', userPassword ? userPassword.length : 0, 'characters');
-      console.log('👤 Username:', username);
-      console.log('-------------------------------------------');
-      
-      try {
-        // Use AuthContext login - handles auth state and navigation automatically
-        await authLogin(userEmail, userPassword);
-        
-        console.log('\n╔═══════════════════════════════════════════╗');
-        console.log('║    AUTO-LOGIN SUCCESSFUL!                 ║');
-        console.log('╚═══════════════════════════════════════════╝');
-        console.log('✅ Registration complete + User logged in via AuthContext');
-        console.log('-------------------------------------------');
-        console.log('💾 Database Updates:');
-        console.log('  ✅ users table: User created');
-        console.log('  ✅ user_sessions table: Session created with device info');
-        console.log('-------------------------------------------');
-        console.log('🔄 Auth state updated - navigation handled by context');
-        console.log('═══════════════════════════════════════════\n');
-        
-        // Show success message
-        Alert.alert(
-          'Registration Complete! 🎉',
-          `Welcome to BharathVA, @${username}! You're now logged in.`,
-          [{ text: 'Get Started' }]
-        );
-      } catch (loginError) {
-        console.log('\n╔═══════════════════════════════════════════╗');
-        console.log('║    AUTO-LOGIN FAILED                      ║');
-        console.log('╚═══════════════════════════════════════════╝');
-        console.error('❌ Error:', loginError);
-        console.log('-------------------------------------------');
-        console.log('⚠️  User registered but not logged in');
-        console.log('💾 Database Updates:');
-        console.log('  ✅ users table: User created');
-        console.log('  ❌ user_sessions table: No session created');
-        console.log('-------------------------------------------');
-        console.log('👉 User will need to login manually');
-        console.log('═══════════════════════════════════════════\n');
-        
-        // If auto-login fails, still show success but ask user to login manually
-        Alert.alert(
-          'Registration Complete! 🎉',
-          `Welcome to BharathVA, @${username}! Please login to continue.`,
-          [
-            {
-              text: 'Login Now',
-              onPress: () => {
-                router.replace({
-                  pathname: '/(auth)/password',
-                  params: { email: userEmail }
-                });
-              },
-            },
-          ]
-        );
-      }
+      // Proceed to Profile Setup step
+      setCurrentStep('profileSetup');
     } catch (error) {
       console.error('Username creation error:', error);
       
@@ -256,6 +193,23 @@ export default function RegisterMain() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleProfileComplete = async () => {
+    try {
+      // Attempt auto-login via AuthContext to populate user state, then go to tabs
+      if (userEmail && userPassword) {
+        await authLogin(userEmail, userPassword);
+        // After context is set, read userId from tokenManager or fallback to profile fetch if needed
+        const userData = await (await import('../../../services/api/authService')).tokenManager.getUserData();
+        const userId = userData?.userId || 'me';
+        router.replace({ pathname: '/(user)/[userId]/(tabs)', params: { userId } });
+      } else {
+        router.replace('/(auth)/login');
+      }
+    } catch (e) {
+      router.replace('/(auth)/login');
     }
   };
 
@@ -331,10 +285,13 @@ export default function RegisterMain() {
             onContinue={handleUsernameComplete}
           />
         );
-      case 'video':
+      case 'profileSetup':
         return (
-          <VideoIntro 
-            onSkip={handleVideoSkip}
+          <ProfileSetup
+            sessionToken={sessionToken}
+            email={userEmail}
+            password={userPassword}
+            onComplete={handleProfileComplete}
           />
         );
       default:

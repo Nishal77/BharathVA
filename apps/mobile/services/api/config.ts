@@ -16,6 +16,8 @@ export const ENDPOINTS = {
     CREATE_PASSWORD: '/register/password',
     CHECK_USERNAME: '/register/check-username',
     CREATE_USERNAME: '/register/username',
+    REGISTER_PROFILE: '/register/profile',
+    REGISTER_COMPLETE: '/register/complete',
     HEALTH: '/register/health',
     LOGIN: '/login',
     REFRESH: '/refresh',
@@ -26,6 +28,12 @@ export const ENDPOINTS = {
     LOGOUT_SESSION: '/sessions/logout',
     LOGOUT_ALL_OTHER: '/sessions/logout-all-other',
     USER_ME: '/user/me',
+    USER_UPDATE_FULLNAME: '/user/me/fullname',
+    USER_UPDATE_USERNAME: '/user/me/username',
+    USER_UPDATE_DATEOFBIRTH: '/user/me/dateofbirth',
+    USER_UPDATE_BIO: '/user/me/bio',
+    USER_UPDATE_PROFILE_IMAGE: '/user/me/profile-image',
+    USER_UPDATE_PROFILE: '/user/me/profile',
   },
 };
 

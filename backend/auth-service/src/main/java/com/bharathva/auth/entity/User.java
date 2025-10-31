@@ -53,6 +53,15 @@ public class User {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     private List<UserSession> userSessions;
 
+    @Column(name = "profile_image_url")
+    private String profileImageUrl;
+
+    @Column(name = "bio")
+    private String bio;
+
+    @Column(name = "gender", length = 30)
+    private String gender;
+
     // Constructors
     public User() {}
 
@@ -108,4 +117,13 @@ public class User {
 
     public List<UserSession> getUserSessions() { return userSessions; }
     public void setUserSessions(List<UserSession> userSessions) { this.userSessions = userSessions; }
+
+    public String getProfileImageUrl() { return profileImageUrl; }
+    public void setProfileImageUrl(String profileImageUrl) { this.profileImageUrl = profileImageUrl; }
+
+    public String getBio() { return bio; }
+    public void setBio(String bio) { this.bio = bio; }
+
+    public String getGender() { return gender; }
+    public void setGender(String gender) { this.gender = gender; }
 }

@@ -11,7 +11,7 @@ interface FeedCardProps {
   name: string;
   handle: string;
   time: string;
-  avatar: string;
+  avatar?: string | null;
   verified?: boolean;
   content: string;
   emojis?: string[];

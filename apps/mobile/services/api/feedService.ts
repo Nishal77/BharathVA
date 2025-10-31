@@ -785,29 +785,39 @@ export interface EnhancedFeedItem extends FeedItem {
   userProfile?: {
     fullName: string;
     username: string;
-    profilePicture?: string;
+    profilePicture?: string | null;
+    profileImageUrl?: string | null;
   };
 }
 
 // Simple in-memory cache for user profiles
-const userProfileCache = new Map<string, { fullName: string; username: string; profilePicture?: string; timestamp: number }>();
+interface CachedUserProfile {
+  fullName: string;
+  username: string;
+  profilePicture?: string | null;
+  profileImageUrl?: string | null;
+  timestamp: number;
+}
+
+const userProfileCache = new Map<string, CachedUserProfile>();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 // Helper function to get cached user profile
-const getCachedUserProfile = (userId: string): { fullName: string; username: string; profilePicture?: string } | null => {
+const getCachedUserProfile = (userId: string): { fullName: string; username: string; profilePicture?: string | null; profileImageUrl?: string | null } | null => {
   const cached = userProfileCache.get(userId);
   if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
     return {
       fullName: cached.fullName,
       username: cached.username,
-      profilePicture: cached.profilePicture
+      profilePicture: cached.profilePicture,
+      profileImageUrl: cached.profileImageUrl
     };
   }
   return null;
 };
 
 // Helper function to cache user profile
-const cacheUserProfile = (userId: string, profile: { fullName: string; username: string; profilePicture?: string }) => {
+const cacheUserProfile = (userId: string, profile: { fullName: string; username: string; profilePicture?: string | null; profileImageUrl?: string | null }) => {
   userProfileCache.set(userId, {
     ...profile,
     timestamp: Date.now()
@@ -835,7 +845,15 @@ export const getAllFeedsWithUserData = async (page: number = 0, size: number = 2
     // Fetch all feeds
     const feedsResponse = await getAllFeeds(page, size);
     if (!feedsResponse.success || !feedsResponse.data) {
-      return feedsResponse as ApiResponse<EnhancedFeedItem[]>;
+      // Return properly typed error response instead of unsafe cast
+      return {
+        success: false,
+        error: feedsResponse.error || {
+          code: 'FEED_FETCH_ERROR',
+          message: 'Failed to fetch feeds',
+        },
+        timestamp: feedsResponse.timestamp || new Date().toISOString(),
+      };
     }
     
     const feeds = feedsResponse.data.content;
@@ -846,7 +864,7 @@ export const getAllFeedsWithUserData = async (page: number = 0, size: number = 2
     log('Unique user IDs', { count: userIds.length, userIds });
     
     // Fetch user profiles for all unique users
-    const userProfiles = new Map<string, { fullName: string; username: string; profilePicture?: string }>();
+    const userProfiles = new Map<string, { fullName: string; username: string; profilePicture?: string | null; profileImageUrl?: string | null }>();
     
     for (const userId of userIds) {
       // Check cache first
@@ -858,47 +876,60 @@ export const getAllFeedsWithUserData = async (page: number = 0, size: number = 2
       }
       
       try {
-        // Import userService and get user profile
+        // Import userService and get user profile from NeonDB
         const { getUserProfileById } = await import('./userService');
         const userResponse = await getUserProfileById(userId);
         
         if (userResponse.success && userResponse.data) {
+          // Prioritize profileImageUrl from NeonDB (which comes from users.profile_image_url)
+          // Check all possible field names from backend response
+          const profileImageUrl = userResponse.data.profileImageUrl || 
+                                  userResponse.data.profilePicture || 
+                                  (userResponse.data as any)?.profile_image_url || 
+                                  null;
+          
           const profile = {
             fullName: userResponse.data.fullName || `User ${userId.substring(0, 8)}`,
             username: userResponse.data.username || `user_${userId.substring(0, 8)}`,
-            profilePicture: userResponse.data.profilePicture || `https://randomuser.me/api/portraits/men/${Math.floor(Math.random() * 100)}.jpg`
+            profilePicture: profileImageUrl, // Keep for backward compatibility
+            profileImageUrl: profileImageUrl, // Primary field from NeonDB users.profile_image_url
           };
           
           userProfiles.set(userId, profile);
           cacheUserProfile(userId, profile); // Cache the result
           
-          log('✅ Fetched real user profile', { 
+          log('✅ Fetched user profile from NeonDB', { 
             userId, 
-            rawData: userResponse.data,
-            processedProfile: profile 
+            rawResponse: userResponse.data,
+            profileImageUrl: profileImageUrl,
+            fullName: profile.fullName,
+            username: profile.username,
+            hasImage: !!profileImageUrl
           });
         } else {
-          // Set fallback profile data
+          // Set fallback profile data (no random images - use null)
           const shortUserId = userId.substring(0, 8);
           const fallbackProfile = {
             fullName: `User ${shortUserId}`,
             username: `user_${shortUserId}`,
-            profilePicture: `https://randomuser.me/api/portraits/men/${Math.floor(Math.random() * 100)}.jpg`
+            profilePicture: null,
+            profileImageUrl: null,
           };
           
           userProfiles.set(userId, fallbackProfile);
           cacheUserProfile(userId, fallbackProfile); // Cache fallback too
           
-          logError('Failed to fetch user profile, using fallback', { userId, error: userResponse.error });
+          logError('Failed to fetch user profile from NeonDB, using fallback', { userId, error: userResponse.error });
         }
       } catch (error) {
-        logError('Failed to fetch user profile', { userId, error });
-        // Set fallback profile data
+        logError('Failed to fetch user profile from NeonDB', { userId, error });
+        // Set fallback profile data (no random images - use null)
         const shortUserId = userId.substring(0, 8);
         const fallbackProfile = {
           fullName: `User ${shortUserId}`,
           username: `user_${shortUserId}`,
-          profilePicture: `https://randomuser.me/api/portraits/men/${Math.floor(Math.random() * 100)}.jpg`
+          profilePicture: null,
+          profileImageUrl: null,
         };
         
         userProfiles.set(userId, fallbackProfile);
@@ -906,13 +937,14 @@ export const getAllFeedsWithUserData = async (page: number = 0, size: number = 2
       }
     }
     
-    // Create enhanced feeds with real user profile data
+    // Create enhanced feeds with real user profile data from NeonDB
     const enhancedFeeds: EnhancedFeedItem[] = feeds.map(feed => ({
       ...feed,
       userProfile: userProfiles.get(feed.userId) || {
         fullName: `User ${feed.userId.substring(0, 8)}`,
         username: `user_${feed.userId.substring(0, 8)}`,
-        profilePicture: `https://randomuser.me/api/portraits/men/${Math.floor(Math.random() * 100)}.jpg`
+        profilePicture: null,
+        profileImageUrl: null,
       }
     }));
     

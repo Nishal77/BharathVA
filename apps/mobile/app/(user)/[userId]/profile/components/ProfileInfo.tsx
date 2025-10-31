@@ -1,14 +1,70 @@
-import React from 'react';
-import { Image, Pressable, Text, View, useColorScheme } from 'react-native';
-import { Svg, Path } from 'react-native-svg';
+import React, { useEffect, useState, useCallback } from 'react';
+import { Image, Pressable, Text, View, useColorScheme, ActivityIndicator } from 'react-native';
+import { Svg, Path, Circle } from 'react-native-svg';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { profileService } from '../../../../../services/api/profileService';
+import { useAuth } from '../../../../../contexts/AuthContext';
 
 export default function ProfileInfo() {
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { user } = useAuth();
+  
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   
   const borderColor = isDark ? '#374151' : '#D1D5DB';
   const buttonBg = isDark ? '#FFFFFF' : '#111827';
   const buttonText = isDark ? '#000000' : '#FFFFFF';
+
+  const loadProfileImage = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      if (!user) {
+        setProfileImageUrl(null);
+        setIsLoading(false);
+        return;
+      }
+      
+      const profile = await profileService.getCurrentUserProfile();
+      setProfileImageUrl((profile as any)?.profileImageUrl || null);
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Failed to load profile image:', error);
+      setProfileImageUrl(null);
+      setIsLoading(false);
+    }
+  }, [user]);
+
+  // Load profile image on mount
+  useEffect(() => {
+    loadProfileImage();
+  }, [loadProfileImage]);
+
+  // Refresh profile image when screen comes into focus (e.g., after editing)
+  useFocusEffect(
+    useCallback(() => {
+      loadProfileImage();
+    }, [loadProfileImage])
+  );
+
+  const handleEditProfile = () => {
+    router.push('/(user)/[userId]/profile/edit');
+  };
+
+  // Placeholder component for when no image is available
+  const ProfileImagePlaceholder = () => (
+    <View className="w-full h-full bg-gray-200 dark:bg-gray-700 items-center justify-center">
+      <Svg width={40} height={40} viewBox="0 0 24 24">
+        <Circle cx="12" cy="8" r="4" fill={isDark ? '#6B7280' : '#9CA3AF'} />
+        <Path
+          d="M12 12c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+          fill={isDark ? '#6B7280' : '#9CA3AF'}
+        />
+      </Svg>
+    </View>
+  );
 
   return (
     <View className="px-5 py-4 dark:bg-[#0A0A0A] bg-white">
@@ -17,11 +73,23 @@ export default function ProfileInfo() {
         {/* Profile Picture */}
         <View className="mr-4">
           <View className="w-20 h-20 rounded-full overflow-hidden border-2" style={{ borderColor: borderColor }}>
-            <Image
-              source={{ uri: `https://randomuser.me/api/portraits/men/${Math.floor(Math.random() * 100)}.jpg` }}
-              className="w-full h-full"
-              resizeMode="cover"
-            />
+            {isLoading ? (
+              <View className="w-full h-full bg-gray-200 dark:bg-gray-700 items-center justify-center">
+                <ActivityIndicator size="small" color={isDark ? '#9CA3AF' : '#6B7280'} />
+              </View>
+            ) : profileImageUrl ? (
+              <Image
+                source={{ uri: profileImageUrl }}
+                className="w-full h-full"
+                resizeMode="cover"
+                onError={(error) => {
+                  console.error('Failed to load profile image:', error);
+                  setProfileImageUrl(null);
+                }}
+              />
+            ) : (
+              <ProfileImagePlaceholder />
+            )}
           </View>
         </View>
 
@@ -44,6 +112,7 @@ export default function ProfileInfo() {
           <Pressable 
             className="rounded-full py-2 px-4 active:opacity-70"
             style={{ backgroundColor: buttonBg }}
+            onPress={handleEditProfile}
           >
             <Text className="text-sm font-medium" style={{ color: buttonText }}>
               Edit Profile

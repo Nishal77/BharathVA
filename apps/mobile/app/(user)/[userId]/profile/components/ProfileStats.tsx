@@ -36,12 +36,19 @@ export default function ProfileStats({ postCount: externalPostCount, onPostCount
       // Decode JWT to get user ID
       const payload = decodeJWT(token);
       if (!payload) {
-        console.log('Failed to decode JWT token for post count');
+        console.warn('⚠️ [ProfileStats] Failed to decode JWT token for post count');
         return;
       }
 
-      const authenticatedUserId = payload.userId || payload.sub;
-      console.log('Fetching post count for user:', authenticatedUserId);
+      // Try multiple possible field names for user ID in JWT
+      const authenticatedUserId = payload.userId || payload.sub || payload.id || payload.user_id;
+      
+      if (!authenticatedUserId) {
+        console.warn('⚠️ [ProfileStats] No user ID found in JWT payload');
+        return;
+      }
+      
+      console.log('📊 [ProfileStats] Fetching post count for user:', authenticatedUserId);
 
       // Get user feeds to count posts
       const response = await getUserFeeds(authenticatedUserId, 0, 1000); // Get a large number to count all
@@ -109,7 +116,7 @@ export default function ProfileStats({ postCount: externalPostCount, onPostCount
               className="w-6 h-6 rounded-full overflow-hidden"
             >
               <Image
-                source={{ uri: `https://randomuser.me/api/portraits/men/${Math.floor(Math.random() * 100)}.jpg` }}
+                source={{ uri: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=100&q=80' }}
                 className="w-full h-full"
                 resizeMode="cover"
               />
@@ -123,7 +130,7 @@ export default function ProfileStats({ postCount: externalPostCount, onPostCount
               }}
             >
               <Image
-                source={{ uri: `https://randomuser.me/api/portraits/men/${Math.floor(Math.random() * 100)}.jpg` }}
+                source={{ uri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&q=80' }}
                 className="w-full h-full"
                 resizeMode="cover"
               />
@@ -137,7 +144,7 @@ export default function ProfileStats({ postCount: externalPostCount, onPostCount
               }}
             >
               <Image
-                source={{ uri: `https://randomuser.me/api/portraits/men/${Math.floor(Math.random() * 100)}.jpg` }}
+                source={{ uri: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&q=80' }}
                 className="w-full h-full"
                 resizeMode="cover"
               />

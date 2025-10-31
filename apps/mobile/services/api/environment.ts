@@ -13,8 +13,8 @@ interface ApiConfig {
 // Environment configurations
 const environments: Record<Environment, ApiConfig> = {
   development: {
-    baseUrl: 'http://192.168.0.225:8080/api/auth', // Gateway service for auth API calls
-    gatewayUrl: 'http://192.168.0.225:8080', // Gateway service for all API calls
+    baseUrl: 'http://192.168.0.121:8080/api/auth', // Gateway service for auth API calls
+    gatewayUrl: 'http://192.168.0.121:8080', // Gateway service for all API calls
     timeout: 30000,
     enableLogging: true,
   },

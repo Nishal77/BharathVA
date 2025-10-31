@@ -5,6 +5,13 @@ spring:
   application:
     name: auth-service
   
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 10MB
+      file-size-threshold: 2KB
+  
   datasource:
     url: ${DB_URL:jdbc:postgresql://ep-summer-bar-a1bv6p9u-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require}
     username: ${DB_USERNAME:neondb_owner}
@@ -93,4 +100,9 @@ jwt:
 otp:
   expiry-minutes: 10
   length: 6
+
+cloudinary:
+  cloud_name: dqmryiyhz
+  api_key: 397473723639954
+  api_secret: FM-U9FOM6wm1KWDjS_vc39dngCg
 

@@ -126,35 +126,68 @@ public class MongoMigrationConfig implements CommandLineRunner {
         // Create indexes for feeds collection using MongoDB native approach
         MongoDatabase database = mongoClient.getDatabase(databaseName);
         
-        // Create indexes directly using MongoDB driver
-        database.getCollection("feeds").createIndex(
-                org.bson.Document.parse("{'userId': 1}"),
-                new IndexOptions().name("idx_user_id")
-        );
-        
-        database.getCollection("feeds").createIndex(
-                org.bson.Document.parse("{'createdAt': -1}"),
-                new IndexOptions().name("idx_created_at_desc")
-        );
-        
-        database.getCollection("feeds").createIndex(
-                org.bson.Document.parse("{'userId': 1, 'createdAt': -1}"),
-                new IndexOptions().name("idx_user_created_desc")
-        );
-        
-        // Create text index for search
-        database.getCollection("feeds").createIndex(
-                org.bson.Document.parse("{'message': 'text'}"),
-                new IndexOptions().name("idx_text_search")
-        );
-        
-        // Create index for feed_metadata collection
-        database.getCollection("feed_metadata").createIndex(
-                org.bson.Document.parse("{'key': 1}"),
-                new IndexOptions().unique(true).name("idx_metadata_key_unique")
-        );
-        
-        log.info("✅ Indexes created successfully");
+        try {
+            // Create indexes with error handling for existing indexes
+            createIndexIfNotExists(database.getCollection("feeds"), 
+                    org.bson.Document.parse("{'userId': 1}"), 
+                    "idx_user_id");
+            
+            createIndexIfNotExists(database.getCollection("feeds"), 
+                    org.bson.Document.parse("{'createdAt': -1}"), 
+                    "idx_created_at_desc");
+            
+            createIndexIfNotExists(database.getCollection("feeds"), 
+                    org.bson.Document.parse("{'userId': 1, 'createdAt': -1}"), 
+                    "idx_user_created_desc");
+            
+            // Create text index for search
+            createIndexIfNotExists(database.getCollection("feeds"), 
+                    org.bson.Document.parse("{'message': 'text'}"), 
+                    "idx_text_search");
+            
+            // Create index for feed_metadata collection
+            createIndexIfNotExists(database.getCollection("feed_metadata"), 
+                    org.bson.Document.parse("{'key': 1}"), 
+                    "idx_metadata_key_unique", true);
+            
+            log.info("✅ Indexes created successfully");
+            
+        } catch (Exception e) {
+            log.warn("⚠️ Some indexes may already exist, continuing... {}", e.getMessage());
+        }
+    }
+    
+    private void createIndexIfNotExists(com.mongodb.client.MongoCollection<org.bson.Document> collection, 
+                                      org.bson.Document indexKeys, String indexName) {
+        createIndexIfNotExists(collection, indexKeys, indexName, false);
+    }
+    
+    private void createIndexIfNotExists(com.mongodb.client.MongoCollection<org.bson.Document> collection, 
+                                      org.bson.Document indexKeys, String indexName, boolean unique) {
+        try {
+            // Check if index already exists
+            boolean indexExists = false;
+            for (org.bson.Document index : collection.listIndexes()) {
+                if (indexName.equals(index.getString("name"))) {
+                    indexExists = true;
+                    break;
+                }
+            }
+            
+            if (!indexExists) {
+                IndexOptions options = new IndexOptions().name(indexName);
+                if (unique) {
+                    options.unique(true);
+                }
+                collection.createIndex(indexKeys, options);
+                log.info("✅ Created index: {}", indexName);
+            } else {
+                log.info("⏭️ Index already exists: {}", indexName);
+            }
+            
+        } catch (Exception e) {
+            log.warn("⚠️ Could not create index {}: {}", indexName, e.getMessage());
+        }
     }
     
     private void insertSampleData() {
