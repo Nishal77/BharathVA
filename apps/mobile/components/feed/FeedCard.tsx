@@ -102,6 +102,9 @@ export default function FeedCard({
             onShare={onShare}
             onBookmark={onBookmark}
             onEmojiSelect={(emoji) => console.log('Emoji selected:', emoji)}
+            likes={likes > 0 ? likes : undefined}
+            comments={replies > 0 ? replies : undefined}
+            shares={retweets > 0 ? retweets : undefined}
           />
 
           <FeedStatsSection
