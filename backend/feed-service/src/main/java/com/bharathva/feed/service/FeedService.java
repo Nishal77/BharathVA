@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -319,5 +320,128 @@ public class FeedService {
         
         log.info("Feed statistics: {}", stats);
         return stats;
+    }
+    
+    // Toggle like on a feed
+    @Transactional
+    @CacheEvict(value = "feedCache", allEntries = true)
+    public FeedResponse toggleLike(String feedId, String userId) {
+        log.info("Toggling like for feed: {} by user: {}", feedId, userId);
+        
+        // Validate parameters
+        if (feedId == null || feedId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Feed ID cannot be null or empty");
+        }
+        if (userId == null || userId.trim().isEmpty()) {
+            throw new IllegalArgumentException("User ID cannot be null or empty");
+        }
+        
+        // Find feed
+        Optional<Feed> feedOptional = feedRepository.findById(feedId);
+        if (feedOptional.isEmpty()) {
+            log.warn("Feed not found with ID: {}", feedId);
+            throw new RuntimeException("Feed not found with ID: " + feedId);
+        }
+        
+        Feed feed = feedOptional.get();
+        boolean wasLiked = feed.hasLiked(userId);
+        
+        // Toggle like
+        if (wasLiked) {
+            feed.removeLike(userId);
+            log.info("User {} unliked feed {}", userId, feedId);
+        } else {
+            feed.addLike(userId);
+            log.info("User {} liked feed {}", userId, feedId);
+        }
+        
+        // Update timestamp
+        feed.updateTimestamp();
+        
+        // Save feed
+        Feed savedFeed = feedRepository.save(feed);
+        
+        // Verify the save was successful
+        if (savedFeed == null) {
+            log.error("❌ Failed to save feed - save returned null");
+            throw new RuntimeException("Failed to save feed after like toggle");
+        }
+        
+        // Double-check by reloading from database
+        Optional<Feed> verifyOptional = feedRepository.findById(feedId);
+        if (verifyOptional.isEmpty()) {
+            log.error("❌ Feed not found after save - persistence issue");
+            throw new RuntimeException("Feed not found after save");
+        }
+        
+        Feed verifiedFeed = verifyOptional.get();
+        List<String> verifiedLikes = verifiedFeed.getLikes();
+        boolean verifiedUserLiked = verifiedFeed.hasLiked(userId);
+        
+        log.info("✅ Like toggle verified:");
+        log.info("   - Feed ID: {}", feedId);
+        log.info("   - User ID: {}", userId);
+        log.info("   - Likes count: {}", verifiedFeed.getLikesCount());
+        log.info("   - User liked: {}", verifiedUserLiked);
+        log.info("   - Likes list: {}", verifiedLikes);
+        
+        if (wasLiked && verifiedFeed.hasLiked(userId)) {
+            log.error("❌ CRITICAL: User {} should have been removed from likes but still present!", userId);
+            throw new RuntimeException("Like removal failed - user still in likes list");
+        } else if (!wasLiked && !verifiedFeed.hasLiked(userId)) {
+            log.error("❌ CRITICAL: User {} should have been added to likes but not present!", userId);
+            throw new RuntimeException("Like addition failed - user not in likes list");
+        }
+        
+        // Notify WebSocket clients about the like change
+        try {
+            if (wasLiked) {
+                webSocketService.notifyFeedUnliked(userId, feedId);
+            } else {
+                webSocketService.notifyFeedLiked(userId, feedId);
+            }
+        } catch (Exception e) {
+            log.warn("⚠️ Failed to send WebSocket notification for like toggle: {}", e.getMessage());
+        }
+        
+        log.info("Like toggled successfully. Feed {} now has {} likes", feedId, verifiedFeed.getLikesCount());
+        FeedResponse feedResponse = new FeedResponse(verifiedFeed, userId);
+        
+        // Ensure likes array is set correctly - explicitly set it from verified feed
+        // The constructor should already set it, but we'll double-check and ensure it's not null
+        List<String> feedLikes = verifiedFeed.getLikes();
+        if (feedLikes == null) {
+            feedLikes = new ArrayList<>();
+        }
+        // Always set a copy to ensure it's included in JSON serialization
+        feedResponse.setLikes(new ArrayList<>(feedLikes));
+        
+        // Log the response to verify likes array is included
+        log.info("FeedResponse created with {} likes: {}", feedResponse.getLikesCount(), feedResponse.getLikes());
+        log.info("FeedResponse JSON will include likes array with {} elements", feedResponse.getLikes().size());
+        
+        return feedResponse;
+    }
+    
+    // Check if user has liked a feed
+    public boolean hasUserLiked(String feedId, String userId) {
+        log.info("Checking if user {} has liked feed {}", userId, feedId);
+        
+        // Validate parameters
+        if (feedId == null || feedId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Feed ID cannot be null or empty");
+        }
+        if (userId == null || userId.trim().isEmpty()) {
+            throw new IllegalArgumentException("User ID cannot be null or empty");
+        }
+        
+        Optional<Feed> feedOptional = feedRepository.findById(feedId);
+        if (feedOptional.isEmpty()) {
+            log.warn("Feed not found with ID: {}", feedId);
+            return false;
+        }
+        
+        Feed feed = feedOptional.get();
+        return feed.hasLiked(userId);
     }
 }

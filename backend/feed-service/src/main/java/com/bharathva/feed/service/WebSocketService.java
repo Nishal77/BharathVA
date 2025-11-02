@@ -68,4 +68,30 @@ public class WebSocketService {
             log.error("❌ Error sending user-specific feed event: {}", e.getMessage(), e);
         }
     }
+    
+    /**
+     * Send feed liked event to all connected clients
+     */
+    public void notifyFeedLiked(String userId, String feedId) {
+        try {
+            FeedEvent event = new FeedEvent("FEED_LIKED", feedId, userId, null);
+            messagingTemplate.convertAndSend("/topic/feeds", event);
+            log.info("📤 Sent feed liked event for user: {}, feed: {}", userId, feedId);
+        } catch (Exception e) {
+            log.error("❌ Error sending feed liked event: {}", e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Send feed unliked event to all connected clients
+     */
+    public void notifyFeedUnliked(String userId, String feedId) {
+        try {
+            FeedEvent event = new FeedEvent("FEED_UNLIKED", feedId, userId, null);
+            messagingTemplate.convertAndSend("/topic/feeds", event);
+            log.info("📤 Sent feed unliked event for user: {}, feed: {}", userId, feedId);
+        } catch (Exception e) {
+            log.error("❌ Error sending feed unliked event: {}", e.getMessage(), e);
+        }
+    }
 }

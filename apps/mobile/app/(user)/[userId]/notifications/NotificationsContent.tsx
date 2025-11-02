@@ -1,6 +1,7 @@
-import React from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, useColorScheme, Image } from 'react-native';
-import Svg, { Path, Rect } from 'react-native-svg';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable, useColorScheme, Image, TextInput } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
 export default function NotificationsContent() {
   const colorScheme = useColorScheme();
@@ -8,344 +9,800 @@ export default function NotificationsContent() {
 
   const colors = {
     background: isDark ? '#000000' : '#FFFFFF',
-    primaryText: isDark ? '#FFFFFF' : '#000000',
+    primaryText: isDark ? '#FFFFFF' : '#1F2937',
     secondaryText: isDark ? '#9CA3AF' : '#6B7280',
     border: isDark ? '#1F2937' : '#E5E7EB',
-    card: isDark ? '#0B1220' : '#F8FAFC',
-    accent: '#3B82F6',
-    danger: '#EF4444',
+    cardBackground: isDark ? '#0F172A' : '#F9FAFB',
+    inputBackground: isDark ? '#1F2937' : '#F3F4F6',
   };
 
-  // Theme-aware confirm button background and border (pill style)
-  const confirmBg = isDark ? '#1E3A8A' : '#E0ECFF';
-  const confirmBorder = isDark ? '#1D4ED8' : '#BFDBFE';
+  // Badge Icons
+  const CommentBadge = () => null;
 
-  const Row = ({
+  const BellBadge = () => (
+    <View style={[styles.badgeContainer, { backgroundColor: '#3B82F6' }]}>
+      <Svg width={10} height={10} viewBox="0 0 10 10">
+        <Path
+          d="M5 2v1M7.5 7.5H2.5c0-1 .5-1.5 1.5-2V5c0-1.5 1-2.5 2.5-2.5s2.5 1 2.5 2.5v.5c1 .5 1.5 1 1.5 2H7.5z"
+          fill="none"
+          stroke="white"
+          strokeWidth="1"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <Path
+          d="M5 7.5v1"
+          stroke="white"
+          strokeWidth="1"
+          strokeLinecap="round"
+        />
+      </Svg>
+    </View>
+  );
+
+  const HeartBadge = () => (
+    <View style={[styles.badgeContainer, { backgroundColor: '#EC4899' }]}>
+      <Svg width={10} height={10} viewBox="0 0 10 10">
+        <Path
+          d="M5 8.5c-.3 0-.6-.1-.8-.3C3.6 7.5 1.5 5.4 1.5 3.5c0-1.1.9-2 2-2 .6 0 1.2.3 1.5.7.3-.4.9-.7 1.5-.7 1.1 0 2 .9 2 2 0 1.9-2.1 4-2.7 4.7-.2.2-.5.3-.8.3z"
+          fill="white"
+          stroke="white"
+          strokeWidth="0.5"
+        />
+      </Svg>
+    </View>
+  );
+
+  // Notification Types
+  const NotificationEntry = ({
     avatar,
-    title,
-    subtitle,
-    right,
+    badge,
+    timestamp,
+    projectInfo,
+    mainText,
+    children,
   }: {
     avatar: string;
-    title: string | React.ReactNode;
-    subtitle?: string;
-    right?: React.ReactNode;
+    badge: React.ReactNode;
+    timestamp: string;
+    projectInfo: string;
+    mainText: string;
+    children?: React.ReactNode;
   }) => (
-    <View style={styles.row}>
-      <Image source={{ uri: avatar }} style={styles.avatar} />
-      <View style={styles.rowText}>
-        {typeof title === 'string' ? (
-          <Text style={[styles.rowTitle, { color: colors.primaryText }]}>{title}</Text>
-        ) : (
-          title
-        )}
-        {subtitle ? (
-          <Text style={[styles.rowSubtitle, { color: colors.secondaryText }]}>{subtitle}</Text>
-        ) : null}
+    <View style={[styles.notificationCard, { borderColor: colors.border }]}>
+      {/* Profile Image with Badge */}
+      <View style={styles.avatarContainer}>
+        <Image source={{ uri: avatar }} style={styles.avatar} />
+        {badge}
       </View>
-      {right}
+
+      {/* Content Area */}
+      <View style={styles.contentArea}>
+        {/* Header: Timestamp and Project Info */}
+        <View style={styles.headerRow}>
+          <Text style={[styles.timestamp, { color: colors.secondaryText }]}>{timestamp}</Text>
+          <Text style={[styles.separator, { color: colors.secondaryText }]}>·</Text>
+          <Text style={[styles.projectInfo, { color: colors.secondaryText }]}>{projectInfo}</Text>
+        </View>
+
+        {/* Main Text */}
+        <Text style={[styles.mainText, { color: colors.primaryText }]}>{mainText}</Text>
+
+        {/* Action-Specific Content */}
+        {children}
+      </View>
     </View>
   );
 
-  const PrimaryBtn = ({ label }: { label: string }) => (
-    <Pressable
-      style={({ pressed }) => [
-        styles.primaryCta,
-        {
-          backgroundColor: confirmBg,
-          shadowColor: colors.accent,
-          borderWidth: 1,
-          borderColor: confirmBorder,
-        },
-        pressed && { transform: [{ scale: 0.98 }] },
-      ]}
-    >
-      <Text style={[styles.primaryCtaText, { color: isDark ? '#FFFFFF' : '#000000' }]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
+  // Comment Notification with Reply Input
+  const CommentNotification = ({
+    avatar,
+    timestamp,
+    projectInfo,
+    mainText,
+    commentText,
+    replyTo,
+  }: {
+    avatar: string;
+    timestamp: string;
+    projectInfo: string;
+    mainText: string;
+    commentText: string;
+    replyTo: string;
+  }) => {
+    const [replyText, setReplyText] = useState('');
 
-  const SecondaryBtn = ({ label }: { label: string }) => (
-    <Pressable style={({ pressed }) => [styles.secondaryCta, { backgroundColor: isDark ? '#111827' : '#E5E7EB' }, pressed && { opacity: 0.9 }]}>
-      <Text style={[styles.secondaryCtaText, { color: colors.primaryText }]}>{label}</Text>
-    </Pressable>
-  );
+    return (
+      <NotificationEntry
+        avatar={avatar}
+        badge={<CommentBadge />}
+        timestamp={timestamp}
+        projectInfo={projectInfo}
+        mainText={mainText}
+      >
+        {/* Comment Bubble */}
+        <View style={[styles.commentBubble, { backgroundColor: colors.cardBackground }]}>
+          <Text style={[styles.commentText, { color: colors.primaryText }]}>{commentText}</Text>
+        </View>
 
-  const DeleteIconButton = () => (
-    <Pressable style={({ pressed }) => [
-      styles.deleteIconBtn,
-      {
-        backgroundColor: isDark ? 'rgba(239,68,68,0.12)' : 'rgba(239,68,68,0.08)',
-        borderColor: isDark ? '#7F1D1D' : '#FCA5A5',
-      },
-      pressed && { opacity: 0.85 }
-    ]}>
-      <Svg width={18} height={18} viewBox="0 0 18 18">
-        <Path d="M13.6977 7.75L13.35 14.35C13.294 15.4201 12.416 16.25 11.353 16.25H6.64804C5.58404 16.25 4.70703 15.42 4.65103 14.35L4.30334 7.75" stroke={colors.danger} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        <Path d="M2.75 4.75H15.25" stroke={colors.danger} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        <Path d="M6.75 4.75V2.75C6.75 2.2 7.198 1.75 7.75 1.75H10.25C10.802 1.75 11.25 2.2 11.25 2.75V4.75" stroke={colors.danger} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      </Svg>
-    </Pressable>
-  );
+        {/* Reply Input */}
+        <Pressable style={[styles.replyInput, { backgroundColor: colors.inputBackground }]}>
+          <View style={styles.replyInputLeft}>
+            <Text style={[styles.replyPlaceholder, { color: colors.secondaryText }]}>
+              Reply {replyTo}
+            </Text>
+          </View>
+          <View style={styles.replyIcons}>
+            <Svg width={18} height={18} viewBox="0 0 18 18" style={styles.replyIcon}>
+              <Circle cx="9" cy="9" r="8" fill="none" stroke={colors.secondaryText} strokeWidth="1" />
+              <Circle cx="6.5" cy="8.5" r="0.8" fill={colors.secondaryText} />
+              <Path
+                d="M11.5 8.5c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2z"
+                fill="none"
+                stroke={colors.secondaryText}
+                strokeWidth="1"
+                strokeLinecap="round"
+              />
+              <Path
+                d="M7.5 10.5c.5.5 1.3.8 2 .8s1.5-.3 2-.8"
+                fill="none"
+                stroke={colors.secondaryText}
+                strokeWidth="1"
+                strokeLinecap="round"
+              />
+            </Svg>
+            <View style={styles.keyboardShortcutContainer}>
+              <Svg width={16} height={16} viewBox="0 0 16 16" style={styles.keyboardIcon}>
+                <Rect x="2" y="4" width="12" height="10" rx="1" fill="none" stroke={colors.secondaryText} strokeWidth="1" />
+                <Path d="M2 8h12" stroke={colors.secondaryText} strokeWidth="1" />
+                <Rect x="4" y="2" width="2" height="1.5" rx="0.3" fill={colors.secondaryText} />
+              </Svg>
+              <Text style={[styles.keyboardShortcut, { color: colors.secondaryText }]}>⌘/</Text>
+            </View>
+          </View>
+        </Pressable>
+      </NotificationEntry>
+    );
+  };
 
-  const FollowingPill = () => (
-    <View style={[styles.followingPill, { backgroundColor: isDark ? '#111827' : '#F3F4F6' }]}> 
-      <Text style={[styles.followingPillText, { color: colors.primaryText }]}>Following</Text>
+  // Image Comment Notification with Image Preview
+  const ImageCommentNotification = ({
+    avatar,
+    timestamp,
+    projectInfo,
+    mainText,
+    commentText,
+    replyTo,
+    imageUri,
+  }: {
+    avatar: string;
+    timestamp: string;
+    projectInfo: string;
+    mainText: string;
+    commentText: string;
+    replyTo: string;
+    imageUri: string;
+  }) => {
+    const [replyText, setReplyText] = useState('');
+
+    return (
+      <NotificationEntry
+        avatar={avatar}
+        badge={<CommentBadge />}
+        timestamp={timestamp}
+        projectInfo={projectInfo}
+        mainText={mainText}
+      >
+        {/* Image Preview with Comment */}
+        <View style={styles.imageCommentContainer}>
+          {/* Image Preview */}
+          <Pressable
+            style={[styles.imagePreviewContainer, { borderColor: colors.border }]}
+            onPress={() => {}}
+          >
+            <Image
+              source={{ uri: imageUri }}
+              style={styles.imagePreview}
+              resizeMode="cover"
+            />
+            {/* Subtle overlay gradient for premium feel */}
+            <LinearGradient
+              colors={['transparent', 'rgba(0, 0, 0, 0.15)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={styles.imageOverlay}
+            />
+          </Pressable>
+
+          {/* Comment Bubble */}
+          <View style={[styles.commentBubble, { backgroundColor: colors.cardBackground }]}>
+            <Text style={[styles.commentText, { color: colors.primaryText }]}>{commentText}</Text>
+          </View>
+        </View>
+
+        {/* Reply Input */}
+        <Pressable style={[styles.replyInput, { backgroundColor: colors.inputBackground }]}>
+          <View style={styles.replyInputLeft}>
+            <Text style={[styles.replyPlaceholder, { color: colors.secondaryText }]}>
+              Reply {replyTo}
+            </Text>
+          </View>
+          <View style={styles.replyIcons}>
+            <Svg width={18} height={18} viewBox="0 0 18 18" style={styles.replyIcon}>
+              <Circle cx="9" cy="9" r="8" fill="none" stroke={colors.secondaryText} strokeWidth="1" />
+              <Circle cx="6.5" cy="8.5" r="0.8" fill={colors.secondaryText} />
+              <Path
+                d="M11.5 8.5c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2z"
+                fill="none"
+                stroke={colors.secondaryText}
+                strokeWidth="1"
+                strokeLinecap="round"
+              />
+              <Path
+                d="M7.5 10.5c.5.5 1.3.8 2 .8s1.5-.3 2-.8"
+                fill="none"
+                stroke={colors.secondaryText}
+                strokeWidth="1"
+                strokeLinecap="round"
+              />
+            </Svg>
+            <View style={styles.keyboardShortcutContainer}>
+              <Svg width={16} height={16} viewBox="0 0 16 16" style={styles.keyboardIcon}>
+                <Rect x="2" y="4" width="12" height="10" rx="1" fill="none" stroke={colors.secondaryText} strokeWidth="1" />
+                <Path d="M2 8h12" stroke={colors.secondaryText} strokeWidth="1" />
+                <Rect x="4" y="2" width="2" height="1.5" rx="0.3" fill={colors.secondaryText} />
+              </Svg>
+              <Text style={[styles.keyboardShortcut, { color: colors.secondaryText }]}>⌘/</Text>
+            </View>
+          </View>
+        </Pressable>
+      </NotificationEntry>
+    );
+  };
+
+  // Access Request Notification
+  const AccessRequestNotificationWithButtons = ({
+    avatar,
+    timestamp,
+    projectInfo,
+    mainText,
+  }: {
+    avatar: string;
+    timestamp: string;
+    projectInfo: string;
+    mainText: string;
+  }) => (
+    <View style={[styles.notificationCard, { borderColor: colors.border }]}>
+      {/* Profile Image without Badge */}
+      <View style={styles.avatarContainer}>
+        <Image source={{ uri: avatar }} style={styles.avatar} />
+      </View>
+
+      {/* Content Area */}
+      <View style={styles.contentArea}>
+        {/* Header: Timestamp and Project Info */}
+        <View style={styles.headerRow}>
+          <Text style={[styles.timestamp, { color: colors.secondaryText }]}>{timestamp}</Text>
+          <Text style={[styles.separator, { color: colors.secondaryText }]}>·</Text>
+          <Text style={[styles.projectInfo, { color: colors.secondaryText }]}>{projectInfo}</Text>
+        </View>
+
+        {/* Main Text with Bold Name */}
+        <Text style={[styles.mainText, { color: colors.primaryText }]}>
+          <Text style={{ fontWeight: '700' }}>
+            {mainText.split(' requested')[0]}
+          </Text>
+          <Text style={{ fontWeight: '400' }}> sent you a follow request.</Text>
+        </Text>
+
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          <Pressable
+            style={[styles.rejectButton, { borderColor: colors.border }]}
+            onPress={() => {}}
+          >
+            <Text style={[styles.rejectButtonText, { color: colors.primaryText }]}>Reject</Text>
+          </Pressable>
+          <Pressable
+            style={styles.approveButton}
+            onPress={() => {}}
+          >
+            <Text style={styles.approveButtonText}>Approve</Text>
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
 
-  const PostPreview = ({ imageUri, text }: { imageUri?: string; text?: string }) => (
-    <View style={[styles.postPreview, { borderColor: colors.border, backgroundColor: isDark ? '#0B1220' : '#FFFFFF' }]}>
-      {imageUri ? (
-        <Image source={{ uri: imageUri }} style={styles.postPreviewImage} />
-      ) : (
-        <Text style={[styles.postPreviewText, { color: colors.primaryText }]} numberOfLines={3}>{text}</Text>
-      )}
+  // Like Notification with Image Preview
+  const LikeNotification = ({
+    avatar,
+    timestamp,
+    projectInfo,
+    mainText,
+    imageUri,
+  }: {
+    avatar: string;
+    timestamp: string;
+    projectInfo: string;
+    mainText: string;
+    imageUri: string;
+  }) => (
+    <View style={[styles.notificationCard, { borderColor: colors.border }]}>
+      {/* Profile Image with Badge */}
+      <View style={styles.avatarContainer}>
+        <Image source={{ uri: avatar }} style={styles.avatar} />
+        <HeartBadge />
+      </View>
+
+      {/* Content Area with Image Preview */}
+      <View style={styles.contentArea}>
+        <View style={styles.likeNotificationContent}>
+          {/* Text Content */}
+          <View style={styles.likeTextContainer}>
+            {/* Header: Timestamp and Project Info */}
+            <View style={[styles.headerRow, { marginBottom: 4 }]}>
+              <Text style={[styles.timestamp, { color: colors.secondaryText }]}>{timestamp}</Text>
+              <Text style={[styles.separator, { color: colors.secondaryText, marginHorizontal: 3 }]}>·</Text>
+              <Text style={[styles.projectInfo, { color: colors.secondaryText }]}>{projectInfo}</Text>
+            </View>
+
+            {/* Main Text */}
+            <Text style={[styles.mainText, { color: colors.primaryText, marginBottom: 0, lineHeight: 20 }]}>
+              <Text style={{ fontWeight: '700' }}>
+                {mainText.split(' liked your post')[0]}
+              </Text>
+              <Text style={{ fontWeight: '400' }}> liked your post</Text>
+            </Text>
+          </View>
+
+          {/* Small Image Preview - Aligned to top with header */}
+          <Pressable
+            style={[styles.smallImagePreview, { borderColor: colors.border, marginTop: 2 }]}
+            onPress={() => {}}
+          >
+            <Image
+              source={{ uri: imageUri }}
+              style={styles.smallImage}
+              resizeMode="cover"
+            />
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
+
+  // Property Update Notification
+  const PropertyUpdateNotification = ({
+    avatar,
+    timestamp,
+    projectInfo,
+    mainText,
+  }: {
+    avatar: string;
+    timestamp: string;
+    projectInfo: string;
+    mainText: string;
+  }) => (
+    <View style={[styles.notificationCard, { borderColor: colors.border }]}>
+      {/* Profile Image without Badge */}
+      <View style={styles.avatarContainer}>
+        <Image source={{ uri: avatar }} style={styles.avatar} />
+      </View>
+
+      {/* Content Area */}
+      <View style={styles.contentArea}>
+        {/* Header: Timestamp and Project Info */}
+        <View style={styles.headerRow}>
+          <Text style={[styles.timestamp, { color: colors.secondaryText }]}>{timestamp}</Text>
+          <Text style={[styles.separator, { color: colors.secondaryText }]}>·</Text>
+          <Text style={[styles.projectInfo, { color: colors.secondaryText }]}>{projectInfo}</Text>
+        </View>
+
+        {/* Main Text with Bold Name */}
+        <Text style={[styles.mainText, { color: colors.primaryText, marginBottom: 4, marginTop: 0 }]}>
+          <Text style={{ fontWeight: '700' }}>
+            {mainText.split(' started following you')[0]}
+          </Text>
+          <Text style={{ fontWeight: '400' }}> is now following you</Text>
+        </Text>
+
+        {/* Following Button */}
+        <View style={[styles.actionButtons, { marginTop: 12 }]}>
+          <Pressable
+            style={[styles.followingButton, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+            onPress={() => {}}
+          >
+            <Text style={[styles.followingButtonText, { color: colors.primaryText }]}>Following</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+
+  // Sample notification data
+  const usernames = [
+    '@alex_williams',
+    '@sophia_martinez',
+    '@james_chen',
+    '@emma_thompson',
+    '@michael_jordan',
+    '@olivia_parker',
+    '@david_kumar',
+    '@isabella_lee',
+    '@ryan_anderson',
+    '@ava_johnson',
+  ];
+
+  const getRandomUsername = () => {
+    return usernames[Math.floor(Math.random() * usernames.length)];
+  };
+
+  const notifications = [
+    {
+      id: '1',
+      type: 'comment',
+      avatar: 'https://i.pravatar.cc/150?img=12',
+      timestamp: '8 hours ago',
+      projectInfo: getRandomUsername(),
+      mainText: 'Ricky commented on the status of Design project',
+      commentText: '@themilo have got the latest draft of homepage and mobile version.',
+      replyTo: '@billy',
+    },
+    {
+      id: '2',
+      type: 'imageComment',
+      avatar: 'https://i.pravatar.cc/150?img=18',
+      timestamp: '5 hours ago',
+      projectInfo: getRandomUsername(),
+      mainText: 'Sarah commented on your post',
+      commentText: 'This design looks absolutely stunning! Love the color palette and layout. Great work!',
+      replyTo: '@sarah',
+      imageUri: `https://picsum.photos/400/250?random=${Date.now()}`,
+    },
+    {
+      id: '3',
+      type: 'access',
+      avatar: 'https://i.pravatar.cc/150?img=15',
+      timestamp: '1d ago',
+      projectInfo: getRandomUsername(),
+      mainText: 'Milo Piróg requested to follow you',
+    },
+    {
+      id: '4',
+      type: 'update',
+      avatar: 'https://i.pravatar.cc/150?img=20',
+      timestamp: '1d ago',
+      projectInfo: getRandomUsername(),
+      mainText: 'Kamil started following you',
+    },
+    {
+      id: '5',
+      type: 'like',
+      avatar: 'https://i.pravatar.cc/150?img=25',
+      timestamp: '2h ago',
+      projectInfo: getRandomUsername(),
+      mainText: 'Alex liked your post',
+      imageUri: `https://picsum.photos/200/200?random=${Date.now() + 1}`,
+    },
+  ];
 
   return (
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
-      {/* Section: Last 30 days */}
-      <Text style={[styles.sectionHeader, { color: colors.primaryText }]}>Last 30 days</Text>
-
-      {/* Info Card removed as per request */}
-
-      {/* Follow requests */}
-      <Row
-        avatar={`https://i.pravatar.cc/100?u=radhika_kapoor`}
-        title={<Text style={{ fontSize: 15, fontWeight: '600', color: '#000000' }}>radhika_kapoor</Text>}
-        subtitle="requested to follow you. 3w"
-        right={
-          <View style={styles.ctaRow}>
-            <PrimaryBtn label="Confirm" />
-            <DeleteIconButton />
-          </View>
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+      {notifications.map((notification) => {
+        switch (notification.type) {
+          case 'comment':
+            return (
+              <CommentNotification
+                key={notification.id}
+                avatar={notification.avatar}
+                timestamp={notification.timestamp}
+                projectInfo={notification.projectInfo}
+                mainText={notification.mainText}
+                commentText={notification.commentText || ''}
+                replyTo={notification.replyTo || ''}
+              />
+            );
+          case 'imageComment':
+            return (
+              <ImageCommentNotification
+                key={notification.id}
+                avatar={notification.avatar}
+                timestamp={notification.timestamp}
+                projectInfo={notification.projectInfo}
+                mainText={notification.mainText}
+                commentText={notification.commentText || ''}
+                replyTo={notification.replyTo || ''}
+                imageUri={notification.imageUri || ''}
+              />
+            );
+          case 'access':
+            return (
+              <AccessRequestNotificationWithButtons
+                key={notification.id}
+                avatar={notification.avatar}
+                timestamp={notification.timestamp}
+                projectInfo={notification.projectInfo}
+                mainText={notification.mainText}
+              />
+            );
+          case 'update':
+            return (
+              <PropertyUpdateNotification
+                key={notification.id}
+                avatar={notification.avatar}
+                timestamp={notification.timestamp}
+                projectInfo={notification.projectInfo}
+                mainText={notification.mainText}
+              />
+            );
+          case 'like':
+            return (
+              <LikeNotification
+                key={notification.id}
+                avatar={notification.avatar}
+                timestamp={notification.timestamp}
+                projectInfo={notification.projectInfo}
+                mainText={notification.mainText}
+                imageUri={notification.imageUri || ''}
+              />
+            );
+          default:
+            return null;
         }
-      />
-      <Row
-        avatar={`https://i.pravatar.cc/100?u=pramod_enterprises`}
-        title={<Text style={{ fontSize: 15, fontWeight: '600', color: '#000000' }}>pramod_enterprises</Text>}
-        subtitle="requested to follow you. 3w"
-        right={
-          <View style={styles.ctaRow}>
-            <PrimaryBtn label="Confirm" />
-            <DeleteIconButton />
-          </View>
-        }
-      />
-
-      {/* Section: Older */}
-      <Text style={[styles.sectionHeader, { color: colors.primaryText, marginTop: 18 }]}>Older</Text>
-
-      <Row
-        avatar={`https://i.pravatar.cc/100?u=aman_trivedi`}
-        title={<Text style={{ fontSize: 15 }}><Text style={{ fontWeight: '600', color: '#000000' }}>aman_trivedi </Text><Text style={{ color: colors.primaryText }}>started following you.</Text></Text>}
-        right={<FollowingPill />}
-      />
-
-      <View style={styles.row}> 
-        <Image source={{ uri: `https://i.pravatar.cc/100?u=devesh_poojary` }} style={styles.avatar} />
-        <View style={styles.rowText}>
-          <Text style={[styles.rowTitle, { color: colors.primaryText }]}><Text style={{ fontWeight: '600', color: '#000000' }}>Vishnu Vardhan</Text> liked your story.</Text>
-          <Text style={[styles.rowSubtitle, { color: colors.secondaryText }]}>6w</Text>
-        </View>
-        <Image source={{ uri: 'https://images.unsplash.com/photo-1520975916090-3105956dac38?q=80&w=200&auto=format&fit=crop' }} style={styles.previewThumb} />
-      </View>
-
-      {['sanjay_clicks', 'mayur_shetty'].map((name) => (
-        <Row
-          key={name}
-          avatar={`https://i.pravatar.cc/100?u=${name}`}
-          title={<Text style={{ fontSize: 15 }}><Text style={{ fontWeight: '600', color: '#000000' }}>{name.replace('_', ' ')} </Text><Text style={{ color: colors.primaryText }}>started following you.</Text></Text>}
-          right={<FollowingPill />}
-        />
-      ))}
-
-      {/* Comment UI with image post preview */}
-      <View style={styles.row}>
-        <Image source={{ uri: `https://i.pravatar.cc/100?u=ananya_verma` }} style={styles.avatar} />
-        <View style={styles.rowText}>
-          <Text style={[styles.rowTitle, { color: colors.primaryText }]}><Text style={{ fontWeight: '600', color: '#000000' }}>ananya_verma</Text> commented on your post</Text>
-          <Text style={[styles.previewText, { color: colors.primaryText, marginTop: 8 }]}>Absolutely love this shot! 🇮🇳✨</Text>
-          <PostPreview imageUri={'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=800&auto=format&fit=crop'} />
-        </View>
-      </View>
-
-      {/* Comment UI with text post preview */}
-      <View style={styles.row}>
-        <Image source={{ uri: `https://i.pravatar.cc/100?u=rahul_kumar` }} style={styles.avatar} />
-        <View style={styles.rowText}>
-          <Text style={[styles.rowTitle, { color: colors.primaryText }]}><Text style={{ fontWeight: '600', color: '#000000' }}>rahul_kumar</Text> commented on your post</Text>
-          <Text style={[styles.previewText, { color: colors.primaryText, marginTop: 8 }]}>Proud moment! Jai Hind! 🇮🇳</Text>
-          <PostPreview text={'“When you feel the tricolour flying high, the pride is unmatched.”'} />
-        </View>
-      </View>
-
-      {/* New post + comment thread UI */}
-      <View style={styles.row}>
-        <Image source={{ uri: `https://i.pravatar.cc/100?u=riya_sharma` }} style={styles.avatar} />
-        <View style={styles.rowText}>
-          <Text style={[styles.rowTitle, { color: colors.primaryText }]}><Text style={{ fontWeight: '600', color: '#000000' }}>riya_sharma</Text> created a new post</Text>
-          <PostPreview imageUri={'https://images.unsplash.com/photo-1499346030926-9a72daac6c63?q=80&w=900&auto=format&fit=crop'} />
-          <View style={[styles.commentBubble, { borderColor: colors.border, backgroundColor: isDark ? '#0F172A' : '#F3F4F6' }]}> 
-            <Text style={[styles.commentAuthor, { color: colors.primaryText }]}>yash_gupta</Text>
-            <Text style={[styles.commentText, { color: colors.primaryText }]}>Looks awesome! Keep it up 👏</Text>
-          </View>
-        </View>
-      </View>
+      })}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  sectionHeader: {
-    fontSize: 19,
-    fontWeight: '600',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
+  container: {
+    flex: 1,
   },
-  infoCard: {
-    marginHorizontal: 20,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
+  scrollContent: {
+    paddingTop: 16,
+    paddingBottom: 120,
+  },
+  notificationCard: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
   },
-  infoIcon: {
+  avatarContainer: {
+    position: 'relative',
+    marginRight: 10,
+  },
+  avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    alignItems: 'center',
+  },
+  badgeContainer: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     justifyContent: 'center',
-    backgroundColor: '#EEF2FF',
-  },
-  infoTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  infoSubtitle: {
-    fontSize: 14,
-    marginTop: 2,
-  },
-  time: {
-    fontSize: 12,
-    marginLeft: 10,
-  },
-  row: {
-    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    marginRight: 12,
-  },
-  rowText: {
+  contentArea: {
     flex: 1,
   },
-  rowTitle: {
-    fontSize: 15,
-  },
-  rowSubtitle: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  ctaRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-
-  },
-  primaryCta: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  primaryCtaText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  secondaryCta: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  secondaryCtaText: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  deleteIconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  followingPill: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 12,
-  },
-  followingPillText: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  previewThumb: {
-    width: 42,
-    height: 42,
-    borderRadius: 8,
-  },
-  previewText: {
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  postPreview: {
-    marginTop: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  postPreviewImage: {
-    width: '100%',
-    height: 180,
-    resizeMode: 'cover',
-  },
-  postPreviewText: {
-    fontSize: 13,
-    lineHeight: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-  },
-  commentBubble: {
-    marginTop: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 12,
-  },
-  commentAuthor: {
-    fontSize: 13,
-    fontWeight: '700',
     marginBottom: 4,
   },
-  commentText: {
+  timestamp: {
     fontSize: 13,
+    fontWeight: '400',
+  },
+  separator: {
+    fontSize: 13,
+    marginHorizontal: 6,
+  },
+  projectInfo: {
+    fontSize: 13,
+    fontWeight: '400',
+  },
+  mainText: {
+    fontSize: 15,
+    fontWeight: '700',
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  imageCommentContainer: {
+    marginBottom: 12,
+  },
+  imagePreviewContainer: {
+    width: '100%',
+    maxWidth: 320,
+    aspectRatio: 16 / 10,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    position: 'relative',
+  },
+  imagePreview: {
+    width: '100%',
+    height: '100%',
+  },
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '35%',
+  },
+  commentBubble: {
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  commentText: {
+    fontSize: 14,
     lineHeight: 20,
+    fontWeight: '400',
+  },
+  replyInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minHeight: 40,
+  },
+  replyInputLeft: {
+    flex: 1,
+  },
+  replyPlaceholder: {
+    fontSize: 14,
+    fontWeight: '400',
+  },
+  replyIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  replyIcon: {
+    width: 18,
+    height: 18,
+  },
+  keyboardShortcutContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  keyboardIcon: {
+    width: 16,
+    height: 16,
+  },
+  keyboardShortcut: {
+    fontSize: 12,
+    fontWeight: '500',
+    fontFamily: 'monospace',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 4,
+  },
+  followingButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+  },
+  followingButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  rejectButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    minWidth: 90,
+    alignItems: 'center',
+  },
+  rejectButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  approveButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#3B82F6',
+    minWidth: 90,
+    alignItems: 'center',
+  },
+  approveButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  statusTags: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  statusTag: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  statusTagActive: {
+    backgroundColor: '#F3E8FF',
+  },
+  statusTagText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  arrowIcon: {
+    marginHorizontal: 4,
+  },
+  dateRange: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  dateIcon: {
+    fontSize: 14,
+  },
+  dateText: {
+    fontSize: 13,
+    fontWeight: '400',
+  },
+  likeNotificationContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  likeTextContainer: {
+    flex: 1,
+    minWidth: 0,
+  },
+  smallImagePreview: {
+    width: 52,
+    height: 52,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  smallImage: {
+    width: '100%',
+    height: '100%',
   },
 });
-
-

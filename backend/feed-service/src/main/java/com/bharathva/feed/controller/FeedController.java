@@ -651,6 +651,59 @@ public class FeedController {
         }
     }
     
+    // Toggle like on a feed
+    @PostMapping("/{feedId}/like")
+    public ResponseEntity<FeedResponse> toggleLike(
+            @PathVariable String feedId,
+            Authentication authentication) {
+        
+        log.info("Toggling like for feed: {}", feedId);
+        
+        try {
+            String authenticatedUserId = getUserIdFromAuthentication(authentication);
+            FeedResponse response = feedService.toggleLike(feedId, authenticatedUserId);
+            
+            // Log the response to verify likes array is included
+            log.info("Like toggled successfully for feed: {} by user: {}", feedId, authenticatedUserId);
+            log.info("FeedResponse contains {} likes: {}", response.getLikesCount(), response.getLikes());
+            
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            log.error("Error toggling like: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (Exception e) {
+            log.error("Error toggling like: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    // Check if user has liked a feed
+    @GetMapping("/{feedId}/liked")
+    public ResponseEntity<Map<String, Object>> checkUserLiked(
+            @PathVariable String feedId,
+            Authentication authentication) {
+        
+        log.info("Checking if user liked feed: {}", feedId);
+        
+        try {
+            String authenticatedUserId = getUserIdFromAuthentication(authentication);
+            boolean hasLiked = feedService.hasUserLiked(feedId, authenticatedUserId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("feedId", feedId);
+            response.put("userId", authenticatedUserId);
+            response.put("liked", hasLiked);
+            
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            log.error("Error checking like status: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (Exception e) {
+            log.error("Error checking like status: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
     // Test image upload without authentication (for testing purposes)
     @PostMapping("/test/upload/image")
     public ResponseEntity<Map<String, Object>> testUploadImage(@RequestParam("file") MultipartFile file) {

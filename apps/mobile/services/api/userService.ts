@@ -213,18 +213,40 @@ export const getUserProfileById = async (userId: string): Promise<ApiResponse<Us
           }
           
           // Extract profileImageUrl with multiple fallback options
+          // Check for camelCase, snake_case, and other variations
           const profileImageUrl = userData.profileImageUrl || 
+                                  userData.profile_image_url ||  // NeonDB field name (snake_case)
                                   userData.profilePicture || 
                                   userData.profile_picture || 
                                   null;
+          
+          // Validate and normalize URL if present
+          let validatedImageUrl = null;
+          if (profileImageUrl) {
+            // Remove whitespace
+            const trimmedUrl = String(profileImageUrl).trim();
+            // Ensure HTTPS for Cloudinary URLs
+            if (trimmedUrl.startsWith('http://res.cloudinary.com')) {
+              validatedImageUrl = trimmedUrl.replace('http://', 'https://');
+            } else if (trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
+              // Convert other HTTP URLs to HTTPS
+              validatedImageUrl = trimmedUrl.replace('http://', 'https://');
+            } else if (trimmedUrl.startsWith('https://') || trimmedUrl.startsWith('http://')) {
+              validatedImageUrl = trimmedUrl;
+            } else if (trimmedUrl.length > 0) {
+              // If it's a relative path or malformed, try to construct full URL
+              log(`⚠️  Profile image URL might be invalid: ${trimmedUrl}`);
+              validatedImageUrl = trimmedUrl;
+            }
+          }
           
           const userProfile: UserProfile = {
             id: userData.id || userId,
             fullName: userData.fullName || userData.full_name || `User ${userId.substring(0, 8)}`,
             username: userData.username || `user_${userId.substring(0, 8)}`,
             email: userData.email,
-            profilePicture: profileImageUrl,
-            profileImageUrl: profileImageUrl, // Primary field from NeonDB users.profile_image_url
+            profilePicture: validatedImageUrl,
+            profileImageUrl: validatedImageUrl, // Primary field from NeonDB users.profile_image_url
             bio: userData.bio,
             verified: userData.verified || userData.isEmailVerified || false,
             followersCount: userData.followersCount || userData.followers_count,
@@ -235,6 +257,8 @@ export const getUserProfileById = async (userId: string): Promise<ApiResponse<Us
           log('✅ User profile fetched successfully from NeonDB', { 
             userId, 
             endpoint, 
+            originalProfileImageUrl: profileImageUrl,
+            validatedProfileImageUrl: validatedImageUrl,
             profileImageUrl: userProfile.profileImageUrl,
             hasImage: !!userProfile.profileImageUrl,
             fullName: userProfile.fullName,
@@ -327,6 +351,118 @@ export const getCurrentUserProfile = async (): Promise<ApiResponse<UserProfile>>
       error: {
         code: 'UNEXPECTED_ERROR',
         message: 'An unexpected error occurred while fetching current user profile',
+        details: error,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+};
+
+/**
+ * Batch fetch usernames for multiple user IDs
+ * Optimized for fetching usernames for "liked by" sections
+ * User IDs should already be validated (they exist in MongoDB's likes array)
+ */
+export const getUsernamesBatch = async (userIds: string[]): Promise<ApiResponse<Record<string, string>>> => {
+  try {
+    log('Batch fetching usernames from NeonDB', { userIdCount: userIds.length });
+    
+    // Get authentication token
+    const token = await getAuthToken();
+    if (!token) {
+      return {
+        success: false,
+        error: {
+          code: 'AUTH_ERROR',
+          message: 'No authentication token found',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    // Validate input
+    if (!userIds || userIds.length === 0) {
+      return {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'userIds array is required and cannot be empty',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    // Limit batch size
+    if (userIds.length > 50) {
+      return {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Maximum 50 user IDs allowed per batch request',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    // Make API request
+    const response = await apiRequest<Record<string, string>>('/api/auth/user/batch/usernames', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userIds }),
+    });
+    
+    // Handle nested ApiResponse structure
+    // Backend returns: { success: true, data: { userId: username }, message: "...", timestamp: "..." }
+    // apiRequest wraps it again: { success: true, data: { success: true, data: { userId: username }, ... }, timestamp: "..." }
+    let usernameMap: Record<string, string> = {};
+    
+    if (response.success && response.data) {
+      // Check if response.data is the actual username map or nested ApiResponse
+      if (response.data && typeof response.data === 'object') {
+        // If response.data has 'data' property, it's a nested ApiResponse
+        if ('data' in response.data && typeof response.data.data === 'object') {
+          usernameMap = response.data.data as Record<string, string>;
+          log('✅ Batch usernames fetched successfully (nested structure)', { 
+            requestedCount: userIds.length,
+            fetchedCount: Object.keys(usernameMap).length,
+            usernames: usernameMap 
+          });
+        } 
+        // Check if response.data itself is the username map (has userId keys)
+        else if (!('success' in response.data) && !('message' in response.data)) {
+          // It's directly the username map
+          usernameMap = response.data as Record<string, string>;
+          log('✅ Batch usernames fetched successfully (direct structure)', { 
+            requestedCount: userIds.length,
+            fetchedCount: Object.keys(usernameMap).length,
+            usernames: usernameMap 
+          });
+        } else {
+          logError('❌ Unexpected response structure', { responseData: response.data });
+        }
+      }
+    } else {
+      logError('❌ Batch username fetch failed', response.error);
+    }
+    
+    // Return normalized response with username map directly in data
+    return {
+      success: response.success,
+      data: usernameMap,
+      error: response.error,
+      timestamp: response.timestamp,
+    };
+    
+  } catch (error) {
+    logError('❌ Unexpected error in getUsernamesBatch', error);
+    return {
+      success: false,
+      error: {
+        code: 'UNEXPECTED_ERROR',
+        message: 'An unexpected error occurred',
         details: error,
       },
       timestamp: new Date().toISOString(),

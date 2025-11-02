@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -209,11 +210,60 @@ public class UserController {
             System.out.println("   - Old profileImageUrl: " + old);
             System.out.println("   - New profileImageUrl: " + url);
             
+            // Update the user entity with the new Cloudinary URL
             user.setProfileImageUrl(url);
-            userRepository.save(user);
             
-            log.info("Profile image updated for user {}: old={}, new={}", userId, old, url);
-            System.out.println("✅ [UserController] Profile image updated successfully for user: " + userId);
+            // Save to database with verification
+            User savedUser = userRepository.save(user);
+            
+            // Verify the save was successful by checking the saved entity
+            if (savedUser == null) {
+                log.error("Failed to save user entity - save returned null");
+                System.err.println("❌ [UserController] Failed to save user entity - save returned null");
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
+                        false,
+                        "Failed to save profile image URL to database",
+                        null,
+                        LocalDateTime.now()
+                ));
+            }
+            
+            // Double-check by reloading from database to verify persistence
+            Optional<User> verificationOptional = userRepository.findById(userId);
+            if (verificationOptional.isEmpty()) {
+                log.error("User not found after save - data persistence issue");
+                System.err.println("❌ [UserController] User not found after save");
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
+                        false,
+                        "Failed to verify profile image URL in database",
+                        null,
+                        LocalDateTime.now()
+                ));
+            }
+            
+            User verifiedUser = verificationOptional.get();
+            String verifiedUrl = verifiedUser.getProfileImageUrl();
+            
+            // Verify the URL was actually saved
+            if (verifiedUrl == null || !verifiedUrl.equals(url)) {
+                log.error("Profile image URL mismatch after save. Expected: {}, Got: {}", url, verifiedUrl);
+                System.err.println("❌ [UserController] Profile image URL mismatch:");
+                System.err.println("   - Expected: " + url);
+                System.err.println("   - Got: " + verifiedUrl);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
+                        false,
+                        "Profile image URL was not saved correctly to database",
+                        null,
+                        LocalDateTime.now()
+                ));
+            }
+            
+            log.info("Profile image updated and verified for user {}: old={}, new={}", userId, old, verifiedUrl);
+            System.out.println("✅ [UserController] Profile image updated and verified successfully:");
+            System.out.println("   - User ID: " + userId);
+            System.out.println("   - Old URL: " + (old != null ? old : "null"));
+            System.out.println("   - New URL: " + verifiedUrl);
+            System.out.println("   - Verified from database: true");
 
             Map<String, Object> responseData = new HashMap<>();
             responseData.put("profileImageUrl", url);
@@ -453,6 +503,77 @@ public class UserController {
             ));
         } catch (Exception e) {
             log.error("Failed to retrieve user by username: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
+                    false,
+                    "An unexpected error occurred",
+                    null,
+                    LocalDateTime.now()
+            ));
+        }
+    }
+
+    /**
+     * Batch fetch usernames for multiple user IDs
+     * This is optimized for fetching usernames for "liked by" sections
+     * User IDs should be validated against MongoDB before calling this endpoint
+     */
+    @PostMapping("/batch/usernames")
+    public ResponseEntity<ApiResponse<Map<String, String>>> getUsernamesBatch(@RequestBody Map<String, Object> request) {
+        try {
+            @SuppressWarnings("unchecked")
+            List<String> userIds = (List<String>) request.get("userIds");
+            
+            if (userIds == null || userIds.isEmpty()) {
+                return ResponseEntity.badRequest().body(new ApiResponse<>(
+                        false,
+                        "userIds list is required and cannot be empty",
+                        null,
+                        LocalDateTime.now()
+                ));
+            }
+            
+            // Limit batch size to prevent abuse
+            if (userIds.size() > 50) {
+                return ResponseEntity.badRequest().body(new ApiResponse<>(
+                        false,
+                        "Maximum 50 user IDs allowed per batch request",
+                        null,
+                        LocalDateTime.now()
+                ));
+            }
+            
+            Map<String, String> usernameMap = new HashMap<>();
+            
+            // Fetch all users in batch
+            for (String userIdStr : userIds) {
+                try {
+                    UUID userId = UUID.fromString(userIdStr);
+                    Optional<User> userOptional = userRepository.findById(userId);
+                    
+                    if (userOptional.isPresent()) {
+                        User user = userOptional.get();
+                        usernameMap.put(userIdStr, user.getUsername());
+                        log.debug("Found username for userId {}: {}", userIdStr, user.getUsername());
+                    } else {
+                        log.warn("User not found in NeonDB for userId: {}", userIdStr);
+                        // Don't add to map - missing entries will be filtered out
+                    }
+                } catch (IllegalArgumentException e) {
+                    log.warn("Invalid UUID format for userId: {}", userIdStr);
+                    // Skip invalid UUIDs
+                }
+            }
+            
+            log.info("Batch username fetch completed: {}/{} usernames found", usernameMap.size(), userIds.size());
+            
+            return ResponseEntity.ok(new ApiResponse<>(
+                    true,
+                    "Usernames retrieved successfully",
+                    usernameMap,
+                    LocalDateTime.now()
+            ));
+        } catch (Exception e) {
+            log.error("Failed to retrieve usernames in batch: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
                     false,
                     "An unexpected error occurred",

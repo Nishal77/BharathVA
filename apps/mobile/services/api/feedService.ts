@@ -57,6 +57,9 @@ export interface PostResponse {
   userId: string;
   message: string;
   imageUrls?: string[];
+  likes?: string[]; // Array of user IDs who liked the post
+  likesCount?: number;
+  userLiked?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,6 +69,9 @@ export interface FeedItem {
   userId: string;
   message: string;
   imageUrls?: string[];
+  likes?: string[]; // Array of user IDs who liked the post
+  likesCount?: number;
+  userLiked?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -664,6 +670,76 @@ export const getAllFeeds = async (page: number = 0, size: number = 20): Promise<
 };
 
 // Delete post function
+// Toggle like on a feed
+export const toggleLike = async (feedId: string): Promise<ApiResponse<PostResponse>> => {
+  try {
+    log('Toggling like', { feedId });
+    
+    // Get authentication token
+    const token = await getAuthToken();
+    if (!token) {
+      return {
+        success: false,
+        error: {
+          code: 'AUTH_ERROR',
+          message: 'No authentication token found',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    // Validate feedId
+    if (!feedId || feedId.trim().length === 0) {
+      return {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Feed ID cannot be empty',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    // Make API request
+    // Backend returns FeedResponse directly (not wrapped in ApiResponse)
+    const response = await apiRequest<PostResponse>(`/api/feed/${feedId}/like`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    
+    if (response.success && response.data) {
+      log('✅ Like toggled successfully', { 
+        feedId, 
+        likesCount: response.data.likesCount,
+        likesArray: response.data.likes,
+        likesArrayLength: response.data.likes?.length || 0
+      });
+      
+      // Log the full response to debug
+      console.log('📦 Full toggleLike response:', JSON.stringify(response.data, null, 2));
+    } else {
+      logError('❌ Like toggle failed', response.error);
+    }
+    
+    return response;
+    
+  } catch (error) {
+    logError('❌ Unexpected error in toggleLike', error);
+    return {
+      success: false,
+      error: {
+        code: 'UNEXPECTED_ERROR',
+        message: 'An unexpected error occurred',
+        details: error,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+};
+
 export const deletePost = async (feedId: string): Promise<ApiResponse<{ success: boolean; message: string }>> => {
   try {
     log('Deleting post', { feedId });
@@ -883,16 +959,33 @@ export const getAllFeedsWithUserData = async (page: number = 0, size: number = 2
         if (userResponse.success && userResponse.data) {
           // Prioritize profileImageUrl from NeonDB (which comes from users.profile_image_url)
           // Check all possible field names from backend response
-          const profileImageUrl = userResponse.data.profileImageUrl || 
-                                  userResponse.data.profilePicture || 
-                                  (userResponse.data as any)?.profile_image_url || 
-                                  null;
+          const rawProfileImageUrl = userResponse.data.profileImageUrl || 
+                                     userResponse.data.profilePicture || 
+                                     (userResponse.data as any)?.profile_image_url || 
+                                     null;
+          
+          // Validate and normalize URL if present
+          let validatedImageUrl = null;
+          if (rawProfileImageUrl) {
+            const trimmedUrl = String(rawProfileImageUrl).trim();
+            // Ensure HTTPS for Cloudinary URLs
+            if (trimmedUrl.startsWith('http://res.cloudinary.com')) {
+              validatedImageUrl = trimmedUrl.replace('http://', 'https://');
+            } else if (trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
+              validatedImageUrl = trimmedUrl.replace('http://', 'https://');
+            } else if (trimmedUrl.startsWith('https://') || trimmedUrl.startsWith('http://')) {
+              validatedImageUrl = trimmedUrl;
+            } else if (trimmedUrl.length > 0) {
+              log(`⚠️  Profile image URL might be invalid: ${trimmedUrl}`);
+              validatedImageUrl = trimmedUrl;
+            }
+          }
           
           const profile = {
             fullName: userResponse.data.fullName || `User ${userId.substring(0, 8)}`,
             username: userResponse.data.username || `user_${userId.substring(0, 8)}`,
-            profilePicture: profileImageUrl, // Keep for backward compatibility
-            profileImageUrl: profileImageUrl, // Primary field from NeonDB users.profile_image_url
+            profilePicture: validatedImageUrl, // Keep for backward compatibility
+            profileImageUrl: validatedImageUrl, // Primary field from NeonDB users.profile_image_url
           };
           
           userProfiles.set(userId, profile);
@@ -901,10 +994,12 @@ export const getAllFeedsWithUserData = async (page: number = 0, size: number = 2
           log('✅ Fetched user profile from NeonDB', { 
             userId, 
             rawResponse: userResponse.data,
-            profileImageUrl: profileImageUrl,
+            originalProfileImageUrl: rawProfileImageUrl,
+            validatedProfileImageUrl: validatedImageUrl,
+            profileImageUrl: profile.profileImageUrl,
             fullName: profile.fullName,
             username: profile.username,
-            hasImage: !!profileImageUrl
+            hasImage: !!validatedImageUrl
           });
         } else {
           // Set fallback profile data (no random images - use null)

@@ -50,19 +50,19 @@ public class MongoMigrationConfig implements CommandLineRunner {
     
     private void runMigration() {
         try {
-            // Check if migration has already been run
-            if (isMigrationCompleted()) {
-                log.info("✅ Migration already completed, skipping...");
-                return;
-            }
-            
             log.info("📋 Running MongoDB migration...");
+            log.info("📋 Database name: {}", databaseName);
             
             // Create database and collections
             createDatabaseAndCollections();
             
             // Create indexes
             createIndexes();
+            
+            // Run likes migration (always run to ensure data consistency)
+            // This is critical and must run every time
+            log.info("🔄 Starting likes field migration...");
+            migrateLikesField();
             
             // Insert sample data if enabled
             if (includeSampleData) {
@@ -76,20 +76,16 @@ public class MongoMigrationConfig implements CommandLineRunner {
             
         } catch (Exception e) {
             log.error("❌ MongoDB migration failed", e);
+            e.printStackTrace();
             throw new RuntimeException("Migration failed", e);
         }
     }
     
+    @SuppressWarnings("unused")
     private boolean isMigrationCompleted() {
-        try {
-            MongoDatabase database = mongoClient.getDatabase(databaseName);
-            return database.getCollection("feed_metadata")
-                    .find(org.bson.Document.parse("{'key': 'migration_info'}"))
-                    .first() != null;
-        } catch (Exception e) {
-            log.warn("Could not check migration status: {}", e.getMessage());
-            return false;
-        }
+        // Migration is now idempotent - always run to ensure data consistency
+        // This method kept for potential future use
+        return false;
     }
     
     private void createDatabaseAndCollections() {
@@ -223,21 +219,172 @@ public class MongoMigrationConfig implements CommandLineRunner {
         log.info("✅ Sample data inserted successfully - 3 feeds created");
     }
     
+    /**
+     * Migration V2: Add likes field to all existing feeds
+     * Ensures all feeds have a likes array initialized as empty array
+     */
+    private void migrateLikesField() {
+        log.info("📋 Running Likes Field Migration (V2)...");
+        log.info("📋 Connecting to database: {}", databaseName);
+        
+        try {
+            MongoDatabase database = mongoClient.getDatabase(databaseName);
+            log.info("✅ Connected to database: {}", databaseName);
+            
+            com.mongodb.client.MongoCollection<org.bson.Document> feedsCollection = 
+                database.getCollection("feeds");
+            
+            // Verify collection exists
+            long collectionExists = database.listCollectionNames().into(new java.util.ArrayList<>())
+                .stream().filter(name -> name.equals("feeds")).count();
+            
+            if (collectionExists == 0) {
+                log.warn("⚠️  Collection 'feeds' does not exist - creating...");
+                database.createCollection("feeds");
+                log.info("✅ Collection 'feeds' created");
+            }
+            
+            log.info("✅ Using collection: feeds");
+            
+            // Use MongoDB JSON query for more reliable filtering
+            // Find all feeds that don't have the likes field or have it as null
+            org.bson.Document filter = org.bson.Document.parse(
+                "{\"$or\": [{\"likes\": {\"$exists\": false}}, {\"likes\": null}]}"
+            );
+            
+            // Update operation using JSON for reliability
+            org.bson.Document updateOperation = org.bson.Document.parse(
+                "{\"$set\": {\"likes\": []}}"
+            );
+            
+            // Count feeds that need migration
+            long feedsToMigrate = feedsCollection.countDocuments(filter);
+            log.info("📊 Found {} feeds that need likes field migration", feedsToMigrate);
+            log.debug("   Filter: {}", filter.toJson());
+            log.debug("   Update: {}", updateOperation.toJson());
+            
+            if (feedsToMigrate > 0) {
+                log.info("🔄 Executing updateMany operation...");
+                
+                try {
+                    // Update all feeds: set likes to empty array if missing or null
+                    com.mongodb.client.result.UpdateResult result = feedsCollection.updateMany(
+                        filter,
+                        updateOperation
+                    );
+                    
+                    long modifiedCount = result.getModifiedCount();
+                    long matchedCount = result.getMatchedCount();
+                    
+                    log.info("✅ UpdateMany completed:");
+                    log.info("   - Matched: {}", matchedCount);
+                    log.info("   - Modified: {}", modifiedCount);
+                    
+                    if (modifiedCount == 0 && matchedCount > 0) {
+                        log.error("❌ CRITICAL: Matched {} but modified 0 - check MongoDB permissions!", matchedCount);
+                    }
+                    
+                    if (modifiedCount != feedsToMigrate) {
+                        log.warn("⚠️  Expected to migrate {} but only migrated {}", feedsToMigrate, modifiedCount);
+                    }
+                    
+                    // Immediate verification
+                    long remaining = feedsCollection.countDocuments(filter);
+                    if (remaining > 0) {
+                        log.error("❌ {} feeds still missing likes field after update!", remaining);
+                    } else {
+                        log.info("✅ All feeds successfully migrated!");
+                    }
+                } catch (Exception updateEx) {
+                    log.error("❌ UpdateMany failed", updateEx);
+                    updateEx.printStackTrace();
+                    throw new RuntimeException("Migration update failed", updateEx);
+                }
+            } else {
+                log.info("✅ All feeds already have likes field - no migration needed");
+            }
+            
+            // Also ensure feeds with non-array likes are fixed
+            org.bson.Document invalidLikesFilter = org.bson.Document.parse(
+                "{\"likes\": {\"$not\": {\"$type\": \"array\"}}}"
+            );
+            
+            long invalidLikesCount = feedsCollection.countDocuments(invalidLikesFilter);
+            if (invalidLikesCount > 0) {
+                log.warn("⚠️  Found {} feeds with invalid likes field type - fixing...", invalidLikesCount);
+                
+                com.mongodb.client.result.UpdateResult fixResult = feedsCollection.updateMany(
+                    invalidLikesFilter,
+                    updateOperation
+                );
+                
+                log.info("✅ Fixed {} feeds with invalid likes field type", fixResult.getModifiedCount());
+            }
+            
+            // Verify migration: count feeds with valid likes array
+            org.bson.Document validLikesFilter = org.bson.Document.parse(
+                "{\"likes\": {\"$type\": \"array\"}}"
+            );
+            long validLikesCount = feedsCollection.countDocuments(validLikesFilter);
+            long totalFeeds = feedsCollection.countDocuments();
+            
+            log.info("📊 Migration verification:");
+            log.info("   - Total feeds: {}", totalFeeds);
+            log.info("   - Feeds with valid likes array: {}", validLikesCount);
+            
+            if (validLikesCount == totalFeeds) {
+                log.info("✅ All feeds have valid likes field - migration successful!");
+            } else {
+                log.warn("⚠️  {} feeds still missing valid likes field", totalFeeds - validLikesCount);
+            }
+            
+        } catch (Exception e) {
+            log.error("❌ Likes field migration failed", e);
+            throw new RuntimeException("Likes migration failed", e);
+        }
+    }
+    
     private void markMigrationCompleted() {
         try {
             MongoDatabase database = mongoClient.getDatabase(databaseName);
-            org.bson.Document migrationDoc = new org.bson.Document()
-                    .append("key", "migration_info")
-                    .append("value", new org.bson.Document()
-                            .append("version", "V1")
-                            .append("description", "Simple feed schema for messages only")
-                            .append("migratedAt", new java.util.Date())
-                            .append("sampleDataIncluded", includeSampleData)
-                            .append("feedsCount", 3))
-                    .append("updatedAt", new java.util.Date());
             
-            database.getCollection("feed_metadata").insertOne(migrationDoc);
-            log.info("✅ Migration marked as completed");
+            // Check if migration info already exists
+            org.bson.Document existingMigration = database.getCollection("feed_metadata")
+                    .find(org.bson.Document.parse("{'key': 'migration_info'}"))
+                    .first();
+            
+            if (existingMigration != null) {
+                // Update existing migration info
+                org.bson.Document updateDoc = new org.bson.Document("$set", 
+                    new org.bson.Document()
+                        .append("value.version", "V2")
+                        .append("value.description", "Feed schema with likes field support")
+                        .append("value.updatedAt", new java.util.Date())
+                        .append("updatedAt", new java.util.Date())
+                );
+                
+                database.getCollection("feed_metadata").updateOne(
+                    org.bson.Document.parse("{'key': 'migration_info'}"),
+                    updateDoc
+                );
+                log.info("✅ Migration info updated to V2");
+            } else {
+                // Create new migration info
+                long totalFeeds = database.getCollection("feeds").countDocuments();
+                
+                org.bson.Document migrationDoc = new org.bson.Document()
+                        .append("key", "migration_info")
+                        .append("value", new org.bson.Document()
+                                .append("version", "V2")
+                                .append("description", "Feed schema with likes field support")
+                                .append("migratedAt", new java.util.Date())
+                                .append("sampleDataIncluded", includeSampleData)
+                                .append("feedsCount", totalFeeds))
+                        .append("updatedAt", new java.util.Date());
+                
+                database.getCollection("feed_metadata").insertOne(migrationDoc);
+                log.info("✅ Migration marked as completed (V2)");
+            }
             
         } catch (Exception e) {
             log.warn("Could not mark migration as completed: {}", e.getMessage());

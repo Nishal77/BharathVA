@@ -1,23 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Pressable, Text, View, useColorScheme, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 // Removed MessageCircle import - using custom SVG
 import { Svg, Path, Line } from 'react-native-svg';
 import EmojiPickerModal from '../../components/EmojiPickerModal';
 import ReactionsPicker from '../../components/ReactionsPicker';
+import CommentsModal from './components/CommentsModal';
+import { toggleLike } from '../../services/api/feedService';
+import { getUserProfileById, getUsernamesBatch, UserProfile } from '../../services/api/userService';
 
 // Get device dimensions
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface FeedActionSectionProps {
+  feedId?: string;
   onLike?: () => void;
   onReply?: () => void;
   onShare?: () => void;
   onBookmark?: () => void;
   onEmojiSelect?: (emoji: string) => void;
   likes?: number;
+  likedByUserIds?: string[]; // Array of user IDs who liked the post
   comments?: number;
   shares?: number;
+  userLiked?: boolean;
 }
 
 // Utility function to format numbers with commas
@@ -27,33 +33,68 @@ function formatNumber(num: number): string {
 }
 
 export default function FeedActionSection({ 
+  feedId,
   onLike, 
   onReply, 
   onShare, 
   onBookmark,
   onEmojiSelect,
   likes,
+  likedByUserIds = [],
   comments,
-  shares = 23
+  shares = 23,
+  userLiked: initialUserLiked = false
 }: FeedActionSectionProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [isSmileActive, setIsSmileActive] = useState(false);
   const [isBookmarkActive, setIsBookmarkActive] = useState(false);
   const [isSendActive, setIsSendActive] = useState(false);
-  const [isHeartActive, setIsHeartActive] = useState(false);
-  const [isMessageActive, setIsMessageActive] = useState(false);
+  const [isHeartActive, setIsHeartActive] = useState(initialUserLiked);
   const [isEmojiPickerVisible, setIsEmojiPickerVisible] = useState(false);
   const [isReactionsPickerVisible, setIsReactionsPickerVisible] = useState(false);
+  const [isCommentsModalVisible, setIsCommentsModalVisible] = useState(false);
+  const [isLiking, setIsLiking] = useState(false);
   
-  // Generate random numbers for testing - always generate for premium look
-  const randomLikes = React.useMemo(() => {
-    if (likes !== undefined && likes > 0) {
-      return likes;
+  // Use provided values or default to 0
+  // Also consider likedByUserIds length if likes is not provided
+  const initialLikes = likes !== undefined ? likes : (likedByUserIds?.length || 0);
+  const [displayLikes, setDisplayLikes] = useState(initialLikes);
+  
+  // State for "Liked by" section
+  const [likerUsername, setLikerUsername] = useState<string | null>(null);
+  const [usernameMap, setUsernameMap] = useState<Record<string, string>>({});
+  const [isLoadingLikerProfile, setIsLoadingLikerProfile] = useState(false);
+  
+  // Local state for likedByUserIds to handle immediate updates from toggleLike response
+  const [localLikedByUserIds, setLocalLikedByUserIds] = useState<string[]>(likedByUserIds || []);
+  
+  // Sync local state with prop - always update when prop changes
+  useEffect(() => {
+    const newValue = likedByUserIds || [];
+    console.log('🔄 Syncing likedByUserIds prop:', {
+      propValue: likedByUserIds,
+      propLength: likedByUserIds?.length || 0,
+      newValueLength: newValue.length,
+      newValue: newValue
+    });
+    setLocalLikedByUserIds(newValue);
+  }, [likedByUserIds]);
+  
+  // Sync with prop changes
+  useEffect(() => {
+    if (likes !== undefined) {
+      setDisplayLikes(likes);
+    } else if (likedByUserIds && likedByUserIds.length > 0) {
+      // If likes prop is not provided, use likedByUserIds length
+      setDisplayLikes(likedByUserIds.length);
     }
-    // Generate random number between 500 and 10,500 for realistic testing
-    return Math.floor(Math.random() * 10000) + 500;
-  }, [likes]);
+  }, [likes, likedByUserIds]);
+  
+  // Sync heart active state with userLiked prop changes
+  useEffect(() => {
+    setIsHeartActive(initialUserLiked);
+  }, [initialUserLiked]);
   
   const randomComments = React.useMemo(() => {
     if (comments !== undefined && comments > 0) {
@@ -74,32 +115,178 @@ export default function FeedActionSection({
   // Theme-aware colors: white in dark mode, black in light mode
   const textColor = isDark ? '#FFFFFF' : '#000000';
   
-  // Random usernames list for "Liked by" section (varying lengths - short to long)
-  const usernames = [
-    // Short usernames
-    'arjun_01', 'priya_23', 'rohan_x', 'kavya_99', 'aditya_07', 'ananya22',
-    'vikram_r', 'meera_s', 'rahul_k', 'sneha_p', 'karan12', 'pooja_l',
-    // Medium usernames
-    'aryan_kumar', 'divya_sharma', 'raj_patel', 'swati_reddy', 'neeraj_singh', 'kritika_mehta',
-    'amit_gupta', 'radha_das', 'varun_jain', 'aishwarya_r', 'siddharth_k', 'nisha_thakur',
-    'manish_shah', 'riya_chopra', 'abhishek_k', 'sanjana_m', 'nikhil_agarwal', 'tara_bansal',
-    // Longer usernames
-    'aditya_kumar_2024', 'priya_sharma_official', 'rohan_patel_01', 'kavya_reddy_99',
-    'arjun_singh_real', 'ananya_mehta_23', 'vikram_gupta_live', 'meera_das_official',
-    'rahul_jain_2024', 'sneha_thakur_07', 'karan_shah_xx', 'pooja_chopra_99',
-    'aryan_bansal_2024', 'divya_agarwal_real', 'raj_kumar_official', 'swati_singh_live'
-  ];
+  // Fetch usernames in batch when localLikedByUserIds changes or displayLikes changes
+  useEffect(() => {
+    const fetchUsernames = async () => {
+      console.log('🔍 Fetch usernames effect triggered:', {
+        displayLikes,
+        localLikedByUserIdsLength: localLikedByUserIds?.length || 0,
+        localLikedByUserIds: localLikedByUserIds
+      });
+      
+      // Don't fetch if there are no likes
+      if (displayLikes === 0 && (!localLikedByUserIds || localLikedByUserIds.length === 0)) {
+        console.log('⚠️ No likes to fetch usernames for');
+        setLikerUsername(null);
+        setUsernameMap({});
+        return;
+      }
+      
+      // If we have localLikedByUserIds, batch fetch all usernames
+      if (localLikedByUserIds && localLikedByUserIds.length > 0) {
+        // Filter out placeholder user IDs
+        const validUserIds = localLikedByUserIds.filter(id => id && !id.startsWith('placeholder_'));
+        
+        if (validUserIds.length === 0) {
+          setLikerUsername(null);
+          setUsernameMap({});
+          return;
+        }
+        
+        setIsLoadingLikerProfile(true);
+        try {
+          console.log('🔍 Batch fetching usernames from NeonDB for user IDs:', validUserIds);
+          
+          // Fetch all usernames in one batch call
+          const response = await getUsernamesBatch(validUserIds);
+          
+          if (response.success && response.data) {
+            const fetchedUsernameMap = response.data;
+            
+            // Verify we have a valid username map (object with string keys and string values)
+            if (!fetchedUsernameMap || typeof fetchedUsernameMap !== 'object' || Array.isArray(fetchedUsernameMap)) {
+              console.error('❌ Invalid username map structure:', fetchedUsernameMap);
+              throw new Error('Invalid username map structure');
+            }
+            
+            console.log('✅ Usernames fetched successfully from NeonDB:', {
+              requestedCount: validUserIds.length,
+              fetchedCount: Object.keys(fetchedUsernameMap).length,
+              usernameMap: fetchedUsernameMap,
+              validUserIds: validUserIds
+            });
+            
+            setUsernameMap(fetchedUsernameMap);
+            
+            // Select username to display:
+            // For single like, use the first (and only) user's username
+            // For multiple likes, pick a random user's username
+            const selectedUserId = displayLikes === 1 
+              ? validUserIds[0] 
+              : validUserIds[Math.floor(Math.random() * validUserIds.length)];
+            
+            console.log('🔍 Selecting username:', {
+              selectedUserId,
+              displayLikes,
+              availableKeys: Object.keys(fetchedUsernameMap),
+              selectedUsername: fetchedUsernameMap[selectedUserId]
+            });
+            
+            const selectedUsername = fetchedUsernameMap[selectedUserId];
+            
+            if (selectedUsername && typeof selectedUsername === 'string' && selectedUsername.trim().length > 0) {
+              setLikerUsername(selectedUsername.trim());
+              console.log('✅ Selected username for display:', selectedUsername);
+            } else {
+              // Fallback: use first available username from the map
+              const availableUsernames = Object.values(fetchedUsernameMap).filter(
+                (u): u is string => typeof u === 'string' && u.trim().length > 0
+              );
+              
+              if (availableUsernames.length > 0) {
+                const firstAvailableUsername = availableUsernames[0];
+                setLikerUsername(firstAvailableUsername);
+                console.log('⚠️ Selected userId not found in map, using first available username:', firstAvailableUsername);
+              } else {
+                // Last resort: generate from userId
+                setLikerUsername(`user_${selectedUserId.substring(0, 8)}`);
+                console.warn('⚠️ No usernames available in map, using generated fallback');
+              }
+            }
+          } else {
+            console.warn('⚠️ Failed to batch fetch usernames, using fallback');
+            // Fallback: create usernames from user IDs
+            const fallbackUsernameMap: Record<string, string> = {};
+            validUserIds.forEach(userId => {
+              fallbackUsernameMap[userId] = `user_${userId.substring(0, 8)}`;
+            });
+            setUsernameMap(fallbackUsernameMap);
+            
+            const selectedUserId = displayLikes === 1 
+              ? validUserIds[0] 
+              : validUserIds[Math.floor(Math.random() * validUserIds.length)];
+            setLikerUsername(fallbackUsernameMap[selectedUserId]);
+          }
+        } catch (error) {
+          console.error('❌ Error batch fetching usernames:', error);
+          // Fallback: create usernames from user IDs
+          const fallbackUsernameMap: Record<string, string> = {};
+          validUserIds.forEach(userId => {
+            fallbackUsernameMap[userId] = `user_${userId.substring(0, 8)}`;
+          });
+          setUsernameMap(fallbackUsernameMap);
+          
+          const selectedUserId = displayLikes === 1 
+            ? validUserIds[0] 
+            : validUserIds[Math.floor(Math.random() * validUserIds.length)];
+          setLikerUsername(fallbackUsernameMap[selectedUserId]);
+        } finally {
+          setIsLoadingLikerProfile(false);
+        }
+      } else if (displayLikes > 0) {
+        // We have likes but no likedByUserIds yet - keep showing "Liked by..."
+        // This allows parent component time to pass the likedByUserIds prop
+        console.warn('⚠️ Has likes but no likedByUserIds - waiting for prop', {
+          displayLikes,
+          localLikedByUserIds,
+          localLikedByUserIdsLength: localLikedByUserIds?.length || 0,
+          feedId
+        });
+        // Keep loading state so UI shows "Liked by..." instead of "1 person"
+        // Don't clear loading state - let parent component update the prop
+        setIsLoadingLikerProfile(true);
+      } else {
+        console.log('⚠️ No displayLikes, clearing username');
+        setLikerUsername(null);
+        setUsernameMap({});
+        setIsLoadingLikerProfile(false);
+      }
+    };
+    
+    fetchUsernames();
+  }, [localLikedByUserIds, displayLikes]);
   
-  // Generate random username (memoized for consistency per render)
-  const randomUsername = React.useMemo(() => {
-    return usernames[Math.floor(Math.random() * usernames.length)];
-  }, []);
-  
-  // Random avatar URLs for "Liked by" section (keep two avatars for visual)
-  const likedByUsers = [
-    { username: randomUsername, avatar: 'https://i.pravatar.cc/150?img=12' },
-    { username: randomUsername, avatar: 'https://i.pravatar.cc/150?img=47' }
-  ];
+  // Generate avatar URLs for "Liked by" section (up to 2 avatars from actual likers)
+  const likedByUsers = React.useMemo(() => {
+    // Always show avatars if there are likes, even if we don't have localLikedByUserIds yet
+    const shouldShowAvatars = displayLikes > 0 || (localLikedByUserIds && localLikedByUserIds.length > 0);
+    
+    if (!shouldShowAvatars) {
+      return [];
+    }
+    
+    // Use localLikedByUserIds if available, otherwise create placeholder avatars based on displayLikes
+    if (localLikedByUserIds && localLikedByUserIds.length > 0) {
+      // Get up to 2 random user IDs from the likes array
+      const shuffled = [...localLikedByUserIds].sort(() => 0.5 - Math.random());
+      const selectedUserIds = shuffled.slice(0, Math.min(2, localLikedByUserIds.length));
+      
+      // Use profile images from username map if available
+      return selectedUserIds.map((userId, index) => ({
+        userId,
+        avatar        : `https://i.pravatar.cc/150?img=${12 + index}`,
+      }));
+    } else if (displayLikes > 0) {
+      // Fallback: create placeholder avatars when we have likes count but no user IDs
+      const avatarCount = Math.min(2, displayLikes);
+      return Array.from({ length: avatarCount }, (_, index) => ({
+        userId: `placeholder_${index}`,
+        avatar: `https://i.pravatar.cc/150?img=${12 + index}`,
+      }));
+    }
+    
+    return [];
+  }, [localLikedByUserIds, displayLikes]);
   
   // Background colors for action buttons
   const likeBgColor = isDark ? '#4B1F1F' : '#FEE2E2';
@@ -125,51 +312,118 @@ export default function FeedActionSection({
     onEmojiSelect?.(emoji);
     setIsEmojiPickerVisible(false);
   };
+  
+  const handleLike = async () => {
+    // Optimistic update
+    const previousState = isHeartActive;
+    const previousLikes = displayLikes;
+    
+    setIsHeartActive(!previousState);
+    setDisplayLikes(previousState ? previousLikes - 1 : previousLikes + 1);
+    onLike?.();
+    
+    // If feedId is provided, sync with backend
+    if (feedId && !isLiking) {
+      setIsLiking(true);
+      try {
+        const response = await toggleLike(feedId);
+        if (response.success && response.data) {
+          // Update with actual backend data
+          const newLikesCount = response.data.likesCount || 0;
+          setDisplayLikes(newLikesCount);
+          setIsHeartActive(response.data.userLiked || false);
+          
+          // If response includes the likes array, update immediately
+          // This allows us to fetch the username right away without waiting for parent refresh
+          if (response.data.likes && Array.isArray(response.data.likes)) {
+            console.log('✅ Updating likedByUserIds from toggleLike response:', response.data.likes);
+            setLocalLikedByUserIds(response.data.likes);
+          } else {
+            console.warn('⚠️ toggleLike response does not include likes array. Response:', response.data);
+            // Even if response doesn't have likes, we'll wait for parent to update the prop
+          }
+        } else {
+          // Revert on error
+          setIsHeartActive(previousState);
+          setDisplayLikes(previousLikes);
+        }
+      } catch (error) {
+        // Revert on error
+        setIsHeartActive(previousState);
+        setDisplayLikes(previousLikes);
+        console.error('Error toggling like:', error);
+      } finally {
+        setIsLiking(false);
+      }
+    }
+  };
+
+  // Only show "Liked by" section if there are actual likes
+  // Show if either displayLikes > 0 OR localLikedByUserIds has items
+  const hasLikes = displayLikes > 0 || (localLikedByUserIds && localLikedByUserIds.length > 0);
 
   return (
     <View className="mb-3 pr-0">
-      {/* Liked by Section */}
-      <View className="flex-row items-center mb-3">
-        <View className="flex-row items-center -mr-2">
-          {likedByUsers.map((user, index) => (
-            <View
-              key={`${user.username}-${index}`}
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 10,
-                borderWidth: 1.5,
-                borderColor: isDark ? '#1F1F1F' : '#FFFFFF',
-                marginLeft: index === 0 ? 0 : -8,
-                backgroundColor: isDark ? '#2A2A2A' : '#F5F5F5',
-                zIndex: likedByUsers.length - index,
-              }}
-            >
-              <Image
-                source={{ uri: user.avatar }}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: 10,
-                }}
-                contentFit="cover"
-              />
+      {/* Liked by Section - Only show if there are likes */}
+      {hasLikes && (
+        <View className="flex-row items-center mb-3">
+          {/* Avatars - Show up to 2 avatars */}
+          {likedByUsers.length > 0 && (
+            <View className="flex-row items-center -mr-2">
+              {likedByUsers.map((user, index) => (
+                <View
+                  key={`${user.userId}-${index}`}
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    borderWidth: 1.5,
+                    borderColor: isDark ? '#1F1F1F' : '#FFFFFF',
+                    marginLeft: index === 0 ? 0 : -8,
+                    backgroundColor: isDark ? '#2A2A2A' : '#F5F5F5',
+                    zIndex: likedByUsers.length - index,
+                  }}
+                >
+                  <Image
+                    source={{ uri: user.avatar }}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: 10,
+                    }}
+                    contentFit="cover"
+                  />
+                </View>
+              ))}
             </View>
-          ))}
+          )}
+          <Text
+            className="text-sm ml-2"
+            style={{
+              color: isDark ? '#E5E5E5' : '#1F1F1F',
+              fontWeight: '500',
+              flexShrink: 1,
+            }}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {isLoadingLikerProfile ? (
+              'Liked by...'
+            ) : likerUsername ? (
+              <>
+                Liked by <Text style={{ fontWeight: '600' }}>{likerUsername}</Text>
+                {displayLikes > 1 ? ' and others' : ''}
+              </>
+            ) : displayLikes > 0 ? (
+              // If we have likes but no username yet, keep showing loading
+              // This handles the case where we have likes but likedByUserIds prop hasn't arrived yet
+              'Liked by...'
+            ) : (
+              ''
+            )}
+          </Text>
         </View>
-        <Text
-          className="text-sm ml-2"
-          style={{
-            color: isDark ? '#E5E5E5' : '#1F1F1F',
-            fontWeight: '500',
-            flexShrink: 1,
-          }}
-          numberOfLines={1}
-          ellipsizeMode="tail"
-        >
-          Liked by <Text style={{ fontWeight: '600' }}>{randomUsername}</Text> and others
-        </Text>
-      </View>
+      )}
 
       {/* Professional Action Buttons with Rounded Boxes */}
       <View className="flex-row items-center justify-between mb-0" style={{ flexWrap: 'wrap' }}>
@@ -178,8 +432,8 @@ export default function FeedActionSection({
           {/* Comments Button */}
           <Pressable
             onPress={() => {
-            setIsMessageActive(!isMessageActive);
-            onReply?.();
+              setIsCommentsModalVisible(true);
+              onReply?.();
             }}
             style={{
               flexDirection: 'row',
@@ -197,31 +451,22 @@ export default function FeedActionSection({
               viewBox="0 0 18 18"
               style={{ marginRight: iconMarginRight }}
             >
-              {isMessageActive ? (
-                <Path
-                  d="M9,1C4.589,1,1,4.589,1,9c0,1.397,.371,2.778,1.062,3.971,.238,.446-.095,2.002-.842,2.749-.209,.209-.276,.522-.17,.798,.105,.276,.364,.465,.659,.481,.079,.004,.16,.006,.242,.006,1.145,0,2.534-.407,3.44-.871,.675,.343,1.39,.587,2.131,.727,.484,.092,.981,.138,1.478,.138,4.411,0,8-3.589,8-8S13.411,1,9,1Zm3.529,11.538c-.944,.943-2.198,1.462-3.529,1.462s-2.593-.522-3.539-1.47c-.292-.293-.292-.768,0-1.061,.294-.293,.77-.292,1.062,0,1.322,1.326,3.621,1.328,4.947,.006,.293-.294,.768-.292,1.061,0,.292,.293,.292,.768-.002,1.061Z"
-                  fill={actionTextColor}
-                />
-              ) : (
-                <>
-                  <Path
-                    d="M9,1.75C4.996,1.75,1.75,4.996,1.75,9c0,1.319,.358,2.552,.973,3.617,.43,.806-.053,2.712-.973,3.633,1.25,.068,2.897-.497,3.633-.973,.489,.282,1.264,.656,2.279,.848,.433,.082,.881,.125,1.338,.125,4.004,0,7.25-3.246,7.25-7.25S13.004,1.75,9,1.75Z"
-                    fill="none"
-                    stroke={actionTextColor}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="1.5"
-                  />
-                  <Path
-                    d="M5.992,12c.77,.772,1.834,1.25,3.008,1.25s2.231-.475,3-1.242"
-                    fill="none"
-                    stroke={actionTextColor}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="1.5"
-                  />
-                </>
-              )}
+              <Path
+                d="M9,1.75C4.996,1.75,1.75,4.996,1.75,9c0,1.319,.358,2.552,.973,3.617,.43,.806-.053,2.712-.973,3.633,1.25,.068,2.897-.497,3.633-.973,.489,.282,1.264,.656,2.279,.848,.433,.082,.881,.125,1.338,.125,4.004,0,7.25-3.246,7.25-7.25S13.004,1.75,9,1.75Z"
+                fill="none"
+                stroke={actionTextColor}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.5"
+              />
+              <Path
+                d="M5.992,12c.77,.772,1.834,1.25,3.008,1.25s2.231-.475,3-1.242"
+                fill="none"
+                stroke={actionTextColor}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.5"
+              />
             </Svg>
             <Text
               style={{
@@ -237,18 +482,19 @@ export default function FeedActionSection({
 
           {/* Likes Button */}
           <Pressable
-            onPress={() => {
-            setIsHeartActive(!isHeartActive);
-            onLike?.();
-            }}
+            onPress={handleLike}
+            disabled={isLiking}
             style={{
               flexDirection: 'row',
               alignItems: 'center',
               paddingHorizontal: buttonPaddingH,
               paddingVertical: buttonPaddingV,
               borderRadius: borderRadius,
-              backgroundColor: likeBgColor,
+              backgroundColor: isHeartActive 
+                ? (isDark ? '#4B1F1F' : '#FEE2E2') 
+                : likeBgColor,
               marginRight: buttonSpacing,
+              opacity: isLiking ? 0.6 : 1,
             }}
           >
             <Svg
@@ -258,15 +504,19 @@ export default function FeedActionSection({
               style={{ marginRight: iconMarginRight }}
             >
               {isHeartActive ? (
+                // Filled red heart when liked
                 <Path
                   d="M12.164,2c-1.195,.015-2.324,.49-3.164,1.306-.84-.815-1.972-1.291-3.178-1.306-2.53,.015-4.582,2.084-4.572,4.609,0,5.253,5.306,8.429,6.932,9.278,.256,.133,.537,.2,.818,.2s.562-.067,.817-.2c1.626-.848,6.933-4.024,6.933-9.275,.009-2.528-2.042-4.597-4.586-4.612Z"
                   fill="#EF4444"
+                  stroke="#DC2626"
+                  strokeWidth="0.5"
                 />
               ) : (
+                // Outline heart when not liked
                 <Path
                   d="M8.529,15.222c.297,.155,.644,.155,.941,0,1.57-.819,6.529-3.787,6.529-8.613,.008-2.12-1.704-3.846-3.826-3.859-1.277,.016-2.464,.66-3.173,1.72-.71-1.06-1.897-1.704-3.173-1.72-2.123,.013-3.834,1.739-3.826,3.859,0,4.826,4.959,7.794,6.529,8.613Z"
                   fill="none"
-                  stroke="#EF4444"
+                  stroke={isDark ? '#FCA5A5' : '#DC2626'}
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth="1.5"
@@ -277,11 +527,13 @@ export default function FeedActionSection({
               style={{
                 fontSize: fontSize,
                 fontWeight: '600',
-                color: isDark ? '#FCA5A5' : '#DC2626',
+                color: isHeartActive 
+                  ? '#EF4444' // Red when liked
+                  : (isDark ? '#FCA5A5' : '#DC2626'), // Red tint when not liked
                 includeFontPadding: false,
               }}
             >
-              {formatNumber(randomLikes)}
+              {formatNumber(displayLikes)}
             </Text>
           </Pressable>
         </View>
@@ -468,6 +720,13 @@ export default function FeedActionSection({
         visible={isEmojiPickerVisible}
         onClose={() => setIsEmojiPickerVisible(false)}
         onEmojiSelect={handleEmojiSelect}
+      />
+
+      {/* Comments Modal */}
+      <CommentsModal
+        visible={isCommentsModalVisible}
+        onClose={() => setIsCommentsModalVisible(false)}
+        commentsCount={randomComments}
       />
     </View>
   );

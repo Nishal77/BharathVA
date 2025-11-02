@@ -224,6 +224,13 @@ export default function HomeScreen() {
       }))
     } : undefined;
 
+    // Calculate if current user has liked this post
+    // Check if current user's ID is in the likes array
+    const currentUserId = userId as string;
+    const userLiked = feed.userLiked !== undefined 
+      ? feed.userLiked 
+      : (feed.likes && Array.isArray(feed.likes) && feed.likes.includes(currentUserId));
+
     const feedCardData = {
       id: feed.id,
       name: feed.userProfile?.fullName || 'Unknown User',
@@ -236,7 +243,9 @@ export default function HomeScreen() {
       media: media,
       replies: 0, // Real engagement data would come from backend
       retweets: 0,
-      likes: 0,
+      likes: feed.likesCount !== undefined ? feed.likesCount : (feed.likes?.length || 0),
+      likedByUserIds: feed.likes || [], // Array of user IDs who liked the post
+      userLiked: userLiked, // Whether current user has liked this post
       bookmarks: 0,
       views: 0
     };
@@ -390,6 +399,8 @@ export default function HomeScreen() {
                   replies={feedCardData.replies}
                   retweets={feedCardData.retweets}
                   likes={feedCardData.likes}
+                  likedByUserIds={feedCardData.likedByUserIds}
+                  userLiked={feedCardData.userLiked}
                   bookmarks={feedCardData.bookmarks}
                   views={feedCardData.views}
                   onPress={() => console.log('Feed pressed:', feed.id)}

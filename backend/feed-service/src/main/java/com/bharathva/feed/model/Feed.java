@@ -29,6 +29,9 @@ public class Feed {
     @Field("imageUrls")
     private List<String> imageUrls = new ArrayList<>();
     
+    @Field("likes")
+    private List<String> likes = new ArrayList<>();
+    
     @Field("createdAt")
     @Indexed
     private LocalDateTime createdAt;
@@ -92,6 +95,37 @@ public class Feed {
         return imageUrls != null && !imageUrls.isEmpty();
     }
     
+    public List<String> getLikes() {
+        return likes != null ? likes : new ArrayList<>();
+    }
+    
+    public void setLikes(List<String> likes) {
+        this.likes = likes != null ? likes : new ArrayList<>();
+    }
+    
+    public void addLike(String userId) {
+        if (this.likes == null) {
+            this.likes = new ArrayList<>();
+        }
+        if (!this.likes.contains(userId)) {
+            this.likes.add(userId);
+        }
+    }
+    
+    public void removeLike(String userId) {
+        if (this.likes != null) {
+            this.likes.remove(userId);
+        }
+    }
+    
+    public boolean hasLiked(String userId) {
+        return this.likes != null && this.likes.contains(userId);
+    }
+    
+    public int getLikesCount() {
+        return this.likes != null ? this.likes.size() : 0;
+    }
+    
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -120,6 +154,8 @@ public class Feed {
                 ", userId='" + userId + '\'' +
                 ", message='" + message + '\'' +
                 ", imageUrls=" + imageUrls +
+                ", likes=" + likes +
+                ", likesCount=" + getLikesCount() +
                 ", createdAt=" + createdAt +
                 ", updatedAt=" + updatedAt +
                 '}';

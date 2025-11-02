@@ -46,12 +46,118 @@ export default function FeedProfileSection({ avatar, onProfilePress }: FeedProfi
         }}>
           {avatar && !imageError ? (
             // Show NeonDB image if available and not errored
-            <Image
-              source={{ uri: avatar }}
-              style={{ width: '100%', height: '100%' }}
-              resizeMode="cover"
-              onError={handleImageError}
-            />
+            // Validate URL before attempting to load
+            (() => {
+              const isValidUrl = avatar && (
+                avatar.startsWith('http://') || 
+                avatar.startsWith('https://')
+              );
+              
+              if (!isValidUrl) {
+                console.log('⚠️  Invalid profile image URL format:', avatar);
+                return (
+                  <View style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+                    <Svg width={24} height={24} viewBox="0 0 24 24">
+                      <Circle cx="12" cy="8" r="4" fill={isDark ? '#6B7280' : '#9CA3AF'} />
+                      <Path
+                        d="M12 12c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+                        fill={isDark ? '#6B7280' : '#9CA3AF'}
+                      />
+                    </Svg>
+                  </View>
+                );
+              }
+              
+              return (
+                <Image
+                  source={{ 
+                    uri: avatar,
+                    cache: 'default'
+                  }}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="cover"
+                  onError={(error) => {
+                    // React Native Image onError structure can vary
+                    // Extract all possible error information
+                    let errorDetails: any = null;
+                    let errorMessage = 'Unknown image download error';
+                    
+                    try {
+                      // Try different error object structures
+                      // React Native ImageErrorEvent has nativeEvent property
+                      const nativeEvent = (error as any)?.nativeEvent;
+                      if (nativeEvent) {
+                        errorDetails = nativeEvent;
+                        // Check if nested error exists (iOS structure)
+                        if ((nativeEvent as any)?.error) {
+                          errorDetails = (nativeEvent as any).error;
+                        }
+                      } else if ((error as any)?.error) {
+                        errorDetails = (error as any).error;
+                      } else {
+                        errorDetails = error;
+                      }
+                      
+                      // Extract error message from various possible structures
+                      if (typeof errorDetails === 'string') {
+                        errorMessage = errorDetails;
+                      } else if (errorDetails?.message) {
+                        errorMessage = errorDetails.message;
+                      } else if (errorDetails?.localizedDescription) {
+                        errorMessage = errorDetails.localizedDescription;
+                      } else if (errorDetails?.userInfo?.NSLocalizedDescription) {
+                        errorMessage = errorDetails.userInfo.NSLocalizedDescription;
+                      } else {
+                        errorMessage = JSON.stringify(errorDetails) || 'Unknown image download error';
+                      }
+                    } catch (e) {
+                      errorMessage = `Error parsing error object: ${e}`;
+                    }
+                    
+                    // Check if error indicates image not found (404)
+                    const is404Error = errorMessage?.includes('404') || 
+                                      errorMessage?.includes('not found') ||
+                                      errorMessage?.includes('Resource not found') ||
+                                      (errorDetails as any)?.code === 404 ||
+                                      (errorDetails as any)?.statusCode === 404;
+                    
+                    console.log('Profile image from NeonDB failed to load:', {
+                      url: avatar,
+                      error: errorMessage,
+                      errorDetails: errorDetails,
+                      errorType: typeof errorDetails,
+                      fullErrorObject: error,
+                      nativeEvent: error?.nativeEvent,
+                      is404Error: is404Error,
+                      issue: is404Error 
+                        ? 'Image deleted from Cloudinary but URL still in database' 
+                        : 'Unknown image load error'
+                    });
+                    
+                    // If 404, this means image was deleted from Cloudinary
+                    // The URL in NeonDB is stale and should be cleaned up
+                    if (is404Error) {
+                      console.warn('⚠️  Profile image not found in Cloudinary - URL is stale:', avatar);
+                      console.warn('   → Consider cleaning up this URL from NeonDB database');
+                    }
+                    
+                    // Set error state to show placeholder
+                    handleImageError();
+                  }}
+                  onLoad={() => {
+                    // Reset error state if image loads successfully
+                    if (imageError) {
+                      console.log('✅ Profile image loaded successfully:', avatar);
+                      setImageError(false);
+                    }
+                  }}
+                  onLoadStart={() => {
+                    // Optional: Log when image starts loading
+                    console.log('🔄 Starting to load profile image:', avatar);
+                  }}
+                />
+              );
+            })()
           ) : (
             // No NeonDB image or failed to load, show SVG placeholder
             <View style={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>

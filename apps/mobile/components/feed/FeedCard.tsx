@@ -23,6 +23,8 @@ interface FeedCardProps {
   replies?: number;
   retweets?: number;
   likes?: number;
+  likedByUserIds?: string[]; // Array of user IDs who liked the post
+  userLiked?: boolean; // Whether the current user has liked this post
   bookmarks?: number;
   views?: number;
   onPress?: () => void;
@@ -49,6 +51,8 @@ export default function FeedCard({
   replies = 0,
   retweets = 0,
   likes = 0,
+  likedByUserIds = [],
+  userLiked = false,
   bookmarks = 0,
   views = 0,
   onPress,
@@ -97,12 +101,15 @@ export default function FeedCard({
           <FeedMediaSection media={media} />
 
           <FeedActionSection
+            feedId={id}
             onLike={onLike}
             onReply={onReply}
             onShare={onShare}
             onBookmark={onBookmark}
             onEmojiSelect={(emoji) => console.log('Emoji selected:', emoji)}
             likes={likes > 0 ? likes : undefined}
+            likedByUserIds={likedByUserIds}
+            userLiked={userLiked}
             comments={replies > 0 ? replies : undefined}
             shares={retweets > 0 ? retweets : undefined}
           />
