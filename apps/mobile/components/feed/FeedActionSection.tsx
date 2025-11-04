@@ -8,6 +8,7 @@ import ReactionsPicker from '../../components/ReactionsPicker';
 import CommentsModal from './components/CommentsModal';
 import { toggleLike } from '../../services/api/feedService';
 import { getUserProfileById, getUsernamesBatch, UserProfile } from '../../services/api/userService';
+import * as SecureStore from 'expo-secure-store';
 
 // Get device dimensions
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -50,6 +51,7 @@ export default function FeedActionSection({
   const [isSmileActive, setIsSmileActive] = useState(false);
   const [isBookmarkActive, setIsBookmarkActive] = useState(false);
   const [isSendActive, setIsSendActive] = useState(false);
+  // Initialize with initialUserLiked, but will be synced via useEffect
   const [isHeartActive, setIsHeartActive] = useState(initialUserLiked);
   const [isEmojiPickerVisible, setIsEmojiPickerVisible] = useState(false);
   const [isReactionsPickerVisible, setIsReactionsPickerVisible] = useState(false);
@@ -68,6 +70,39 @@ export default function FeedActionSection({
   
   // Local state for likedByUserIds to handle immediate updates from toggleLike response
   const [localLikedByUserIds, setLocalLikedByUserIds] = useState<string[]>(likedByUserIds || []);
+  
+  // Store authenticated user ID for fallback check
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  
+  // Get authenticated user ID from token on mount
+  useEffect(() => {
+    const getAuthenticatedUserId = async () => {
+      try {
+        // Get token directly from SecureStore
+        const token = await SecureStore.getItemAsync('accessToken');
+        if (token) {
+          // Decode JWT to get user ID
+          const base64Url = token.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split('')
+              .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+              .join('')
+          );
+          const payload = JSON.parse(jsonPayload);
+          const userId = payload.userId || payload.sub || null;
+          if (userId) {
+            setCurrentUserId(userId);
+            console.log('✅ Authenticated user ID extracted:', userId);
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not extract authenticated user ID:', error);
+      }
+    };
+    getAuthenticatedUserId();
+  }, []);
   
   // Sync local state with prop - always update when prop changes
   useEffect(() => {
@@ -91,10 +126,36 @@ export default function FeedActionSection({
     }
   }, [likes, likedByUserIds]);
   
-  // Sync heart active state with userLiked prop changes
+  // BULLETPROOF: Sync heart active state with userLiked prop changes
+  // This ensures the heart state always reflects the backend truth, even after refresh
   useEffect(() => {
-    setIsHeartActive(initialUserLiked);
-  }, [initialUserLiked]);
+    // Priority 1: Use initialUserLiked from backend (most reliable)
+    let shouldBeActive = initialUserLiked;
+    
+    // Priority 2: Fallback - check if current user ID is in likedByUserIds array
+    if (shouldBeActive === false && currentUserId && localLikedByUserIds && localLikedByUserIds.length > 0) {
+      const isInLikesArray = localLikedByUserIds.includes(currentUserId);
+      if (isInLikesArray) {
+        shouldBeActive = true;
+        console.log('🔍 Fallback check: User ID found in likes array, setting heart active');
+      }
+    }
+    
+    // Only update if different to prevent unnecessary re-renders
+    if (isHeartActive !== shouldBeActive) {
+      console.log('🔄 Syncing isHeartActive with userLiked prop:', {
+        feedId,
+        initialUserLiked,
+        currentUserId,
+        shouldBeActive,
+        currentIsHeartActive: isHeartActive,
+        displayLikes,
+        likedByUserIdsLength: localLikedByUserIds?.length || 0,
+        isInLikesArray: currentUserId ? localLikedByUserIds?.includes(currentUserId) : false
+      });
+      setIsHeartActive(shouldBeActive);
+    }
+  }, [initialUserLiked, feedId, currentUserId, localLikedByUserIds, isHeartActive]);
   
   const randomComments = React.useMemo(() => {
     if (comments !== undefined && comments > 0) {
@@ -328,16 +389,32 @@ export default function FeedActionSection({
       try {
         const response = await toggleLike(feedId);
         if (response.success && response.data) {
-          // Update with actual backend data
+          // Update with actual backend data - this is the source of truth
           const newLikesCount = response.data.likesCount || 0;
+          const newUserLiked = response.data.userLiked !== undefined ? response.data.userLiked : false;
+          
           setDisplayLikes(newLikesCount);
-          setIsHeartActive(response.data.userLiked || false);
+          setIsHeartActive(newUserLiked);
+          
+          console.log('✅ Like toggle response received:', {
+            feedId,
+            newLikesCount,
+            newUserLiked,
+            likesArray: response.data.likes,
+            userLikedFromBackend: response.data.userLiked
+          });
           
           // If response includes the likes array, update immediately
           // This allows us to fetch the username right away without waiting for parent refresh
           if (response.data.likes && Array.isArray(response.data.likes)) {
             console.log('✅ Updating likedByUserIds from toggleLike response:', response.data.likes);
             setLocalLikedByUserIds(response.data.likes);
+            
+            // Also verify: if current user ID is in the array, ensure heart is active
+            if (currentUserId && response.data.likes.includes(currentUserId) && !newUserLiked) {
+              console.warn('⚠️ Inconsistency detected: User ID in likes array but userLiked is false. Setting to true.');
+              setIsHeartActive(true);
+            }
           } else {
             console.warn('⚠️ toggleLike response does not include likes array. Response:', response.data);
             // Even if response doesn't have likes, we'll wait for parent to update the prop
@@ -366,47 +443,47 @@ export default function FeedActionSection({
     <View className="mb-3 pr-0">
       {/* Liked by Section - Only show if there are likes */}
       {hasLikes && (
-        <View className="flex-row items-center mb-3">
+      <View className="flex-row items-center mb-3">
           {/* Avatars - Show up to 2 avatars */}
           {likedByUsers.length > 0 && (
-            <View className="flex-row items-center -mr-2">
-              {likedByUsers.map((user, index) => (
-                <View
+        <View className="flex-row items-center -mr-2">
+          {likedByUsers.map((user, index) => (
+            <View
                   key={`${user.userId}-${index}`}
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 10,
-                    borderWidth: 1.5,
-                    borderColor: isDark ? '#1F1F1F' : '#FFFFFF',
-                    marginLeft: index === 0 ? 0 : -8,
-                    backgroundColor: isDark ? '#2A2A2A' : '#F5F5F5',
-                    zIndex: likedByUsers.length - index,
-                  }}
-                >
-                  <Image
-                    source={{ uri: user.avatar }}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      borderRadius: 10,
-                    }}
-                    contentFit="cover"
-                  />
-                </View>
-              ))}
+              style={{
+                width: 20,
+                height: 20,
+                borderRadius: 10,
+                borderWidth: 1.5,
+                borderColor: isDark ? '#1F1F1F' : '#FFFFFF',
+                marginLeft: index === 0 ? 0 : -8,
+                backgroundColor: isDark ? '#2A2A2A' : '#F5F5F5',
+                zIndex: likedByUsers.length - index,
+              }}
+            >
+              <Image
+                source={{ uri: user.avatar }}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  borderRadius: 10,
+                }}
+                contentFit="cover"
+              />
             </View>
+          ))}
+        </View>
           )}
-          <Text
-            className="text-sm ml-2"
-            style={{
-              color: isDark ? '#E5E5E5' : '#1F1F1F',
-              fontWeight: '500',
-              flexShrink: 1,
-            }}
-            numberOfLines={1}
-            ellipsizeMode="tail"
-          >
+        <Text
+          className="text-sm ml-2"
+          style={{
+            color: isDark ? '#E5E5E5' : '#1F1F1F',
+            fontWeight: '500',
+            flexShrink: 1,
+          }}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
             {isLoadingLikerProfile ? (
               'Liked by...'
             ) : likerUsername ? (
@@ -421,8 +498,8 @@ export default function FeedActionSection({
             ) : (
               ''
             )}
-          </Text>
-        </View>
+        </Text>
+      </View>
       )}
 
       {/* Professional Action Buttons with Rounded Boxes */}
@@ -451,22 +528,22 @@ export default function FeedActionSection({
               viewBox="0 0 18 18"
               style={{ marginRight: iconMarginRight }}
             >
-              <Path
-                d="M9,1.75C4.996,1.75,1.75,4.996,1.75,9c0,1.319,.358,2.552,.973,3.617,.43,.806-.053,2.712-.973,3.633,1.25,.068,2.897-.497,3.633-.973,.489,.282,1.264,.656,2.279,.848,.433,.082,.881,.125,1.338,.125,4.004,0,7.25-3.246,7.25-7.25S13.004,1.75,9,1.75Z"
-                fill="none"
-                stroke={actionTextColor}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.5"
-              />
-              <Path
-                d="M5.992,12c.77,.772,1.834,1.25,3.008,1.25s2.231-.475,3-1.242"
-                fill="none"
-                stroke={actionTextColor}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.5"
-              />
+                  <Path
+                    d="M9,1.75C4.996,1.75,1.75,4.996,1.75,9c0,1.319,.358,2.552,.973,3.617,.43,.806-.053,2.712-.973,3.633,1.25,.068,2.897-.497,3.633-.973,.489,.282,1.264,.656,2.279,.848,.433,.082,.881,.125,1.338,.125,4.004,0,7.25-3.246,7.25-7.25S13.004,1.75,9,1.75Z"
+                    fill="none"
+                    stroke={actionTextColor}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.5"
+                  />
+                  <Path
+                    d="M5.992,12c.77,.772,1.834,1.25,3.008,1.25s2.231-.475,3-1.242"
+                    fill="none"
+                    stroke={actionTextColor}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.5"
+                  />
             </Svg>
             <Text
               style={{

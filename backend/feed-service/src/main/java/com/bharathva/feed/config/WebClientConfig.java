@@ -11,6 +11,9 @@ public class WebClientConfig {
     @Value("${auth.service.url:http://localhost:8081}")
     private String authServiceUrl;
     
+    @Value("${gateway.url:http://localhost:8080}")
+    private String gatewayUrl;
+    
     @Bean
     public WebClient.Builder webClientBuilder() {
         return WebClient.builder();
@@ -18,8 +21,10 @@ public class WebClientConfig {
     
     @Bean
     public WebClient authServiceWebClient(WebClient.Builder webClientBuilder) {
+        // Use gateway URL if available, otherwise use direct auth service URL
+        String baseUrl = gatewayUrl != null && !gatewayUrl.trim().isEmpty() ? gatewayUrl : authServiceUrl;
         return webClientBuilder
-                .baseUrl(authServiceUrl)
+                .baseUrl(baseUrl)
                 .build();
     }
 }

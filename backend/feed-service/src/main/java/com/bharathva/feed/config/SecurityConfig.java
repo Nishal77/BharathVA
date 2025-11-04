@@ -40,6 +40,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/feed/test/**").permitAll()
                 .requestMatchers("/api/feed/public/**").permitAll()
                 .requestMatchers("/api/feed/user/**").permitAll() // Temporarily allow user feeds without authentication for debugging
+                .requestMatchers("/api/feed/notifications/health").permitAll() // Allow health check for notifications
                 .requestMatchers("/ws/**").permitAll() // Allow WebSocket connections
                 .anyRequest().authenticated()
             )

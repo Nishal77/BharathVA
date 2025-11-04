@@ -13,6 +13,8 @@ export default function ProfileInfo() {
   
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [imageError, setImageError] = useState<boolean>(false);
+  const [failedUrls, setFailedUrls] = useState<Set<string>>(new Set());
   
   const borderColor = isDark ? '#374151' : '#D1D5DB';
   const buttonBg = isDark ? '#FFFFFF' : '#111827';
@@ -28,11 +30,64 @@ export default function ProfileInfo() {
       }
       
       const profile = await profileService.getCurrentUserProfile();
-      setProfileImageUrl((profile as any)?.profileImageUrl || null);
+      const imageUrl = (profile as any)?.profileImageUrl || (profile as any)?.profile_image_url;
+      
+      // Validate URL before setting
+      if (imageUrl && typeof imageUrl === 'string') {
+        const trimmedUrl = imageUrl.trim();
+        
+        // Skip if this URL has already failed
+        if (failedUrls.has(trimmedUrl)) {
+          console.warn('⚠️ Skipping URL that previously failed to load:', trimmedUrl);
+          setProfileImageUrl(null);
+          setImageError(true);
+          setIsLoading(false);
+          return;
+        }
+        
+        // Check if it's a valid URL
+        if (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://')) {
+          // Convert http to https for security (especially for Cloudinary)
+          let secureUrl = trimmedUrl.startsWith('http://') 
+            ? trimmedUrl.replace('http://', 'https://')
+            : trimmedUrl;
+          
+          // Ensure Cloudinary URLs use HTTPS
+          if (secureUrl.includes('res.cloudinary.com')) {
+            secureUrl = secureUrl.replace(/^http:\/\//, 'https://');
+          }
+          
+          // Additional Cloudinary URL validation
+          if (secureUrl.includes('res.cloudinary.com')) {
+            // Check if URL has proper Cloudinary structure
+            const cloudinaryPattern = /^https:\/\/res\.cloudinary\.com\/[^\/]+\/(image|video|raw)\/upload\/[^\/]+\/[^\/]+/;
+            if (!cloudinaryPattern.test(secureUrl)) {
+              console.warn('⚠️ Invalid Cloudinary URL format:', secureUrl);
+              setFailedUrls(prev => new Set(prev).add(trimmedUrl));
+              setProfileImageUrl(null);
+              setImageError(true);
+              setIsLoading(false);
+              return;
+            }
+          }
+          
+          setProfileImageUrl(secureUrl);
+          setImageError(false);
+          console.log('✅ Profile image URL set:', secureUrl);
+        } else {
+          console.warn('⚠️ Invalid profile image URL format:', trimmedUrl);
+          setProfileImageUrl(null);
+          setImageError(true);
+        }
+      } else {
+        setProfileImageUrl(null);
+        setImageError(false);
+      }
       setIsLoading(false);
     } catch (error) {
       console.error('Failed to load profile image:', error);
       setProfileImageUrl(null);
+      setImageError(true);
       setIsLoading(false);
     }
   }, [user]);
@@ -77,16 +132,113 @@ export default function ProfileInfo() {
               <View className="w-full h-full bg-gray-200 dark:bg-gray-700 items-center justify-center">
                 <ActivityIndicator size="small" color={isDark ? '#9CA3AF' : '#6B7280'} />
               </View>
-            ) : profileImageUrl ? (
-              <Image
-                source={{ uri: profileImageUrl }}
-                className="w-full h-full"
-                resizeMode="cover"
-                onError={(error) => {
-                  console.error('Failed to load profile image:', error);
-                  setProfileImageUrl(null);
-                }}
-              />
+            ) : profileImageUrl && !imageError ? (
+              (() => {
+                // Validate URL before attempting to load
+                const isValidUrl = profileImageUrl && 
+                  (profileImageUrl.startsWith('http://') || profileImageUrl.startsWith('https://'));
+                
+                // Check if URL has already failed
+                if (failedUrls.has(profileImageUrl)) {
+                  return <ProfileImagePlaceholder />;
+                }
+                
+                if (!isValidUrl) {
+                  console.warn('⚠️ Invalid profile image URL format:', profileImageUrl);
+                  setFailedUrls(prev => new Set(prev).add(profileImageUrl));
+                  return <ProfileImagePlaceholder />;
+                }
+                
+                return (
+                  <Image
+                    source={{ 
+                      uri: profileImageUrl,
+                      cache: 'default'
+                    }}
+                    className="w-full h-full"
+                    resizeMode="cover"
+                    onError={(error) => {
+                      // React Native Image onError structure can vary
+                      // Extract all possible error information
+                      let errorDetails: any = null;
+                      let errorMessage = 'Unknown image download error';
+                      
+                      // Try multiple ways to extract error information
+                      try {
+                        const nativeEvent = (error as any)?.nativeEvent;
+                        if (nativeEvent) {
+                          errorDetails = nativeEvent;
+                          // Check if nested error exists (iOS structure)
+                          if ((nativeEvent as any)?.error) {
+                            errorDetails = (nativeEvent as any).error;
+                          }
+                        } else if ((error as any)?.error) {
+                          errorDetails = (error as any).error;
+                        } else {
+                          errorDetails = error;
+                        }
+                        
+                        errorMessage = errorDetails?.message || 
+                                      errorDetails?.localizedDescription ||
+                                      errorDetails?.userInfo?.NSLocalizedDescription ||
+                                      (typeof errorDetails === 'string' ? errorDetails : 'Unknown image download error');
+                      } catch (parseError) {
+                        // If error parsing fails, use fallback
+                        errorMessage = 'Unknown image download error';
+                        errorDetails = error;
+                      }
+                      
+                      // Check for 404 errors (image not found)
+                      const is404Error = errorMessage?.toLowerCase().includes('404') ||
+                                        errorMessage?.toLowerCase().includes('not found') ||
+                                        errorMessage?.toLowerCase().includes('failed to load') ||
+                                        errorMessage?.toLowerCase().includes('resource not found') ||
+                                        (errorDetails as any)?.statusCode === 404 ||
+                                        (errorDetails as any)?.code === 'ENOTFOUND' ||
+                                        (errorDetails as any)?.code === 'HTTP_404';
+                      
+                      console.error('❌ Profile image failed to load:', {
+                        url: profileImageUrl,
+                        error: errorMessage,
+                        errorDetails: errorDetails,
+                        errorType: typeof errorDetails,
+                        fullErrorObject: error,
+                        nativeEvent: error?.nativeEvent,
+                        is404Error: is404Error,
+                        issue: is404Error 
+                          ? 'Image deleted from Cloudinary but URL still in database (stale URL)' 
+                          : 'Unknown image load error - may be network issue or invalid image format'
+                      });
+                      
+                      // If 404, this means image was deleted from Cloudinary
+                      if (is404Error) {
+                        console.warn('⚠️ Profile image not found in Cloudinary - URL is stale:', profileImageUrl);
+                        console.warn('   → The image was deleted from Cloudinary but URL still exists in database');
+                        console.warn('   → Consider uploading a new profile image');
+                      }
+                      
+                      // Mark this URL as failed to prevent retry loops
+                      setFailedUrls(prev => new Set(prev).add(profileImageUrl));
+                      setImageError(true);
+                      // Don't clear profileImageUrl immediately - let the error state handle it
+                    }}
+                    onLoad={() => {
+                      // Reset error state if image loads successfully
+                      setImageError(false);
+                      setFailedUrls(prev => {
+                        const newSet = new Set(prev);
+                        newSet.delete(profileImageUrl);
+                        return newSet;
+                      });
+                      console.log('✅ Profile image loaded successfully:', profileImageUrl);
+                    }}
+                    onLoadStart={() => {
+                      // Log when image starts loading
+                      console.log('🔄 Starting to load profile image:', profileImageUrl);
+                    }}
+                  />
+                );
+              })()
             ) : (
               <ProfileImagePlaceholder />
             )}

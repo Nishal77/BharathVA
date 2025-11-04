@@ -69,13 +69,13 @@ export default function FeedProfileSection({ avatar, onProfilePress }: FeedProfi
               }
               
               return (
-                <Image
+            <Image
                   source={{ 
                     uri: avatar,
                     cache: 'default'
                   }}
-                  style={{ width: '100%', height: '100%' }}
-                  resizeMode="cover"
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="cover"
                   onError={(error) => {
                     // React Native Image onError structure can vary
                     // Extract all possible error information

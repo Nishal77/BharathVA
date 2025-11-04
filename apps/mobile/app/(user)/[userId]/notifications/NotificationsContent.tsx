@@ -1,11 +1,20 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, useColorScheme, Image, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable, useColorScheme, Image, TextInput, ActivityIndicator, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
+import { getNotifications, Notification } from '../../../../services/api/notificationService';
+import { getUserProfileById } from '../../../../services/api/userService';
 
 export default function NotificationsContent() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [userProfileCache, setUserProfileCache] = useState<Map<string, { username: string; fullName: string; profileImageUrl: string | null }>>(new Map());
 
   const colors = {
     background: isDark ? '#000000' : '#FFFFFF',
@@ -14,6 +23,153 @@ export default function NotificationsContent() {
     border: isDark ? '#1F2937' : '#E5E7EB',
     cardBackground: isDark ? '#0F172A' : '#F9FAFB',
     inputBackground: isDark ? '#1F2937' : '#F3F4F6',
+  };
+
+  // Format time ago for display
+  const formatTimeAgo = (hours: number): string => {
+    if (hours < 1) {
+      return 'now';
+    } else if (hours < 24) {
+      return `${hours}h ago`;
+    } else if (hours < 48) {
+      return '1d ago';
+    } else {
+      const days = Math.floor(hours / 24);
+      return `${days}d ago`;
+    }
+  };
+
+  // Fetch notifications from backend
+  const fetchNotifications = async (pageNum: number = 0, append: boolean = false) => {
+    try {
+      setLoading(!append);
+      console.log('[NotificationsContent] Fetching notifications:', { page: pageNum, append });
+      
+      const response = await getNotifications(pageNum, 20);
+      
+      console.log('[NotificationsContent] Notification response:', {
+        success: response.success,
+        hasData: !!response.data,
+        contentLength: response.data?.content?.length || 0,
+        totalElements: response.data?.totalElements || 0,
+        error: response.error
+      });
+      
+      if (response.success && response.data) {
+        const newNotifications = response.data.content || [];
+        
+        console.log('[NotificationsContent] Received notifications:', {
+          count: newNotifications.length,
+          types: newNotifications.map(n => n.type),
+          ids: newNotifications.map(n => n.id)
+        });
+        
+        // Ensure notifications are sorted by latest first (backend should do this, but double-check)
+        const sortedNotifications = [...newNotifications].sort((a, b) => {
+          const timeA = a.timeAgoHours || 0;
+          const timeB = b.timeAgoHours || 0;
+          return timeA - timeB; // Lower timeAgoHours = more recent
+        });
+        
+        // Fetch missing user details for notifications
+        const notificationsWithUserDetails = await Promise.all(
+          sortedNotifications.map(async (notification) => {
+            // Use senderId if available (new schema), otherwise fallback to actorUserId (legacy)
+            const userId = notification.senderId || notification.actorUserId;
+            
+            // If username or fullName is missing, fetch from NeonDB
+            if ((!notification.actorUsername || notification.actorUsername.trim() === '' || notification.actorUsername === 'unknown') && userId) {
+              // Check cache first
+              const cached = userProfileCache.get(userId);
+              if (cached) {
+                return {
+                  ...notification,
+                  actorUsername: cached.username,
+                  actorFullName: cached.fullName,
+                  actorProfileImageUrl: cached.profileImageUrl || notification.actorProfileImageUrl,
+                };
+              }
+              
+              try {
+                console.log('[NotificationsContent] Fetching user details for userId:', userId);
+                const userResponse = await getUserProfileById(userId);
+                if (userResponse.success && userResponse.data) {
+                  const userData = userResponse.data;
+                  // Update cache
+                  setUserProfileCache(prev => {
+                    const newCache = new Map(prev);
+                    newCache.set(userId, {
+                      username: userData.username || '',
+                      fullName: userData.fullName || '',
+                      profileImageUrl: userData.profileImageUrl || userData.profilePicture || null,
+                    });
+                    return newCache;
+                  });
+                  
+                  return {
+                    ...notification,
+                    actorUsername: userData.username || notification.actorUsername || '',
+                    actorFullName: userData.fullName || notification.actorFullName || '',
+                    actorProfileImageUrl: userData.profileImageUrl || userData.profilePicture || notification.actorProfileImageUrl,
+                  };
+                }
+              } catch (error) {
+                console.warn('[NotificationsContent] Failed to fetch user details for userId:', userId, error);
+              }
+            }
+            
+            return notification;
+          })
+        );
+        
+        if (append) {
+          setNotifications(prev => {
+            const combined = [...prev, ...notificationsWithUserDetails];
+            // Remove duplicates based on ID
+            const unique = combined.filter((notif, index, self) => 
+              index === self.findIndex(n => n.id === notif.id)
+            );
+            console.log('[NotificationsContent] Appended notifications. Total:', unique.length);
+            return unique;
+          });
+        } else {
+          setNotifications(notificationsWithUserDetails);
+          console.log('[NotificationsContent] Set notifications. Count:', notificationsWithUserDetails.length);
+        }
+        
+        setHasMore(!response.data.last && response.data.totalPages > pageNum + 1);
+        setPage(pageNum);
+      } else {
+        console.error('[NotificationsContent] Failed to fetch notifications:', {
+          error: response.error,
+          code: response.error?.code,
+          message: response.error?.message,
+          success: response.success,
+          hasData: !!response.data
+        });
+        if (!append) {
+          setNotifications([]);
+        }
+      }
+    } catch (error) {
+      console.error('[NotificationsContent] Error fetching notifications:', error);
+      if (!append) {
+        setNotifications([]);
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Initial load and refresh
+  useEffect(() => {
+    fetchNotifications(0, false);
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchNotifications(0, false);
   };
 
   // Badge Icons
@@ -41,13 +197,11 @@ export default function NotificationsContent() {
   );
 
   const HeartBadge = () => (
-    <View style={[styles.badgeContainer, { backgroundColor: '#EC4899' }]}>
-      <Svg width={10} height={10} viewBox="0 0 10 10">
+    <View style={styles.heartBadgeContainer}>
+      <Svg width={10} height={10} viewBox="0 0 24 24" style={styles.heartIcon}>
         <Path
-          d="M5 8.5c-.3 0-.6-.1-.8-.3C3.6 7.5 1.5 5.4 1.5 3.5c0-1.1.9-2 2-2 .6 0 1.2.3 1.5.7.3-.4.9-.7 1.5-.7 1.1 0 2 .9 2 2 0 1.9-2.1 4-2.7 4.7-.2.2-.5.3-.8.3z"
-          fill="white"
-          stroke="white"
-          strokeWidth="0.5"
+          d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+          fill="#EC4899"
         />
       </Svg>
     </View>
@@ -72,7 +226,7 @@ export default function NotificationsContent() {
     <View style={[styles.notificationCard, { borderColor: colors.border }]}>
       {/* Profile Image with Badge */}
       <View style={styles.avatarContainer}>
-        <Image source={{ uri: avatar }} style={styles.avatar} />
+      <Image source={{ uri: avatar }} style={styles.avatar} />
         {badge}
       </View>
 
@@ -130,7 +284,7 @@ export default function NotificationsContent() {
           <View style={styles.replyInputLeft}>
             <Text style={[styles.replyPlaceholder, { color: colors.secondaryText }]}>
               Reply {replyTo}
-            </Text>
+      </Text>
           </View>
           <View style={styles.replyIcons}>
             <Svg width={18} height={18} viewBox="0 0 18 18" style={styles.replyIcon}>
@@ -160,7 +314,7 @@ export default function NotificationsContent() {
               <Text style={[styles.keyboardShortcut, { color: colors.secondaryText }]}>⌘/</Text>
             </View>
           </View>
-        </Pressable>
+    </Pressable>
       </NotificationEntry>
     );
   };
@@ -212,7 +366,7 @@ export default function NotificationsContent() {
               end={{ x: 0, y: 1 }}
               style={styles.imageOverlay}
             />
-          </Pressable>
+    </Pressable>
 
           {/* Comment Bubble */}
           <View style={[styles.commentBubble, { backgroundColor: colors.cardBackground }]}>
@@ -251,11 +405,11 @@ export default function NotificationsContent() {
                 <Rect x="2" y="4" width="12" height="10" rx="1" fill="none" stroke={colors.secondaryText} strokeWidth="1" />
                 <Path d="M2 8h12" stroke={colors.secondaryText} strokeWidth="1" />
                 <Rect x="4" y="2" width="2" height="1.5" rx="0.3" fill={colors.secondaryText} />
-              </Svg>
+      </Svg>
               <Text style={[styles.keyboardShortcut, { color: colors.secondaryText }]}>⌘/</Text>
             </View>
           </View>
-        </Pressable>
+    </Pressable>
       </NotificationEntry>
     );
   };
@@ -285,7 +439,7 @@ export default function NotificationsContent() {
           <Text style={[styles.timestamp, { color: colors.secondaryText }]}>{timestamp}</Text>
           <Text style={[styles.separator, { color: colors.secondaryText }]}>·</Text>
           <Text style={[styles.projectInfo, { color: colors.secondaryText }]}>{projectInfo}</Text>
-        </View>
+    </View>
 
         {/* Main Text with Bold Name */}
         <Text style={[styles.mainText, { color: colors.primaryText }]}>
@@ -329,10 +483,13 @@ export default function NotificationsContent() {
     imageUri: string;
   }) => (
     <View style={[styles.notificationCard, { borderColor: colors.border }]}>
-      {/* Profile Image with Badge */}
+      {/* Profile Image with Badge Overlay */}
       <View style={styles.avatarContainer}>
         <Image source={{ uri: avatar }} style={styles.avatar} />
-        <HeartBadge />
+        {/* Heart Badge positioned at bottom-right corner of profile image */}
+        <View style={styles.heartBadgeOverlay}>
+          <HeartBadge />
+        </View>
       </View>
 
       {/* Content Area with Image Preview */}
@@ -345,7 +502,7 @@ export default function NotificationsContent() {
               <Text style={[styles.timestamp, { color: colors.secondaryText }]}>{timestamp}</Text>
               <Text style={[styles.separator, { color: colors.secondaryText, marginHorizontal: 3 }]}>·</Text>
               <Text style={[styles.projectInfo, { color: colors.secondaryText }]}>{projectInfo}</Text>
-            </View>
+          </View>
 
             {/* Main Text */}
             <Text style={[styles.mainText, { color: colors.primaryText, marginBottom: 0, lineHeight: 20 }]}>
@@ -369,7 +526,7 @@ export default function NotificationsContent() {
           </Pressable>
         </View>
       </View>
-    </View>
+        </View>
   );
 
   // Property Update Notification
@@ -420,141 +577,108 @@ export default function NotificationsContent() {
     </View>
   );
 
-  // Sample notification data
-  const usernames = [
-    '@alex_williams',
-    '@sophia_martinez',
-    '@james_chen',
-    '@emma_thompson',
-    '@michael_jordan',
-    '@olivia_parker',
-    '@david_kumar',
-    '@isabella_lee',
-    '@ryan_anderson',
-    '@ava_johnson',
-  ];
-
-  const getRandomUsername = () => {
-    return usernames[Math.floor(Math.random() * usernames.length)];
+  // Get default avatar if profile image is not available
+  const getAvatarUrl = (profileImageUrl: string | null | undefined, userId: string | null | undefined): string => {
+    if (profileImageUrl && profileImageUrl.trim().length > 0 && 
+        (profileImageUrl.startsWith('http://') || profileImageUrl.startsWith('https://'))) {
+      return profileImageUrl.trim();
+    }
+    // Fallback to placeholder avatar based on user ID hash
+    if (userId) {
+      const hash = userId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      return `https://i.pravatar.cc/150?img=${(hash % 50) + 1}`;
+    }
+    return `https://i.pravatar.cc/150?img=1`;
   };
 
-  const notifications = [
-    {
-      id: '1',
-      type: 'comment',
-      avatar: 'https://i.pravatar.cc/150?img=12',
-      timestamp: '8 hours ago',
-      projectInfo: getRandomUsername(),
-      mainText: 'Ricky commented on the status of Design project',
-      commentText: '@themilo have got the latest draft of homepage and mobile version.',
-      replyTo: '@billy',
-    },
-    {
-      id: '2',
-      type: 'imageComment',
-      avatar: 'https://i.pravatar.cc/150?img=18',
-      timestamp: '5 hours ago',
-      projectInfo: getRandomUsername(),
-      mainText: 'Sarah commented on your post',
-      commentText: 'This design looks absolutely stunning! Love the color palette and layout. Great work!',
-      replyTo: '@sarah',
-      imageUri: `https://picsum.photos/400/250?random=${Date.now()}`,
-    },
-    {
-      id: '3',
-      type: 'access',
-      avatar: 'https://i.pravatar.cc/150?img=15',
-      timestamp: '1d ago',
-      projectInfo: getRandomUsername(),
-      mainText: 'Milo Piróg requested to follow you',
-    },
-    {
-      id: '4',
-      type: 'update',
-      avatar: 'https://i.pravatar.cc/150?img=20',
-      timestamp: '1d ago',
-      projectInfo: getRandomUsername(),
-      mainText: 'Kamil started following you',
-    },
-    {
-      id: '5',
-      type: 'like',
-      avatar: 'https://i.pravatar.cc/150?img=25',
-      timestamp: '2h ago',
-      projectInfo: getRandomUsername(),
-      mainText: 'Alex liked your post',
-      imageUri: `https://picsum.photos/200/200?random=${Date.now() + 1}`,
-    },
-  ];
+  // Get default feed image if not available
+  const getFeedImageUrl = (feedImageUrl: string | null | undefined): string => {
+    if (feedImageUrl && feedImageUrl.trim().length > 0 && 
+        (feedImageUrl.startsWith('http://') || feedImageUrl.startsWith('https://'))) {
+      return feedImageUrl.trim();
+    }
+    // Fallback to placeholder image
+    return `https://picsum.photos/200/200?random=${Date.now()}`;
+  };
+
+  if (loading && notifications.length === 0) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, flex: 1, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={isDark ? '#FFFFFF' : '#1F2937'} />
+          </View>
+    );
+  }
 
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={isDark ? '#FFFFFF' : '#1F2937'}
+        />
+      }
     >
-      {notifications.map((notification) => {
-        switch (notification.type) {
-          case 'comment':
-            return (
-              <CommentNotification
-                key={notification.id}
-                avatar={notification.avatar}
-                timestamp={notification.timestamp}
-                projectInfo={notification.projectInfo}
-                mainText={notification.mainText}
-                commentText={notification.commentText || ''}
-                replyTo={notification.replyTo || ''}
-              />
-            );
-          case 'imageComment':
-            return (
-              <ImageCommentNotification
-                key={notification.id}
-                avatar={notification.avatar}
-                timestamp={notification.timestamp}
-                projectInfo={notification.projectInfo}
-                mainText={notification.mainText}
-                commentText={notification.commentText || ''}
-                replyTo={notification.replyTo || ''}
-                imageUri={notification.imageUri || ''}
-              />
-            );
-          case 'access':
-            return (
-              <AccessRequestNotificationWithButtons
-                key={notification.id}
-                avatar={notification.avatar}
-                timestamp={notification.timestamp}
-                projectInfo={notification.projectInfo}
-                mainText={notification.mainText}
-              />
-            );
-          case 'update':
-            return (
-              <PropertyUpdateNotification
-                key={notification.id}
-                avatar={notification.avatar}
-                timestamp={notification.timestamp}
-                projectInfo={notification.projectInfo}
-                mainText={notification.mainText}
-              />
-            );
-          case 'like':
-            return (
-              <LikeNotification
-                key={notification.id}
-                avatar={notification.avatar}
-                timestamp={notification.timestamp}
-                projectInfo={notification.projectInfo}
-                mainText={notification.mainText}
-                imageUri={notification.imageUri || ''}
-              />
-            );
-          default:
-            return null;
-        }
-      })}
+      {notifications.length === 0 && !loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 }}>
+          <Text style={{ fontSize: 16, color: colors.secondaryText, textAlign: 'center', marginBottom: 8 }}>
+            No notifications yet
+          </Text>
+          <Text style={{ fontSize: 14, color: colors.secondaryText, textAlign: 'center', opacity: 0.7 }}>
+            When someone likes or comments on your posts, you'll see them here
+          </Text>
+        </View>
+      ) : notifications.length > 0 ? (
+        notifications.map((notification) => {
+          // Use senderId if available (new schema), otherwise fallback to actorUserId (legacy)
+          const userId = notification.senderId || notification.actorUserId;
+          const avatarUrl = getAvatarUrl(notification.actorProfileImageUrl, userId);
+          const timestamp = formatTimeAgo(notification.timeAgoHours);
+          const username = notification.actorUsername ? `@${notification.actorUsername}` : '@unknown';
+          const actorName = notification.actorFullName || notification.actorUsername || 'Someone';
+
+          switch (notification.type) {
+            case 'LIKE':
+              return (
+                <LikeNotification
+                  key={notification.id}
+                  avatar={avatarUrl}
+                  timestamp={timestamp}
+                  projectInfo={username}
+                  mainText={`${actorName} liked your post`}
+                  imageUri={getFeedImageUrl(notification.feedImageUrl)}
+                />
+              );
+            case 'COMMENT':
+              return (
+                <CommentNotification
+                  key={notification.id}
+                  avatar={avatarUrl}
+                  timestamp={timestamp}
+                  projectInfo={username}
+                  mainText={`${actorName} commented on your post`}
+                  commentText={''}
+                  replyTo={notification.actorUsername || ''}
+                />
+              );
+            case 'FOLLOW':
+              return (
+                <PropertyUpdateNotification
+                  key={notification.id}
+                  avatar={avatarUrl}
+                  timestamp={timestamp}
+                  projectInfo={username}
+                  mainText={`${actorName} is now following you`}
+                />
+              );
+            default:
+              return null;
+          }
+        })
+      ) : null}
     </ScrollView>
   );
 }
@@ -575,29 +699,52 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     position: 'relative',
-    marginRight: 10,
+    marginRight: 12,
+    width: 48,
+    height: 48,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   badgeContainer: {
-    position: 'absolute',
-    bottom: -1,
-    right: -1,
     width: 18,
     height: 18,
     borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 2,
-    elevation: 2,
+    elevation: 3,
+  },
+  heartBadgeContainer: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  heartIcon: {
+    marginTop: 0.5,
+  },
+  heartBadgeOverlay: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    zIndex: 10,
   },
   contentArea: {
     flex: 1,

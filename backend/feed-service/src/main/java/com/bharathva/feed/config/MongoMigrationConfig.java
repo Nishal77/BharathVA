@@ -64,6 +64,10 @@ public class MongoMigrationConfig implements CommandLineRunner {
             log.info("🔄 Starting likes field migration...");
             migrateLikesField();
             
+            // Run notification schema migration (V3)
+            log.info("🔄 Starting notification schema migration...");
+            migrateNotificationSchema();
+            
             // Insert sample data if enabled
             if (includeSampleData) {
                 insertSampleData();
@@ -85,7 +89,7 @@ public class MongoMigrationConfig implements CommandLineRunner {
     private boolean isMigrationCompleted() {
         // Migration is now idempotent - always run to ensure data consistency
         // This method kept for potential future use
-        return false;
+            return false;
     }
     
     private void createDatabaseAndCollections() {
@@ -112,6 +116,21 @@ public class MongoMigrationConfig implements CommandLineRunner {
                 .append("updatedAt", new java.util.Date());
         database.getCollection("feed_metadata").insertOne(tempMetadata);
         database.getCollection("feed_metadata").deleteOne(org.bson.Document.parse("{'key': 'temp_migration_metadata'}"));
+        
+        // Create notifications collection with proper schema
+        org.bson.Document tempNotification = new org.bson.Document()
+                .append("_id", "temp_migration_notification")
+                .append("senderId", "temp_sender")
+                .append("receiverId", "temp_receiver")
+                .append("postId", "temp_post")
+                .append("type", "LIKE")
+                .append("message", "Temp notification for migration")
+                .append("isRead", false)
+                .append("createdAt", new java.util.Date())
+                .append("updatedAt", new java.util.Date());
+        database.getCollection("notifications").insertOne(tempNotification);
+        database.getCollection("notifications").deleteOne(org.bson.Document.parse("{'_id': 'temp_migration_notification'}"));
+        log.info("✅ Created notifications collection");
         
         log.info("✅ Database and collections created successfully");
     }
@@ -143,8 +162,20 @@ public class MongoMigrationConfig implements CommandLineRunner {
             
             // Create index for feed_metadata collection
             createIndexIfNotExists(database.getCollection("feed_metadata"), 
-                    org.bson.Document.parse("{'key': 1}"), 
-                    "idx_metadata_key_unique", true);
+                org.bson.Document.parse("{'key': 1}"), 
+                "idx_metadata_key_unique", true);
+            
+            // Create notifications collection and indexes (will be created in migrateNotificationSchema, but ensure it exists here)
+            try {
+                if (database.listCollectionNames().into(new java.util.ArrayList<>())
+                    .stream().noneMatch(name -> name.equals("notifications"))) {
+                    database.createCollection("notifications");
+                    log.info("✅ Created notifications collection");
+                }
+                createNotificationIndexes(database);
+            } catch (Exception e) {
+                log.warn("⚠️ Could not create notifications collection/indexes in createIndexes: {}", e.getMessage());
+            }
             
             log.info("✅ Indexes created successfully");
             
@@ -344,6 +375,222 @@ public class MongoMigrationConfig implements CommandLineRunner {
         }
     }
     
+    /**
+     * Migration V3: Migrate notification schema to new structure
+     * Updates existing notifications to use new field names (senderId, receiverId, postId, message)
+     * while maintaining backward compatibility with legacy fields
+     */
+    private void migrateNotificationSchema() {
+        log.info("📋 Running Notification Schema Migration (V3)...");
+        log.info("📋 Connecting to database: {}", databaseName);
+        
+        try {
+            MongoDatabase database = mongoClient.getDatabase(databaseName);
+            log.info("✅ Connected to database: {}", databaseName);
+            
+            // Step 1: Ensure collection exists by creating it with a temporary document
+            long collectionExists = database.listCollectionNames().into(new java.util.ArrayList<>())
+                .stream().filter(name -> name.equals("notifications")).count();
+            
+            if (collectionExists == 0) {
+                log.info("ℹ️  Collection 'notifications' does not exist - creating it...");
+                try {
+                    // Create collection by inserting a temporary document
+                    org.bson.Document tempDoc = new org.bson.Document()
+                        .append("_id", "temp_migration_notification")
+                        .append("senderId", "temp_sender")
+                        .append("receiverId", "temp_receiver")
+                        .append("postId", "temp_post")
+                        .append("type", "LIKE")
+                        .append("message", "Temp notification for migration")
+                        .append("isRead", false)
+                        .append("createdAt", new java.util.Date())
+                        .append("updatedAt", new java.util.Date());
+                    
+                    database.getCollection("notifications").insertOne(tempDoc);
+                    database.getCollection("notifications").deleteOne(
+                        org.bson.Document.parse("{'_id': 'temp_migration_notification'}")
+                    );
+                    log.info("✅ Collection 'notifications' created successfully");
+                } catch (Exception e) {
+                    log.error("❌ Failed to create notifications collection: {}", e.getMessage(), e);
+                    // Try alternative method
+                    try {
+                        database.createCollection("notifications");
+                        log.info("✅ Collection 'notifications' created using createCollection()");
+                    } catch (Exception e2) {
+                        log.error("❌ Alternative collection creation also failed: {}", e2.getMessage(), e2);
+                        throw new RuntimeException("Failed to create notifications collection", e2);
+                    }
+                }
+            } else {
+                log.info("✅ Collection 'notifications' already exists");
+            }
+            
+            com.mongodb.client.MongoCollection<org.bson.Document> notificationsCollection = 
+                database.getCollection("notifications");
+            
+            log.info("✅ Using collection: notifications");
+            
+            // Step 2: Always create indexes first (even if collection is empty)
+            log.info("🔄 Creating notification indexes...");
+            createNotificationIndexes(database);
+            
+            // Find notifications that need migration (have old fields but missing new fields)
+            org.bson.Document filter = org.bson.Document.parse(
+                "{ $or: [ " +
+                "  { senderId: { $exists: false }, actorUserId: { $exists: true } }, " +
+                "  { receiverId: { $exists: false }, recipientUserId: { $exists: true } }, " +
+                "  { postId: { $exists: false }, feedId: { $exists: true } }, " +
+                "  { message: { $exists: false } } " +
+                "] }"
+            );
+            
+            long notificationsToMigrate = notificationsCollection.countDocuments(filter);
+            log.info("📊 Found {} notifications that need schema migration", notificationsToMigrate);
+            
+            if (notificationsToMigrate > 0) {
+                log.info("🔄 Executing notification schema migration...");
+                
+                // Use aggregation pipeline to update documents
+                java.util.List<org.bson.Document> notifications = notificationsCollection.find(filter).into(new java.util.ArrayList<>());
+                
+                int migratedCount = 0;
+                for (org.bson.Document notification : notifications) {
+                    org.bson.Document updateDoc = new org.bson.Document();
+                    
+                    // Map old fields to new fields
+                    if (notification.containsKey("actorUserId") && !notification.containsKey("senderId")) {
+                        updateDoc.append("senderId", notification.getString("actorUserId"));
+                    }
+                    if (notification.containsKey("recipientUserId") && !notification.containsKey("receiverId")) {
+                        updateDoc.append("receiverId", notification.getString("recipientUserId"));
+                    }
+                    if (notification.containsKey("feedId") && !notification.containsKey("postId")) {
+                        updateDoc.append("postId", notification.getString("feedId"));
+                    }
+                    
+                    // Generate message if missing
+                    if (!notification.containsKey("message")) {
+                        String message = generateNotificationMessage(notification);
+                        if (message != null) {
+                            updateDoc.append("message", message);
+                        }
+                    }
+                    
+                    if (!updateDoc.isEmpty()) {
+                        org.bson.Document update = new org.bson.Document("$set", updateDoc);
+                        notificationsCollection.updateOne(
+                            new org.bson.Document("_id", notification.getObjectId("_id")),
+                            update
+                        );
+                        migratedCount++;
+                    }
+                }
+                
+                log.info("✅ Migration Results:");
+                log.info("   - Notifications migrated: {}", migratedCount);
+                
+                // Verify migration
+                long remaining = notificationsCollection.countDocuments(filter);
+                if (remaining == 0) {
+                    log.info("✅ All notifications successfully migrated!");
+                } else {
+                    log.warn("⚠️  {} notifications still need migration", remaining);
+                }
+            } else {
+                log.info("✅ All notifications already have new schema - no migration needed");
+            }
+            
+        } catch (Exception e) {
+            log.error("❌ Notification schema migration failed", e);
+            e.printStackTrace();
+            // Don't throw - notification migration is not critical for startup
+            log.warn("⚠️  Continuing despite notification migration failure");
+        }
+    }
+    
+    /**
+     * Generate notification message from existing notification document
+     */
+    private String generateNotificationMessage(org.bson.Document notification) {
+        String type = notification.getString("type");
+        if (type == null) {
+            return "Someone interacted with your post";
+        }
+        
+        String actorUsername = notification.getString("actorUsername");
+        String actorFullName = notification.getString("actorFullName");
+        String actorName = "Someone";
+        
+        if (actorFullName != null && !actorFullName.trim().isEmpty()) {
+            actorName = actorFullName.trim();
+        } else if (actorUsername != null && !actorUsername.trim().isEmpty()) {
+            actorName = actorUsername.trim();
+        }
+        
+        switch (type.toUpperCase()) {
+            case "LIKE":
+                return actorName + " liked your post";
+            case "COMMENT":
+                return actorName + " commented on your post";
+            case "REPLY":
+                return actorName + " replied to your comment";
+            case "FOLLOW":
+                return actorName + " is now following you";
+            case "MENTION":
+                return actorName + " mentioned you in a post";
+            default:
+                return actorName + " interacted with your post";
+        }
+    }
+    
+    /**
+     * Create indexes for notification collection
+     */
+    private void createNotificationIndexes(MongoDatabase database) {
+        try {
+            com.mongodb.client.MongoCollection<org.bson.Document> collection = 
+                database.getCollection("notifications");
+            
+            createIndexIfNotExists(collection, 
+                org.bson.Document.parse("{'senderId': 1}"), 
+                "idx_sender_id");
+            
+            createIndexIfNotExists(collection, 
+                org.bson.Document.parse("{'receiverId': 1}"), 
+                "idx_receiver_id");
+            
+            createIndexIfNotExists(collection, 
+                org.bson.Document.parse("{'postId': 1}"), 
+                "idx_post_id");
+            
+            createIndexIfNotExists(collection, 
+                org.bson.Document.parse("{'type': 1}"), 
+                "idx_type");
+            
+            createIndexIfNotExists(collection, 
+                org.bson.Document.parse("{'createdAt': -1}"), 
+                "idx_created_at_desc");
+            
+            createIndexIfNotExists(collection, 
+                org.bson.Document.parse("{'receiverId': 1, 'isRead': 1, 'createdAt': -1}"), 
+                "idx_receiver_read_created");
+            
+            // Verify indexes were created
+            long indexCount = collection.listIndexes().into(new java.util.ArrayList<>()).size();
+            log.info("✅ Notification indexes created successfully (total: {} indexes)", indexCount);
+            
+            if (indexCount < 7) {
+                log.warn("⚠️  Expected at least 7 indexes (including _id_), but found {}", indexCount);
+            }
+        } catch (Exception e) {
+            log.error("❌ Could not create notification indexes: {}", e.getMessage(), e);
+            e.printStackTrace();
+            // Don't throw - indexes can be created manually if needed
+        }
+    }
+    
     private void markMigrationCompleted() {
         try {
             MongoDatabase database = mongoClient.getDatabase(databaseName);
@@ -357,8 +604,8 @@ public class MongoMigrationConfig implements CommandLineRunner {
                 // Update existing migration info
                 org.bson.Document updateDoc = new org.bson.Document("$set", 
                     new org.bson.Document()
-                        .append("value.version", "V2")
-                        .append("value.description", "Feed schema with likes field support")
+                        .append("value.version", "V3")
+                        .append("value.description", "Feed schema with likes field and notification schema (senderId, receiverId, postId, message)")
                         .append("value.updatedAt", new java.util.Date())
                         .append("updatedAt", new java.util.Date())
                 );
@@ -367,23 +614,23 @@ public class MongoMigrationConfig implements CommandLineRunner {
                     org.bson.Document.parse("{'key': 'migration_info'}"),
                     updateDoc
                 );
-                log.info("✅ Migration info updated to V2");
+                log.info("✅ Migration info updated to V3");
             } else {
                 // Create new migration info
                 long totalFeeds = database.getCollection("feeds").countDocuments();
                 
-                org.bson.Document migrationDoc = new org.bson.Document()
-                        .append("key", "migration_info")
-                        .append("value", new org.bson.Document()
-                                .append("version", "V2")
-                                .append("description", "Feed schema with likes field support")
-                                .append("migratedAt", new java.util.Date())
-                                .append("sampleDataIncluded", includeSampleData)
+            org.bson.Document migrationDoc = new org.bson.Document()
+                    .append("key", "migration_info")
+                    .append("value", new org.bson.Document()
+                                .append("version", "V3")
+                                .append("description", "Feed schema with likes field and notification schema (senderId, receiverId, postId, message)")
+                            .append("migratedAt", new java.util.Date())
+                            .append("sampleDataIncluded", includeSampleData)
                                 .append("feedsCount", totalFeeds))
-                        .append("updatedAt", new java.util.Date());
-                
-                database.getCollection("feed_metadata").insertOne(migrationDoc);
-                log.info("✅ Migration marked as completed (V2)");
+                    .append("updatedAt", new java.util.Date());
+            
+            database.getCollection("feed_metadata").insertOne(migrationDoc);
+                log.info("✅ Migration marked as completed (V3)");
             }
             
         } catch (Exception e) {

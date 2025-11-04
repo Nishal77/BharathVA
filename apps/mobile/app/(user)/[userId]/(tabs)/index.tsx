@@ -225,11 +225,13 @@ export default function HomeScreen() {
     } : undefined;
 
     // Calculate if current user has liked this post
-    // Check if current user's ID is in the likes array
-    const currentUserId = userId as string;
+    // Use feed.userLiked from backend if available (most reliable)
+    // Otherwise, check if current authenticated user's ID is in the likes array
+    // Note: userId from useLocalSearchParams is the profile being viewed, NOT the authenticated user
+    // We need to extract the authenticated user ID from the token or use feed.userLiked from backend
     const userLiked = feed.userLiked !== undefined 
       ? feed.userLiked 
-      : (feed.likes && Array.isArray(feed.likes) && feed.likes.includes(currentUserId));
+      : false; // Default to false if backend doesn't provide userLiked (shouldn't happen with auth)
 
     const feedCardData = {
       id: feed.id,
@@ -254,6 +256,12 @@ export default function HomeScreen() {
     console.log('🔄 Converting feed to FeedCard format:', {
       feedId: feed.id,
       userId: feed.userId,
+      userLiked: feed.userLiked,
+      userLikedFromBackend: feed.userLiked,
+      likesArray: feed.likes,
+      likesCount: feed.likesCount,
+      calculatedUserLiked: userLiked,
+      finalUserLiked: feedCardData.userLiked,
       userProfile: feed.userProfile,
       profileImageUrl: feed.userProfile?.profileImageUrl,
       profilePicture: feed.userProfile?.profilePicture,

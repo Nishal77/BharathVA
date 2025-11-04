@@ -20,20 +20,48 @@ public class UserClient {
     @Autowired
     private WebClient authServiceWebClient;
     
-    @Value("${auth.service.url:http://localhost:8081}")
+    @Value("${auth.service.url:http://localhost:8080}")
     private String authServiceUrl;
+    
+    @Value("${gateway.url:http://localhost:8080}")
+    private String gatewayUrl;
     
     @Cacheable(value = "userCache", key = "#userId")
     public UserInfo getUserInfo(String userId) {
         try {
             log.debug("Fetching user info for userId: {}", userId);
             
-            Map<String, Object> response = authServiceWebClient
-                    .get()
-                    .uri(authServiceUrl + "/auth/user/{userId}", userId)
-                    .retrieve()
-                    .bodyToMono(Map.class)
-                    .block();
+            // WebClient baseUrl is configured in WebClientConfig to use gateway (or auth service)
+            // Gateway routes /api/auth/** to auth-service, rewriting to /auth/**
+            // If gateway is not available, WebClient will use direct auth service URL
+            String endpoint = gatewayUrl != null && !gatewayUrl.trim().isEmpty() 
+                ? "/api/auth/user/{userId}" 
+                : "/auth/user/{userId}";
+            
+            log.info("🌐 Fetching user info: baseUrl={}, endpoint={}, userId={}", 
+                gatewayUrl != null && !gatewayUrl.trim().isEmpty() ? gatewayUrl : authServiceUrl,
+                endpoint, userId);
+            
+            Map<String, Object> response = null;
+            try {
+                response = authServiceWebClient
+                        .get()
+                        .uri(endpoint, userId)
+                        .retrieve()
+                        .bodyToMono(Map.class)
+                        .block();
+                
+                log.info("✅ Auth service response for userId {}: {}", userId, response != null ? "received" : "null");
+            } catch (Exception e) {
+                log.error("❌ Failed to fetch user info from auth service: endpoint={}, userId={}, error: {}", 
+                    endpoint, userId, e.getMessage(), e);
+                log.error("❌ Exception type: {}", e.getClass().getName());
+                if (e.getCause() != null) {
+                    log.error("❌ Caused by: {}", e.getCause().getMessage());
+                }
+                // Return null to allow notification creation without user details
+                return null;
+            }
             
             if (response != null && response.containsKey("data")) {
                 Map<String, Object> userData = (Map<String, Object>) response.get("data");
@@ -43,7 +71,11 @@ public class UserClient {
                 userInfo.setUsername(userData.get("username") != null ? userData.get("username").toString() : null);
                 userInfo.setFullName(userData.get("fullName") != null ? userData.get("fullName").toString() : null);
                 userInfo.setEmail(userData.get("email") != null ? userData.get("email").toString() : null);
-                userInfo.setAvatarUrl(userData.get("avatarUrl") != null ? userData.get("avatarUrl").toString() : null);
+                // Map profileImageUrl from backend response to avatarUrl in UserInfo
+                String profileImageUrl = userData.get("profileImageUrl") != null 
+                    ? userData.get("profileImageUrl").toString() 
+                    : (userData.get("avatarUrl") != null ? userData.get("avatarUrl").toString() : null);
+                userInfo.setAvatarUrl(profileImageUrl);
                 userInfo.setVerified(userData.get("verified") != null ? (Boolean) userData.get("verified") : false);
                 
                 log.debug("Successfully fetched user info for userId: {}", userId);
@@ -104,9 +136,11 @@ public class UserClient {
         try {
             log.debug("Fetching user info for username: {}", username);
             
+            String endpoint = "/api/auth/user/username/{username}";
+            
             Map<String, Object> response = authServiceWebClient
                     .get()
-                    .uri(authServiceUrl + "/auth/user/username/{username}", username)
+                    .uri(endpoint, username)
                     .retrieve()
                     .bodyToMono(Map.class)
                     .block();
@@ -119,7 +153,11 @@ public class UserClient {
                 userInfo.setUsername(userData.get("username") != null ? userData.get("username").toString() : null);
                 userInfo.setFullName(userData.get("fullName") != null ? userData.get("fullName").toString() : null);
                 userInfo.setEmail(userData.get("email") != null ? userData.get("email").toString() : null);
-                userInfo.setAvatarUrl(userData.get("avatarUrl") != null ? userData.get("avatarUrl").toString() : null);
+                // Map profileImageUrl from backend response to avatarUrl in UserInfo
+                String profileImageUrl = userData.get("profileImageUrl") != null 
+                    ? userData.get("profileImageUrl").toString() 
+                    : (userData.get("avatarUrl") != null ? userData.get("avatarUrl").toString() : null);
+                userInfo.setAvatarUrl(profileImageUrl);
                 userInfo.setVerified(userData.get("verified") != null ? (Boolean) userData.get("verified") : false);
                 
                 log.debug("Successfully fetched user info for username: {}", username);

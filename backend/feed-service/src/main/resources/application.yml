@@ -98,3 +98,7 @@ jwt:
 auth:
   service:
     url: ${AUTH_SERVICE_URL:http://auth-service:8081}
+
+# Gateway Configuration (for service-to-service communication)
+gateway:
+  url: ${GATEWAY_URL:http://gateway-service:8080}

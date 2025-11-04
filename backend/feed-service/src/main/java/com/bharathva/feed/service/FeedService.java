@@ -38,6 +38,9 @@ public class FeedService {
     @Autowired
     private WebSocketService webSocketService;
     
+    @Autowired
+    private NotificationService notificationService;
+    
     // Create a new feed message
     @Transactional
     @CacheEvict(value = "feedCache", allEntries = true)
@@ -129,9 +132,9 @@ public class FeedService {
     }
     
     // Get all feeds (global feed)
-    @Cacheable(value = "feedCache", key = "'global_' + #page + '_' + #size")
-    public Page<FeedResponse> getAllFeeds(int page, int size) {
-        log.info("Getting all feeds, page: {}, size: {}", page, size);
+    @Cacheable(value = "feedCache", key = "'global_' + #page + '_' + #size + (#currentUserId != null ? '_' + #currentUserId : '')")
+    public Page<FeedResponse> getAllFeeds(int page, int size, String currentUserId) {
+        log.info("Getting all feeds, page: {}, size: {}, currentUserId: {}", page, size, currentUserId);
         
         // Validate pagination parameters
         if (page < 0) {
@@ -145,7 +148,13 @@ public class FeedService {
         Page<Feed> feeds = feedRepository.findAll(pageable);
         
         log.info("Retrieved {} feeds from database", feeds.getTotalElements());
-        return feeds.map(FeedResponse::new);
+        
+        // Map feeds to FeedResponse with userLiked status if currentUserId is provided
+        if (currentUserId != null && !currentUserId.trim().isEmpty()) {
+            return feeds.map(feed -> new FeedResponse(feed, currentUserId));
+        } else {
+            return feeds.map(FeedResponse::new);
+        }
     }
     
     // Get user feeds
@@ -393,15 +402,37 @@ public class FeedService {
             throw new RuntimeException("Like addition failed - user not in likes list");
         }
         
-        // Notify WebSocket clients about the like change
+        // Create or delete notification based on like action
+        // This is done asynchronously to not block the like action
         try {
             if (wasLiked) {
+                // User unliked - delete notification
+                log.info("🔔 User {} unliked feed {}, deleting notification", userId, feedId);
+                notificationService.deleteLikeNotification(feedId, userId);
                 webSocketService.notifyFeedUnliked(userId, feedId);
+                log.info("✅ Notification deletion completed for feed: {} by user: {}", feedId, userId);
             } else {
+                // User liked - create notification
+                log.info("🔔 User {} liked feed {}, creating notification", userId, feedId);
+                log.info("🔔 Feed owner userId: {}", verifiedFeed.getUserId());
+                log.info("🔔 Actor userId: {}", userId);
+                
+                // Check if user is liking their own post
+                if (userId.equals(verifiedFeed.getUserId())) {
+                    log.info("ℹ️ User {} liked their own post {}, skipping notification creation", userId, feedId);
+                } else {
+                    notificationService.createLikeNotification(feedId, userId);
+                    log.info("✅ Notification creation initiated for feed: {} by user: {}", feedId, userId);
+                }
                 webSocketService.notifyFeedLiked(userId, feedId);
             }
+            log.info("✅ Notification handling completed successfully for feed: {} by user: {}", feedId, userId);
         } catch (Exception e) {
-            log.warn("⚠️ Failed to send WebSocket notification for like toggle: {}", e.getMessage());
+            log.error("❌ CRITICAL: Failed to create/delete notification for like toggle - feed: {}, user: {}, error: {}", 
+                feedId, userId, e.getMessage(), e);
+            log.error("❌ Exception stack trace:", e);
+            // Don't break like functionality if notification fails, but log the error
+            // The like action itself succeeded, so we continue
         }
         
         log.info("Like toggled successfully. Feed {} now has {} likes", feedId, verifiedFeed.getLikesCount());

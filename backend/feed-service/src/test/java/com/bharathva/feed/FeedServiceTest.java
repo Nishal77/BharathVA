@@ -75,13 +75,48 @@ public class FeedServiceTest {
         feedService.createFeed(new CreateFeedRequest(testUserId1, "First test post"), testUserId1);
         feedService.createFeed(new CreateFeedRequest(testUserId2, "Second test post"), testUserId2);
         
-        // Get all feeds
-        var feeds = feedService.getAllFeeds(0, 10);
+        // Get all feeds without current user (null userId)
+        var feeds = feedService.getAllFeeds(0, 10, null);
         
         // Verify
         assertEquals(2, feeds.getTotalElements());
         
+        // Verify feeds don't have userLiked set when userId is null
+        feeds.getContent().forEach(feed -> {
+            assertNotNull(feed);
+            assertFalse(feed.isUserLiked(), "User liked should be false when no current user provided");
+        });
+        
         System.out.println("✅ Test passed! Retrieved " + feeds.getTotalElements() + " feeds");
+    }
+    
+    @Test
+    public void testGetAllFeedsWithCurrentUser() {
+        // Clean up any existing test data
+        feedRepository.deleteAll();
+        
+        // Create test feeds
+        String testUserId1 = "30aeb201-d44a-4c8f-aca8-94bd49288ca4";
+        String testUserId2 = "9c58dc97-390f-43ed-8950-cdef29930756";
+        
+        feedService.createFeed(new CreateFeedRequest(testUserId1, "First test post"), testUserId1);
+        feedService.createFeed(new CreateFeedRequest(testUserId2, "Second test post"), testUserId2);
+        
+        // Get all feeds with current user context
+        var feeds = feedService.getAllFeeds(0, 10, testUserId1);
+        
+        // Verify
+        assertEquals(2, feeds.getTotalElements());
+        
+        // Verify userLiked status is set correctly
+        feeds.getContent().forEach(feed -> {
+            assertNotNull(feed);
+            if (feed.getUserId().equals(testUserId1)) {
+                assertTrue(feed.isUserLiked(), "User should have liked their own post");
+            }
+        });
+        
+        System.out.println("✅ Test passed! Retrieved " + feeds.getTotalElements() + " feeds with user context");
     }
 
     @Test

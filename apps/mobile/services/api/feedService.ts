@@ -960,9 +960,9 @@ export const getAllFeedsWithUserData = async (page: number = 0, size: number = 2
           // Prioritize profileImageUrl from NeonDB (which comes from users.profile_image_url)
           // Check all possible field names from backend response
           const rawProfileImageUrl = userResponse.data.profileImageUrl || 
-                                     userResponse.data.profilePicture || 
-                                     (userResponse.data as any)?.profile_image_url || 
-                                     null;
+                                  userResponse.data.profilePicture || 
+                                  (userResponse.data as any)?.profile_image_url || 
+                                  null;
           
           // Validate and normalize URL if present
           let validatedImageUrl = null;

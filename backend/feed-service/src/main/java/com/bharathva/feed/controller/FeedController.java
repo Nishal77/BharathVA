@@ -273,12 +273,24 @@ public class FeedController {
     @GetMapping("/all")
     public ResponseEntity<Page<FeedResponse>> getAllFeeds(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            Authentication authentication) {
         
         log.info("Getting all feeds, page: {}, size: {}", page, size);
         
         try {
-            Page<FeedResponse> feeds = feedService.getAllFeeds(page, size);
+            // Extract authenticated user ID if available (optional for public feeds)
+            String currentUserId = null;
+            if (authentication != null && authentication.isAuthenticated()) {
+                try {
+                    currentUserId = getUserIdFromAuthentication(authentication);
+                    log.info("Authenticated user ID for feed context: {}", currentUserId);
+                } catch (Exception e) {
+                    log.warn("Could not extract user ID from authentication, proceeding without user context: {}", e.getMessage());
+                }
+            }
+            
+            Page<FeedResponse> feeds = feedService.getAllFeeds(page, size, currentUserId);
             return ResponseEntity.ok(feeds);
         } catch (Exception e) {
             log.error("Error getting all feeds: {}", e.getMessage(), e);
