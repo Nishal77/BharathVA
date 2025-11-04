@@ -246,6 +246,121 @@ public class NotificationService {
     }
     
     /**
+     * Create a comment notification when a user comments on a post
+     * Only creates notification if the actor is not the post owner
+     */
+    @Transactional
+    public void createCommentNotification(String feedId, String actorUserId, String commentText) {
+        try {
+            log.info("Creating comment notification for feed: {} by user: {}", feedId, actorUserId);
+            
+            // Find the feed
+            Optional<Feed> feedOptional = feedRepository.findById(feedId);
+            if (feedOptional.isEmpty()) {
+                log.warn("Feed not found for notification: {}", feedId);
+                return;
+            }
+            
+            Feed feed = feedOptional.get();
+            String recipientUserId = feed.getUserId();
+            
+            // Don't create notification if user commented on their own post
+            if (actorUserId.equals(recipientUserId)) {
+                log.debug("User {} commented on their own post, skipping notification", actorUserId);
+                return;
+            }
+            
+            // REMOVED: Duplicate notification check
+            // Each comment should create its own notification, allowing users to post multiple comments
+            // This ensures all comments are visible in the notifications section
+            log.debug("Creating comment notification for feed: {} by user: {} - allowing multiple comments per user", feedId, actorUserId);
+            
+            log.info("Fetching user info for actor: {} from auth service", actorUserId);
+            // Get actor user info from auth service
+            UserInfo actorInfo = null;
+            try {
+                actorInfo = userClient.getUserInfo(actorUserId);
+                if (actorInfo != null) {
+                    log.info("Successfully fetched user info for actor: {} - username: {}, fullName: {}", 
+                        actorUserId, actorInfo.getUsername(), actorInfo.getFullName());
+                } else {
+                    log.warn("User info returned null for actor: {}, will create notification without user details", actorUserId);
+                }
+            } catch (Exception e) {
+                log.error("Error fetching user info for actor: {} - {}", actorUserId, e.getMessage(), e);
+                // Continue to create notification even if user info fetch fails
+            }
+            
+            // Create notification using new schema (senderId, receiverId, postId, type)
+            Notification notification = new Notification(
+                actorUserId,    // senderId: who commented
+                recipientUserId, // receiverId: post owner
+                feedId,         // postId: which post
+                Notification.NotificationType.COMMENT
+            );
+            
+            // Generate message dynamically based on actor info
+            String notificationMessage = generateNotificationMessage(
+                Notification.NotificationType.COMMENT,
+                actorInfo
+            );
+            notification.setMessage(notificationMessage);
+            log.debug("Generated notification message: {}", notificationMessage);
+            
+            // Set actor details
+            if (actorInfo != null) {
+                notification.setActorUsername(actorInfo.getUsername());
+                notification.setActorFullName(actorInfo.getFullName());
+                String profileImageUrl = actorInfo.getAvatarUrl();
+                if (profileImageUrl != null && !profileImageUrl.trim().isEmpty()) {
+                    notification.setActorProfileImageUrl(profileImageUrl.trim());
+                    log.debug("Set actor profile image URL: {}", profileImageUrl);
+                }
+            } else {
+                log.warn("Creating notification without actor details for actor: {}. Frontend will fetch username separately.", actorUserId);
+                notification.setActorUsername(null);
+                notification.setActorFullName(null);
+                notification.setMessage(generateNotificationMessage(Notification.NotificationType.COMMENT, null));
+            }
+            
+            // Set feed image URL (first image if available)
+            if (feed.getImageUrls() != null && !feed.getImageUrls().isEmpty()) {
+                notification.setFeedImageUrl(feed.getImageUrls().get(0));
+                log.debug("Set feed image URL: {}", feed.getImageUrls().get(0));
+            }
+            
+            // Store the actual comment text for display in notifications
+            if (commentText != null && !commentText.trim().isEmpty()) {
+                // Truncate if too long (max 200 chars for notification display)
+                String truncatedComment = commentText.length() > 200 
+                    ? commentText.substring(0, 197) + "..." 
+                    : commentText;
+                notification.setCommentText(truncatedComment);
+                log.debug("Set comment text: {} (length: {})", truncatedComment, truncatedComment.length());
+            }
+            
+            notification.setCreatedAt(LocalDateTime.now());
+            notification.setUpdatedAt(LocalDateTime.now());
+            notification.setRead(false);
+            
+            log.info("💾 Saving comment notification to MongoDB: senderId={}, receiverId={}, postId={}, type={}, message={}, commentText={}",
+                actorUserId, recipientUserId, feedId, Notification.NotificationType.COMMENT, notification.getMessage(), notification.getCommentText());
+            
+            Notification savedNotification = notificationRepository.save(notification);
+            
+            if (savedNotification == null) {
+                log.error("❌ CRITICAL: Notification save returned null for feed: {} by user: {}", feedId, actorUserId);
+            } else {
+                log.info("✅ Comment notification saved successfully with ID: {}", savedNotification.getId());
+            }
+            
+        } catch (Exception e) {
+            log.error("❌ Error creating comment notification for feed: {} by user: {}", feedId, actorUserId, e);
+            // Don't throw - notification failure shouldn't break comment functionality
+        }
+    }
+    
+    /**
      * Delete like notification when a user unlikes a post
      */
     @Transactional

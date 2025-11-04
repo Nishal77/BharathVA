@@ -25,6 +25,7 @@ interface FeedActionSectionProps {
   comments?: number;
   shares?: number;
   userLiked?: boolean;
+  onCommentAdded?: () => void; // Callback when comment is added to refresh feed list
 }
 
 // Utility function to format numbers with commas
@@ -44,7 +45,8 @@ export default function FeedActionSection({
   likedByUserIds = [],
   comments,
   shares = 23,
-  userLiked: initialUserLiked = false
+  userLiked: initialUserLiked = false,
+  onCommentAdded
 }: FeedActionSectionProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -157,13 +159,8 @@ export default function FeedActionSection({
     }
   }, [initialUserLiked, feedId, currentUserId, localLikedByUserIds, isHeartActive]);
   
-  const randomComments = React.useMemo(() => {
-    if (comments !== undefined && comments > 0) {
-      return comments;
-    }
-    // Generate random number between 10 and 510 for realistic testing
-    return Math.floor(Math.random() * 500) + 10;
-  }, [comments]);
+  // Use actual comment count from backend, default to 0
+  const displayComments = comments !== undefined ? comments : 0;
   
   const randomShares = React.useMemo(() => {
     if (shares !== undefined && shares > 0) {
@@ -553,7 +550,7 @@ export default function FeedActionSection({
                 includeFontPadding: false,
               }}
             >
-              {formatNumber(randomComments)}
+              {formatNumber(displayComments)}
             </Text>
           </Pressable>
 
@@ -803,7 +800,9 @@ export default function FeedActionSection({
       <CommentsModal
         visible={isCommentsModalVisible}
         onClose={() => setIsCommentsModalVisible(false)}
-        commentsCount={randomComments}
+        commentsCount={displayComments}
+        postId={feedId}
+        onCommentAdded={onCommentAdded}
       />
     </View>
   );

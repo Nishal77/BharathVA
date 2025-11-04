@@ -243,7 +243,7 @@ export default function HomeScreen() {
       content: feed.message,
       emojis: [],
       media: media,
-      replies: 0, // Real engagement data would come from backend
+      replies: feed.commentsCount !== undefined ? feed.commentsCount : (feed.comments?.length || 0), // Real comment count from backend
       retweets: 0,
       likes: feed.likesCount !== undefined ? feed.likesCount : (feed.likes?.length || 0),
       likedByUserIds: feed.likes || [], // Array of user IDs who liked the post
@@ -417,6 +417,11 @@ export default function HomeScreen() {
                   onLike={() => console.log('Like:', feed.id)}
                   onBookmark={() => console.log('Bookmark:', feed.id)}
                   onShare={() => console.log('Share:', feed.id)}
+                  onFeedPress={(feedId) => {
+                    // Refresh feed list when comment is added
+                    console.log('Feed comment added, refreshing feed:', feedId);
+                    fetchFeeds(0, true);
+                  }}
                 />
               );
             })

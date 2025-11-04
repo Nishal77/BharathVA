@@ -17,6 +17,8 @@ import { BlurView } from 'expo-blur';
 import { Svg, Path } from 'react-native-svg';
 import { Ellipsis } from 'lucide-react-native';
 import CommentsAction from './CommentsAction';
+import { addComment, getAllFeeds, getFeedById } from '../../../services/api/feedService';
+import { getUserProfileById } from '../../../services/api/userService';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -41,128 +43,9 @@ interface CommentsModalProps {
   onClose: () => void;
   postId?: string;
   commentsCount?: number;
+  onCommentAdded?: () => void; // Callback to refresh parent feed list
 }
 
-// Sample comments data - in production, this would come from API
-const generateSampleComments = (): Comment[] => {
-  const names = [
-    'Anshu Kumar', 'Nancy Sharma', 'Arjun Patel', 'Priya Reddy', 'Rohan Singh',
-    'Kavya Malhotra', 'Disha Kapoor', 'Raj Gupta', 'Sneha Jain', 'Vikram Agarwal',
-    'Meera Bansal', 'Akash Verma', 'Divya Tiwari', 'Nikhil Das', 'Tara Shah',
-    'Aman Reddy', 'Isha Kumar', 'Kunal Patel', 'Aditi Sharma', 'Rahul Malhotra',
-    'Sonia Gupta', 'Neeraj Singh', 'Puja Jain', 'Harsh Agarwal', 'Kiara Bansal',
-    'Varun Verma', 'Ananya Tiwari', 'Rishabh Das', 'Tanvi Shah', 'Ravi Kumar'
-  ];
-  
-  const usernames = [
-    'anshu_avail', 'nancybabyworld11', 'video_call01k', 'arjun_01', 'priya_sharma',
-    'rohan_patel', 'kavya_reddy', 'disha_kapoor', 'raj_malhotra', 'sneha_gupta',
-    'vikram_singh', 'meera_jain', 'akash_kumar', 'divya_sharma', 'nikhil_agarwal',
-    'tara_bansal', 'aman_verma', 'isha_reddy', 'kunal_shah', 'aditi_patel',
-    'rahul_tiwari', 'sonia_kapoor', 'neeraj_singh', 'puja_das', 'harsh_malik',
-    'kiara_sharma', 'varun_jain', 'ananya_mehta', 'rishabh_chopra', 'tanvi_shah'
-  ];
-
-  const shortComments = [
-    '🔥', '❤️', '🙌', 'Amazing!', 'Wow!', 'Perfect!', 'Love this!', 'So good!',
-    'Incredible!', 'Epic!', 'Brilliant!', 'Stunning!', 'Fantastic!', 'Outstanding!',
-    'Mind-blowing!', 'Phenomenal!', 'Exceptional!', 'Remarkable!', 'Impressive!',
-    'Extraordinary!', 'Magnificent!', 'Spectacular!', 'Incredible work!', 'So inspiring!',
-    'Pure excellence!', 'Absolute perfection!', 'Legendary performance!', 'Pure magic!'
-  ];
-
-  const longComments = [
-    'I agree with you about this topic. I remember when this first came up, and it\'s amazing to see how far we\'ve come. This new approach just makes so much more sense.',
-    'Absolutely fantastic! This is exactly what I needed to see today. The attention to detail is remarkable and the execution is flawless. Truly inspiring work!',
-    'This is incredible! The amount of effort and thought that went into this is truly commendable. I\'ve been following this for a while now and I must say, this is by far the best implementation I\'ve seen.',
-    'Wow, this really resonates with me. I\'ve been thinking about something similar for a while, but seeing it executed so beautifully here is truly inspiring. Can\'t wait to see where this goes next!',
-    'This is absolutely mind-blowing! The creativity and innovation on display here is unmatched. I\'ve shared this with my entire team and everyone is equally impressed. This sets a new standard!',
-    'I completely understand what you mean. The nuances in this approach really show a deep understanding of the subject matter. It\'s refreshing to see such thoughtful and well-executed work.',
-    'This is exactly the kind of quality content I love to see. The presentation is top-notch, the information is valuable, and the overall execution is flawless. Thank you for sharing this!',
-    'Incredible work! The way this tackles the problem from multiple angles while maintaining such high quality is truly impressive. I\'ve learned so much from this and I\'m genuinely grateful.',
-    'This is phenomenal! Every single detail has been carefully considered and beautifully executed. It\'s clear that a lot of passion and expertise went into creating this. Absolutely brilliant!',
-    'This resonates so deeply with me. The approach here is thoughtful, comprehensive, and genuinely innovative. It\'s rare to see something that checks all these boxes so perfectly.',
-    'I remember when this topic first came up, and it\'s amazing to see how far we\'ve come. This new approach just makes so much more sense and addresses all the concerns we had before.',
-    'This is exactly what I needed! The clarity of thought, the precision of execution, and the overall quality are just outstanding. This has completely changed my perspective on the matter.',
-    'What an incredible achievement! The level of sophistication and attention to detail here is truly remarkable. This represents some of the finest work I\'ve seen in this space.',
-    'I\'ve been waiting for something like this for a long time. The way you\'ve approached this challenge shows real innovation and creativity. This is going to make such a difference.',
-    'This is mind-blowing! Every aspect of this has been executed with such precision and care. It\'s rare to see something that combines innovation with such high quality execution.'
-  ];
-
-  const allComments = [...shortComments, ...longComments];
-
-  const pronouns = ['he/him', 'she/her', 'they/them', 'he/they', 'she/they'];
-
-  const generateTimestamp = () => {
-    const now = new Date();
-    const daysAgo = Math.floor(Math.random() * 365);
-    const date = new Date(now);
-    date.setDate(date.getDate() - daysAgo);
-    const edited = Math.random() > 0.7;
-    const relativeTime = formatRelativeTime(date);
-    return edited ? `${relativeTime} (edited)` : relativeTime;
-  };
-
-  const generateNestedReplies = (parentId: string, count: number): Comment[] => {
-    return Array.from({ length: count }, (_, index) => {
-      const nameIndex = Math.floor(Math.random() * names.length);
-      const randomName = names[nameIndex];
-      const randomUsername = usernames[nameIndex];
-      const randomComment = allComments[Math.floor(Math.random() * allComments.length)];
-      const randomClaps = Math.floor(Math.random() * 100);
-      const randomIsClapped = Math.random() > 0.7;
-      const randomAvatar = Math.floor(Math.random() * 70) + 1;
-      const hasPronouns = Math.random() > 0.6;
-
-      const replyDate = new Date();
-      const replyDaysAgo = Math.floor(Math.random() * 30);
-      replyDate.setDate(replyDate.getDate() - replyDaysAgo);
-      const replyRelativeTime = formatRelativeTime(replyDate);
-
-      return {
-        id: `reply_${parentId}_${index + 1}_${Date.now()}`,
-        name: randomName,
-        username: randomUsername,
-        avatar: `https://i.pravatar.cc/150?img=${randomAvatar}`,
-        comment: randomComment,
-        timestamp: replyRelativeTime,
-        pronouns: hasPronouns ? pronouns[Math.floor(Math.random() * pronouns.length)] : undefined,
-        claps: randomClaps,
-        replies: 0,
-        isClapped: randomIsClapped,
-        showReplies: false,
-      };
-    });
-  };
-
-  const sampleComments: Comment[] = Array.from({ length: 15 }, (_, index) => {
-    const nameIndex = Math.floor(Math.random() * names.length);
-    const randomName = names[nameIndex];
-    const randomUsername = usernames[nameIndex];
-    const randomComment = allComments[Math.floor(Math.random() * allComments.length)];
-    const randomClaps = Math.floor(Math.random() * 1000);
-    const randomIsClapped = Math.random() > 0.7;
-    const randomReplies = Math.floor(Math.random() * 8);
-    const randomAvatar = Math.floor(Math.random() * 70) + 1;
-    const hasReplies = randomReplies > 0;
-
-    return {
-      id: `comment_${index + 1}_${Date.now()}_${Math.random()}`,
-      name: randomName,
-      username: randomUsername,
-      avatar: `https://i.pravatar.cc/150?img=${randomAvatar}`,
-      comment: randomComment,
-      timestamp: generateTimestamp(),
-      claps: randomClaps,
-      replies: randomReplies,
-      isClapped: randomIsClapped,
-      showReplies: false,
-      repliesList: hasReplies ? generateNestedReplies(`comment_${index + 1}`, randomReplies) : undefined,
-    };
-  });
-
-  return sampleComments;
-};
 
 const formatRelativeTime = (date: Date): string => {
   const now = new Date();
@@ -197,7 +80,9 @@ const formatRelativeTime = (date: Date): string => {
 export default function CommentsModal({
   visible,
   onClose,
+  postId,
   commentsCount = 0,
+  onCommentAdded,
 }: CommentsModalProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -206,6 +91,8 @@ export default function CommentsModal({
   const [clappedComments, setClappedComments] = useState<Set<string>>(new Set());
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
   const [showReplies, setShowReplies] = useState<Set<string>>(new Set());
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
   // Theme-compatible color for "Show replies" text - works in both light and dark
   const showRepliesColor = isDark ? '#60A5FA' : '#2563EB';
@@ -214,11 +101,194 @@ export default function CommentsModal({
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
+  // Fetch comments from backend when modal opens
+  useEffect(() => {
+    if (visible && postId) {
+      fetchComments();
+    } else if (visible && !postId) {
+      // If no postId, initialize with empty array
+      setComments([]);
+    }
+  }, [visible, postId]);
+
+  const fetchComments = async () => {
+    if (!postId) {
+      console.log('[CommentsModal] No postId provided, skipping fetch');
+      setComments([]);
+      return;
+    }
+    
+    setIsLoadingComments(true);
+    console.log('[CommentsModal] Fetching comments for postId:', postId);
+    
+    try {
+      // Fetch the specific feed by ID (more efficient than fetching all feeds)
+      const response = await getFeedById(postId);
+      console.log('[CommentsModal] getFeedById response:', {
+        success: response.success,
+        hasData: !!response.data,
+        feedId: response.data?.id,
+        commentsCount: response.data?.comments?.length || 0,
+        comments: response.data?.comments
+      });
+      
+      if (response.success && response.data) {
+        const feed = response.data;
+        
+        console.log('[CommentsModal] Feed data:', {
+          feedId: feed.id,
+          commentsCountFromBackend: feed.commentsCount,
+          commentsArrayLength: feed.comments?.length || 0,
+          commentsArray: feed.comments
+        });
+        
+        // Always process comments if they exist - check both comments array and commentsCount
+        const hasComments = feed.comments && Array.isArray(feed.comments) && feed.comments.length > 0;
+        const hasCommentsCount = feed.commentsCount && feed.commentsCount > 0;
+        
+        console.log('[CommentsModal] Comment check:', {
+          hasComments,
+          hasCommentsCount,
+          commentsArrayLength: feed.comments?.length || 0,
+          commentsCount: feed.commentsCount,
+          commentsArray: feed.comments
+        });
+        
+        if (hasComments) {
+          console.log('[CommentsModal] Processing', feed.comments.length, 'comments from array');
+          
+          // Fetch user profiles for all comment authors
+          const userIds = [...new Set(feed.comments.map(c => c.userId))];
+          console.log('[CommentsModal] Unique user IDs:', userIds);
+          
+          const userProfiles = new Map<string, { username: string; fullName: string; profileImageUrl?: string | null }>();
+          
+          // Batch fetch user profiles using Promise.all for parallel requests
+          const profilePromises = userIds.map(async (userId) => {
+            try {
+              const userResponse = await getUserProfileById(userId);
+              if (userResponse.success && userResponse.data) {
+                return {
+                  userId,
+                  profile: {
+                    username: userResponse.data.username || `user_${userId.substring(0, 8)}`,
+                    fullName: userResponse.data.fullName || `User ${userId.substring(0, 8)}`,
+                    profileImageUrl: userResponse.data.profileImageUrl || userResponse.data.profilePicture || null,
+                  }
+                };
+              }
+            } catch (error) {
+              console.error(`[CommentsModal] Failed to fetch user profile for ${userId}:`, error);
+            }
+            return {
+              userId,
+              profile: {
+                username: `user_${userId.substring(0, 8)}`,
+                fullName: `User ${userId.substring(0, 8)}`,
+                profileImageUrl: null,
+              }
+            };
+          });
+          
+          const profileResults = await Promise.all(profilePromises);
+          profileResults.forEach(({ userId, profile }) => {
+            userProfiles.set(userId, profile);
+          });
+          
+          console.log('[CommentsModal] Fetched user profiles:', userProfiles.size);
+          
+          // Convert backend comments to frontend Comment format
+          // Ensure we process ALL comments - don't filter or limit
+          console.log('[CommentsModal] Mapping comments:', feed.comments.length, 'total comments');
+          const formattedComments: Comment[] = feed.comments
+            .map((comment, index) => {
+              console.log('[CommentsModal] Mapping comment', index, ':', {
+                userId: comment.userId,
+                text: comment.text,
+                createdAt: comment.createdAt
+              });
+              const userProfile = userProfiles.get(comment.userId) || {
+                username: `user_${comment.userId.substring(0, 8)}`,
+                fullName: `User ${comment.userId.substring(0, 8)}`,
+                profileImageUrl: null,
+              };
+              
+              const createdAt = new Date(comment.createdAt);
+              const timestamp = formatRelativeTime(createdAt);
+              
+              // Generate unique ID using feed ID, user ID, timestamp (full ISO string), index, and text hash
+              // This ensures uniqueness even if same user comments multiple times
+              // Use full ISO timestamp string to ensure millisecond precision
+              const timestampStr = new Date(comment.createdAt).getTime().toString();
+              const textHash = comment.text.substring(0, 15).replace(/[^a-zA-Z0-9]/g, '_');
+              // Include index to ensure uniqueness even if timestamps match
+              const uniqueId = `comment_${postId}_${comment.userId}_${timestampStr}_${index}_${textHash}`;
+              
+              console.log('[CommentsModal] Generated comment ID:', uniqueId, {
+                index,
+                text: comment.text.substring(0, 20),
+                timestamp: comment.createdAt,
+                userId: comment.userId.substring(0, 8)
+              });
+              
+              return {
+                id: uniqueId,
+                name: userProfile.fullName,
+                username: userProfile.username,
+                avatar: userProfile.profileImageUrl || `https://i.pravatar.cc/150?img=${index + 1}`,
+                comment: comment.text,
+                timestamp,
+                claps: 0,
+                replies: 0,
+                isClapped: false,
+                showReplies: false,
+              };
+            })
+            .reverse(); // Show newest first
+          
+          // Verify we have all comments before setting state
+          console.log('[CommentsModal] Formatted comments:', formattedComments.length, 'out of', feed.comments.length, 'original');
+          console.log('[CommentsModal] Comment details:', formattedComments.map((c, idx) => ({
+            index: idx,
+            id: c.id,
+            text: c.comment,
+            username: c.username,
+            name: c.name
+          })));
+          
+          // Verify count matches
+          if (formattedComments.length !== feed.comments.length) {
+            console.error('[CommentsModal] ERROR: Comment count mismatch!', {
+              expected: feed.comments.length,
+              actual: formattedComments.length,
+              commentsCount: feed.commentsCount,
+              feedComments: feed.comments.map((c, i) => ({ index: i, text: c.text, userId: c.userId }))
+            });
+          }
+          
+          setComments(formattedComments);
+        } else {
+          // Check if commentsCount suggests there should be comments
+          if (feed.commentsCount && feed.commentsCount > 0) {
+            console.warn('[CommentsModal] WARNING: Feed has commentsCount =', feed.commentsCount, 'but comments array is empty or missing');
+          }
+          console.log('[CommentsModal] No comments to display - comments array is empty or missing');
+          setComments([]);
+        }
+      } else {
+        console.warn('[CommentsModal] Failed to fetch feeds or no data:', response.error);
+        setComments([]);
+      }
+    } catch (error) {
+      console.error('[CommentsModal] Failed to fetch comments:', error);
+      setComments([]);
+    } finally {
+      setIsLoadingComments(false);
+    }
+  };
 
   useEffect(() => {
     if (visible) {
-      // Load comments when modal opens
-      setComments(generateSampleComments());
       
       // Animate modal in with premium spring animation
       Animated.parallel([
@@ -314,30 +384,77 @@ export default function CommentsModal({
     });
   };
 
-  const handleSendComment = () => {
-    if (inputText.trim()) {
+  const handleSendComment = async () => {
+    if (!inputText.trim() || !postId || isSubmittingComment) {
+      return;
+    }
+    
+    setIsSubmittingComment(true);
+    const commentText = inputText.trim();
+    
+    try {
+      // Optimistic update - add comment immediately
       const now = new Date();
       const timestamp = formatRelativeTime(now);
       
-      const newComment: Comment = {
-        id: Date.now().toString(),
+      // Get current user profile for optimistic comment
+      // For now, use placeholder - will be updated after API call
+      const optimisticComment: Comment = {
+        id: `temp_${Date.now()}`,
         name: 'You',
         username: 'you',
         avatar: 'https://i.pravatar.cc/150?img=1',
-        comment: inputText,
+        comment: commentText,
         timestamp,
         claps: 0,
         replies: 0,
         isClapped: false,
         showReplies: false,
       };
-      setComments((prev) => [newComment, ...prev]);
+      
+      setComments((prev) => [optimisticComment, ...prev]);
       setInputText('');
+      
+      // Submit comment to backend
+      const response = await addComment(postId, commentText);
+      
+      if (response.success && response.data) {
+        console.log('[CommentsModal] Comment added successfully, refreshing comments:', {
+          responseCommentsCount: response.data.commentsCount,
+          responseCommentsLength: response.data.comments?.length || 0
+        });
+        // Refresh comments to get all comments including the new one
+        await fetchComments();
+        // Notify parent to refresh feed list to update comment count
+        onCommentAdded?.();
+      } else {
+        // Remove optimistic comment on error
+        setComments((prev) => prev.filter(c => c.id !== optimisticComment.id));
+        console.error('Failed to add comment:', response.error);
+      }
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      // Remove optimistic comment on error
+      setComments((prev) => prev.filter(c => !c.id.startsWith('temp_')));
+    } finally {
+      setIsSubmittingComment(false);
     }
   };
 
 
+  // Use all comments - no filtering needed
   const filteredComments = comments;
+  
+  // Log for debugging
+  React.useEffect(() => {
+    if (comments.length > 0) {
+      console.log('[CommentsModal] Comments state updated:', {
+        count: comments.length,
+        commentTexts: comments.map(c => c.comment),
+        commentIds: comments.map(c => c.id)
+      });
+    }
+  }, [comments]);
 
   // Theme colors - Premium white background
   const backgroundColor = '#FFFFFF';
@@ -501,7 +618,7 @@ export default function CommentsModal({
                         marginLeft: 10,
                       }}
                     >
-                      {comments.length} Responses
+                      {comments.length > 0 ? comments.length : (commentsCount > 0 ? commentsCount : 0)} Responses
                     </Text>
                   </View>
                 </View>
@@ -517,7 +634,7 @@ export default function CommentsModal({
               }}
               showsVerticalScrollIndicator={false}
             >
-              {filteredComments.length === 0 ? (
+              {isLoadingComments ? (
                 <View
                   style={{
                     flex: 1,
@@ -533,12 +650,46 @@ export default function CommentsModal({
                       textAlign: 'center',
                     }}
                   >
-                    No comments found
+                    Loading comments...
+                  </Text>
+                </View>
+              ) : filteredComments.length === 0 ? (
+                <View
+                  style={{
+                    flex: 1,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    paddingVertical: 60,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 15,
+                      color: secondaryTextColor,
+                      textAlign: 'center',
+                    }}
+                  >
+                    No comments yet
                   </Text>
                 </View>
               ) : (
                 <View>
-                  {filteredComments.map((comment) => {
+                  {filteredComments.map((comment, index) => {
+                    // Use the comment's ID directly - it should be unique
+                    // Add index as fallback only if ID is missing
+                    const stableKey = comment.id || `comment_fallback_${postId}_${index}_${comment.timestamp}`;
+                    
+                    // Log for debugging - ensure all comments are being rendered
+                    if (index < 5) { // Only log first 5 to avoid spam
+                      console.log('[CommentsModal] Rendering comment at index:', index, {
+                        key: stableKey,
+                        text: comment.comment?.substring(0, 30),
+                        username: comment.username,
+                        id: comment.id,
+                        totalComments: filteredComments.length
+                      });
+                    }
+                    
                     const isClapped = clappedComments.has(comment.id) || comment.isClapped;
                     const currentClaps = isClapped && !comment.isClapped && !clappedComments.has(comment.id)
                       ? comment.claps
@@ -547,7 +698,7 @@ export default function CommentsModal({
                     const hasReplies = comment.repliesList && comment.repliesList.length > 0;
 
                     return (
-                      <View key={comment.id}>
+                      <View key={stableKey}>
                         {/* Main Comment */}
                         <View
                           style={{
@@ -957,8 +1108,8 @@ export default function CommentsModal({
                 
                 {/* Integrated Circular Send Button */}
                 <Pressable
-                  onPress={inputText.trim().length > 0 ? handleSendComment : undefined}
-                  disabled={inputText.trim().length === 0}
+                  onPress={inputText.trim().length > 0 && !isSubmittingComment ? handleSendComment : undefined}
+                  disabled={inputText.trim().length === 0 || isSubmittingComment}
                   style={({ pressed }) => ({
                     width: 36,
                     height: 36,

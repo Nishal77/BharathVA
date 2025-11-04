@@ -653,17 +653,35 @@ export default function NotificationsContent() {
                 />
               );
             case 'COMMENT':
-              return (
-                <CommentNotification
-                  key={notification.id}
-                  avatar={avatarUrl}
-                  timestamp={timestamp}
-                  projectInfo={username}
-                  mainText={`${actorName} commented on your post`}
-                  commentText={''}
-                  replyTo={notification.actorUsername || ''}
-                />
-              );
+              // Check if feed has image - use ImageCommentNotification if image exists, otherwise regular CommentNotification
+              const hasImage = notification.feedImageUrl && notification.feedImageUrl.trim().length > 0;
+              
+              if (hasImage) {
+                return (
+                  <ImageCommentNotification
+                    key={notification.id}
+                    avatar={avatarUrl}
+                    timestamp={timestamp}
+                    projectInfo={username}
+                    mainText={`${actorName} commented on your post`}
+                    commentText={notification.commentText || ''}
+                    replyTo={notification.actorUsername || ''}
+                    imageUri={getFeedImageUrl(notification.feedImageUrl)}
+                  />
+                );
+              } else {
+                return (
+                  <CommentNotification
+                    key={notification.id}
+                    avatar={avatarUrl}
+                    timestamp={timestamp}
+                    projectInfo={username}
+                    mainText={`${actorName} commented on your post`}
+                    commentText={notification.commentText || ''}
+                    replyTo={notification.actorUsername || ''}
+                  />
+                );
+              }
             case 'FOLLOW':
               return (
                 <PropertyUpdateNotification

@@ -52,6 +52,12 @@ export interface MultipleImageUploadResponse {
   error?: string;
 }
 
+export interface CommentResponse {
+  userId: string;
+  text: string;
+  createdAt: string;
+}
+
 export interface PostResponse {
   id: string;
   userId: string;
@@ -59,6 +65,8 @@ export interface PostResponse {
   imageUrls?: string[];
   likes?: string[]; // Array of user IDs who liked the post
   likesCount?: number;
+  comments?: CommentResponse[]; // Array of comments
+  commentsCount?: number;
   userLiked?: boolean;
   createdAt: string;
   updatedAt: string;
@@ -71,6 +79,8 @@ export interface FeedItem {
   imageUrls?: string[];
   likes?: string[]; // Array of user IDs who liked the post
   likesCount?: number;
+  comments?: CommentResponse[]; // Array of comments
+  commentsCount?: number;
   userLiked?: boolean;
   createdAt: string;
   updatedAt: string;
@@ -669,6 +679,52 @@ export const getAllFeeds = async (page: number = 0, size: number = 20): Promise<
   }
 };
 
+// Get a single feed by ID (for comments modal)
+export const getFeedById = async (feedId: string): Promise<ApiResponse<PostResponse>> => {
+  try {
+    log('Fetching feed by ID', { feedId });
+    
+    const token = await getAuthToken();
+    if (!token) {
+      return {
+        success: false,
+        error: {
+          code: 'AUTH_ERROR',
+          message: 'No authentication token found',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    const response = await apiRequest<PostResponse>(`/api/feed/${feedId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (response.success) {
+      log('✅ Feed fetched successfully', { feedId, commentsCount: response.data?.comments?.length || 0 });
+    } else {
+      logError('❌ Failed to fetch feed', response.error);
+    }
+    
+    return response;
+  } catch (error) {
+    logError('❌ Unexpected error in getFeedById', error);
+    return {
+      success: false,
+      error: {
+        code: 'UNEXPECTED_ERROR',
+        message: 'An unexpected error occurred',
+        details: error,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+};
+
 // Delete post function
 // Toggle like on a feed
 export const toggleLike = async (feedId: string): Promise<ApiResponse<PostResponse>> => {
@@ -829,6 +885,167 @@ export const deletePost = async (feedId: string): Promise<ApiResponse<{ success:
       error: {
         code: 'UNEXPECTED_ERROR',
         message: 'An unexpected error occurred while deleting the post',
+        details: error,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+};
+
+// Add comment to a feed
+export const addComment = async (feedId: string, text: string): Promise<ApiResponse<PostResponse>> => {
+  try {
+    log('Adding comment', { feedId, text: text.substring(0, 50) + '...' });
+    
+    // Get authentication token
+    const token = await getAuthToken();
+    if (!token) {
+      return {
+        success: false,
+        error: {
+          code: 'AUTH_ERROR',
+          message: 'No authentication token found',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    // Validate feedId and text
+    if (!feedId || feedId.trim().length === 0) {
+      return {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Feed ID cannot be empty',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    if (!text || text.trim().length === 0) {
+      return {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Comment text cannot be empty',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    if (text.length > 1000) {
+      return {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Comment cannot exceed 1000 characters',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    // Create request payload
+    const payload = {
+      text: text.trim(),
+    };
+    
+    // Make API request
+    const response = await apiRequest<PostResponse>(`/api/feed/${feedId}/comment`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    
+    if (response.success) {
+      log('✅ Comment added successfully', { feedId, commentsCount: response.data?.commentsCount });
+    } else {
+      logError('❌ Comment addition failed', response.error);
+    }
+    
+    return response;
+    
+  } catch (error) {
+    logError('❌ Unexpected error in addComment', error);
+    return {
+      success: false,
+      error: {
+        code: 'UNEXPECTED_ERROR',
+        message: 'An unexpected error occurred',
+        details: error,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+};
+
+// Delete comment from a feed
+export const deleteComment = async (feedId: string, commentIndex: number): Promise<ApiResponse<PostResponse>> => {
+  try {
+    log('Deleting comment', { feedId, commentIndex });
+    
+    // Get authentication token
+    const token = await getAuthToken();
+    if (!token) {
+      return {
+        success: false,
+        error: {
+          code: 'AUTH_ERROR',
+          message: 'No authentication token found',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    // Validate feedId and commentIndex
+    if (!feedId || feedId.trim().length === 0) {
+      return {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Feed ID cannot be empty',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    if (commentIndex < 0) {
+      return {
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Comment index cannot be negative',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    // Make API request
+    const response = await apiRequest<PostResponse>(`/api/feed/${feedId}/comment/${commentIndex}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    
+    if (response.success) {
+      log('✅ Comment deleted successfully', { feedId, commentsCount: response.data?.commentsCount });
+    } else {
+      logError('❌ Comment deletion failed', response.error);
+    }
+    
+    return response;
+    
+  } catch (error) {
+    logError('❌ Unexpected error in deleteComment', error);
+    return {
+      success: false,
+      error: {
+        code: 'UNEXPECTED_ERROR',
+        message: 'An unexpected error occurred',
         details: error,
       },
       timestamp: new Date().toISOString(),

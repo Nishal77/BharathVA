@@ -19,6 +19,7 @@ export interface Notification {
   feedId: string;
   postId?: string; // New schema field (postId = feed post ID)
   feedImageUrl?: string | null;
+  commentText?: string | null; // Comment text for COMMENT type notifications
   isRead: boolean;
   createdAt: string;
   updatedAt: string;

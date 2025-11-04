@@ -33,7 +33,7 @@ spring:
           filters:
             - RewritePath=/api/auth/(?<path>.*), /auth/$\{path}
         
-        # Feed Service routes
+        # Feed Service routes - must be before any static resource handlers
         - id: feed-service
           uri: ${FEED_SERVICE_URI:lb://FEED-SERVICE}
           predicates:

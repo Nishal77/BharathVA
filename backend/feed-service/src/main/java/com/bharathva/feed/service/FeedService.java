@@ -1,7 +1,9 @@
 package com.bharathva.feed.service;
 
+import com.bharathva.feed.dto.CreateCommentRequest;
 import com.bharathva.feed.dto.CreateFeedRequest;
 import com.bharathva.feed.dto.FeedResponse;
+import com.bharathva.feed.model.Comment;
 import com.bharathva.feed.model.Feed;
 import com.bharathva.feed.repository.FeedRepository;
 import org.slf4j.Logger;
@@ -474,5 +476,141 @@ public class FeedService {
         
         Feed feed = feedOptional.get();
         return feed.hasLiked(userId);
+    }
+    
+    // Add comment to a feed
+    @Transactional
+    @CacheEvict(value = "feedCache", key = "#feedId")
+    public FeedResponse addComment(String feedId, String userId, CreateCommentRequest request) {
+        log.info("Adding comment to feed: {} by user: {}", feedId, userId);
+        
+        // Validate parameters
+        if (feedId == null || feedId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Feed ID cannot be null or empty");
+        }
+        if (userId == null || userId.trim().isEmpty()) {
+            throw new IllegalArgumentException("User ID cannot be null or empty");
+        }
+        if (request == null || request.getText() == null || request.getText().trim().isEmpty()) {
+            throw new IllegalArgumentException("Comment text cannot be empty");
+        }
+        
+        // Find feed
+        Optional<Feed> feedOptional = feedRepository.findById(feedId);
+        if (feedOptional.isEmpty()) {
+            log.warn("Feed not found with ID: {}", feedId);
+            throw new RuntimeException("Feed not found with ID: " + feedId);
+        }
+        
+        Feed feed = feedOptional.get();
+        
+        // Create comment
+        Comment comment = new Comment(userId, request.getText().trim());
+        feed.addComment(comment);
+        feed.updateTimestamp();
+        
+        // Save feed
+        Feed savedFeed = feedRepository.save(feed);
+        
+        // Verify the save was successful
+        if (savedFeed == null) {
+            log.error("❌ Failed to save feed - save returned null");
+            throw new RuntimeException("Failed to save feed after adding comment");
+        }
+        
+        // Reload from database to verify
+        Optional<Feed> verifyOptional = feedRepository.findById(feedId);
+        if (verifyOptional.isEmpty()) {
+            log.error("❌ Feed not found after save - persistence issue");
+            throw new RuntimeException("Feed not found after save");
+        }
+        
+        Feed verifiedFeed = verifyOptional.get();
+        log.info("✅ Comment added successfully. Feed {} now has {} comments", feedId, verifiedFeed.getCommentsCount());
+        
+        // Create notification for comment (unless user commented on their own post)
+        try {
+            if (!userId.equals(verifiedFeed.getUserId())) {
+                log.info("🔔 User {} commented on feed {}, creating notification", userId, feedId);
+                notificationService.createCommentNotification(feedId, userId, request.getText().trim());
+                log.info("✅ Comment notification created for feed: {} by user: {}", feedId, userId);
+            } else {
+                log.info("ℹ️ User {} commented on their own post {}, skipping notification", userId, feedId);
+            }
+            webSocketService.notifyFeedCommented(userId, feedId);
+        } catch (Exception e) {
+            log.error("❌ CRITICAL: Failed to create notification for comment - feed: {}, user: {}, error: {}", 
+                feedId, userId, e.getMessage(), e);
+            // Don't break comment functionality if notification fails
+        }
+        
+        FeedResponse feedResponse = new FeedResponse(verifiedFeed, userId);
+        return feedResponse;
+    }
+    
+    // Delete comment from a feed
+    @Transactional
+    @CacheEvict(value = "feedCache", key = "#feedId")
+    public FeedResponse deleteComment(String feedId, String userId, int commentIndex) {
+        log.info("Deleting comment at index {} from feed: {} by user: {}", commentIndex, feedId, userId);
+        
+        // Validate parameters
+        if (feedId == null || feedId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Feed ID cannot be null or empty");
+        }
+        if (userId == null || userId.trim().isEmpty()) {
+            throw new IllegalArgumentException("User ID cannot be null or empty");
+        }
+        if (commentIndex < 0) {
+            throw new IllegalArgumentException("Comment index cannot be negative");
+        }
+        
+        // Find feed
+        Optional<Feed> feedOptional = feedRepository.findById(feedId);
+        if (feedOptional.isEmpty()) {
+            log.warn("Feed not found with ID: {}", feedId);
+            throw new RuntimeException("Feed not found with ID: " + feedId);
+        }
+        
+        Feed feed = feedOptional.get();
+        
+        // Check if comment exists
+        if (feed.getComments().size() <= commentIndex) {
+            log.warn("Comment index {} out of bounds for feed {} with {} comments", commentIndex, feedId, feed.getCommentsCount());
+            throw new RuntimeException("Comment not found at index " + commentIndex);
+        }
+        
+        // Check if user owns the comment
+        Comment comment = feed.getComments().get(commentIndex);
+        if (!comment.getUserId().equals(userId)) {
+            log.warn("User {} attempted to delete comment owned by {}", userId, comment.getUserId());
+            throw new RuntimeException("User " + userId + " is not authorized to delete this comment");
+        }
+        
+        // Remove comment
+        feed.removeComment(commentIndex);
+        feed.updateTimestamp();
+        
+        // Save feed
+        Feed savedFeed = feedRepository.save(feed);
+        
+        // Verify the save was successful
+        if (savedFeed == null) {
+            log.error("❌ Failed to save feed - save returned null");
+            throw new RuntimeException("Failed to save feed after deleting comment");
+        }
+        
+        // Reload from database to verify
+        Optional<Feed> verifyOptional = feedRepository.findById(feedId);
+        if (verifyOptional.isEmpty()) {
+            log.error("❌ Feed not found after save - persistence issue");
+            throw new RuntimeException("Feed not found after save");
+        }
+        
+        Feed verifiedFeed = verifyOptional.get();
+        log.info("✅ Comment deleted successfully. Feed {} now has {} comments", feedId, verifiedFeed.getCommentsCount());
+        
+        FeedResponse feedResponse = new FeedResponse(verifiedFeed, userId);
+        return feedResponse;
     }
 }

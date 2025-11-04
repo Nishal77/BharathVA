@@ -1,5 +1,6 @@
 package com.bharathva.feed.controller;
 
+import com.bharathva.feed.dto.CreateCommentRequest;
 import com.bharathva.feed.dto.CreateFeedRequest;
 import com.bharathva.feed.dto.FeedResponse;
 import com.bharathva.feed.service.FeedService;
@@ -752,6 +753,52 @@ public class FeedController {
             response.put("error", e.getMessage());
             
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    
+    // Add comment to a feed
+    @PostMapping("/{feedId}/comment")
+    public ResponseEntity<FeedResponse> addComment(
+            @PathVariable String feedId,
+            @Valid @RequestBody CreateCommentRequest request,
+            Authentication authentication) {
+        
+        log.info("Adding comment to feed: {}", feedId);
+        
+        try {
+            String authenticatedUserId = getUserIdFromAuthentication(authentication);
+            FeedResponse response = feedService.addComment(feedId, authenticatedUserId, request);
+            log.info("Comment added successfully to feed: {}", feedId);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            log.error("Error adding comment: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (Exception e) {
+            log.error("Error adding comment: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    // Delete comment from a feed
+    @DeleteMapping("/{feedId}/comment/{commentIndex}")
+    public ResponseEntity<FeedResponse> deleteComment(
+            @PathVariable String feedId,
+            @PathVariable int commentIndex,
+            Authentication authentication) {
+        
+        log.info("Deleting comment at index {} from feed: {}", commentIndex, feedId);
+        
+        try {
+            String authenticatedUserId = getUserIdFromAuthentication(authentication);
+            FeedResponse response = feedService.deleteComment(feedId, authenticatedUserId, commentIndex);
+            log.info("Comment deleted successfully from feed: {}", feedId);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            log.error("Error deleting comment: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (Exception e) {
+            log.error("Error deleting comment: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
     

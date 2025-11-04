@@ -32,6 +32,9 @@ public class Feed {
     @Field("likes")
     private List<String> likes = new ArrayList<>();
     
+    @Field("comments")
+    private List<Comment> comments = new ArrayList<>();
+    
     @Field("createdAt")
     @Indexed
     private LocalDateTime createdAt;
@@ -126,6 +129,31 @@ public class Feed {
         return this.likes != null ? this.likes.size() : 0;
     }
     
+    public List<Comment> getComments() {
+        return comments != null ? comments : new ArrayList<>();
+    }
+    
+    public void setComments(List<Comment> comments) {
+        this.comments = comments != null ? comments : new ArrayList<>();
+    }
+    
+    public void addComment(Comment comment) {
+        if (this.comments == null) {
+            this.comments = new ArrayList<>();
+        }
+        this.comments.add(comment);
+    }
+    
+    public void removeComment(int index) {
+        if (this.comments != null && index >= 0 && index < this.comments.size()) {
+            this.comments.remove(index);
+        }
+    }
+    
+    public int getCommentsCount() {
+        return this.comments != null ? this.comments.size() : 0;
+    }
+    
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -156,6 +184,8 @@ public class Feed {
                 ", imageUrls=" + imageUrls +
                 ", likes=" + likes +
                 ", likesCount=" + getLikesCount() +
+                ", comments=" + comments +
+                ", commentsCount=" + getCommentsCount() +
                 ", createdAt=" + createdAt +
                 ", updatedAt=" + updatedAt +
                 '}';

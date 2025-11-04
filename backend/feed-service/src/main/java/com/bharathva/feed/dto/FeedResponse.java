@@ -1,5 +1,6 @@
 package com.bharathva.feed.dto;
 
+import com.bharathva.feed.model.Comment;
 import com.bharathva.feed.model.Feed;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -7,6 +8,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.stream.Collectors;
 
 /**
  * Simple response DTO for feed messages
@@ -22,7 +24,12 @@ public class FeedResponse {
     @JsonInclude(JsonInclude.Include.ALWAYS)
     private List<String> likes = new ArrayList<>();
     
+    @JsonProperty("comments")
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    private List<CommentResponse> comments = new ArrayList<>();
+    
     private int likesCount;
+    private int commentsCount;
     private boolean userLiked;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -37,6 +44,10 @@ public class FeedResponse {
         this.imageUrls = feed.getImageUrls();
         this.likes = feed.getLikes() != null ? new ArrayList<>(feed.getLikes()) : new ArrayList<>();
         this.likesCount = feed.getLikesCount();
+        this.comments = feed.getComments() != null 
+            ? feed.getComments().stream().map(CommentResponse::new).collect(Collectors.toList())
+            : new ArrayList<>();
+        this.commentsCount = feed.getCommentsCount();
         this.userLiked = false; // Will be set separately if user context is available
         this.createdAt = feed.getCreatedAt();
         this.updatedAt = feed.getUpdatedAt();
@@ -49,6 +60,10 @@ public class FeedResponse {
         this.imageUrls = feed.getImageUrls();
         this.likes = feed.getLikes() != null ? new ArrayList<>(feed.getLikes()) : new ArrayList<>();
         this.likesCount = feed.getLikesCount();
+        this.comments = feed.getComments() != null 
+            ? feed.getComments().stream().map(CommentResponse::new).collect(Collectors.toList())
+            : new ArrayList<>();
+        this.commentsCount = feed.getCommentsCount();
         this.userLiked = currentUserId != null && feed.hasLiked(currentUserId);
         this.createdAt = feed.getCreatedAt();
         this.updatedAt = feed.getUpdatedAt();
@@ -125,6 +140,22 @@ public class FeedResponse {
     
     public void setLikes(List<String> likes) {
         this.likes = likes != null ? new ArrayList<>(likes) : new ArrayList<>();
+    }
+    
+    public List<CommentResponse> getComments() {
+        return comments;
+    }
+    
+    public void setComments(List<CommentResponse> comments) {
+        this.comments = comments != null ? comments : new ArrayList<>();
+    }
+    
+    public int getCommentsCount() {
+        return commentsCount;
+    }
+    
+    public void setCommentsCount(int commentsCount) {
+        this.commentsCount = commentsCount;
     }
     
     @Override

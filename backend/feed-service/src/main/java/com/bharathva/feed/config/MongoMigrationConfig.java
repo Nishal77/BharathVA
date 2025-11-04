@@ -64,6 +64,10 @@ public class MongoMigrationConfig implements CommandLineRunner {
             log.info("🔄 Starting likes field migration...");
             migrateLikesField();
             
+            // Run comments migration (always run to ensure data consistency)
+            log.info("🔄 Starting comments field migration...");
+            migrateCommentsField();
+            
             // Run notification schema migration (V3)
             log.info("🔄 Starting notification schema migration...");
             migrateNotificationSchema();
@@ -372,6 +376,116 @@ public class MongoMigrationConfig implements CommandLineRunner {
         } catch (Exception e) {
             log.error("❌ Likes field migration failed", e);
             throw new RuntimeException("Likes migration failed", e);
+        }
+    }
+    
+    /**
+     * Migration: Add comments field to all feeds
+     * Ensures all feeds have a comments array initialized to empty array
+     */
+    private void migrateCommentsField() {
+        log.info("📋 Running Comments Field Migration...");
+        log.info("📋 Connecting to database: {}", databaseName);
+        
+        try {
+            MongoDatabase database = mongoClient.getDatabase(databaseName);
+            log.info("✅ Connected to database: {}", databaseName);
+            
+            com.mongodb.client.MongoCollection<org.bson.Document> feedsCollection = 
+                database.getCollection("feeds");
+            
+            // Verify collection exists
+            long collectionExists = database.listCollectionNames().into(new java.util.ArrayList<>())
+                .stream().filter(name -> name.equals("feeds")).count();
+            
+            if (collectionExists == 0) {
+                log.warn("⚠️  Collection 'feeds' does not exist - creating...");
+                database.createCollection("feeds");
+                log.info("✅ Collection 'feeds' created");
+            }
+            
+            log.info("✅ Using collection: feeds");
+            
+            // Find all feeds that don't have the comments field or have it as null
+            org.bson.Document filter = org.bson.Document.parse(
+                "{\"$or\": [{\"comments\": {\"$exists\": false}}, {\"comments\": null}]}"
+            );
+            
+            // Update operation using JSON for reliability
+            org.bson.Document updateOperation = org.bson.Document.parse(
+                "{\"$set\": {\"comments\": []}}"
+            );
+            
+            // Count feeds that need migration
+            long feedsToMigrate = feedsCollection.countDocuments(filter);
+            log.info("📊 Found {} feeds that need comments field migration", feedsToMigrate);
+            
+            if (feedsToMigrate > 0) {
+                log.info("🔄 Executing updateMany operation for comments field...");
+                
+                try {
+                    // Update all feeds: set comments to empty array if missing or null
+                    com.mongodb.client.result.UpdateResult result = feedsCollection.updateMany(
+                        filter,
+                        updateOperation
+                    );
+                    
+                    long modifiedCount = result.getModifiedCount();
+                    long matchedCount = result.getMatchedCount();
+                    
+                    log.info("✅ Comments migration completed:");
+                    log.info("   - Matched: {}", matchedCount);
+                    log.info("   - Modified: {}", modifiedCount);
+                    
+                    // Immediate verification
+                    long remaining = feedsCollection.countDocuments(filter);
+                    if (remaining > 0) {
+                        log.error("❌ {} feeds still missing comments field after update!", remaining);
+                    } else {
+                        log.info("✅ All feeds successfully migrated with comments field!");
+                    }
+                } catch (Exception updateEx) {
+                    log.error("❌ Comments updateMany failed", updateEx);
+                    updateEx.printStackTrace();
+                    throw new RuntimeException("Comments migration update failed", updateEx);
+                }
+            } else {
+                log.info("✅ All feeds already have comments field - no migration needed");
+            }
+            
+            // Fix invalid types (comments should be an array)
+            org.bson.Document invalidFilter = org.bson.Document.parse(
+                "{\"comments\": {\"$not\": {\"$type\": \"array\"}}}"
+            );
+            
+            long invalidCount = feedsCollection.countDocuments(invalidFilter);
+            if (invalidCount > 0) {
+                log.warn("⚠️  Fixing {} feeds with invalid comments type...", invalidCount);
+                com.mongodb.client.result.UpdateResult fixResult = feedsCollection.updateMany(
+                    invalidFilter,
+                    updateOperation
+                );
+                log.info("✅ Fixed {} feeds with invalid comments type", fixResult.getModifiedCount());
+            }
+            
+            // Final verification
+            org.bson.Document validFilter = org.bson.Document.parse("{\"comments\": {\"$type\": \"array\"}}");
+            long validCount = feedsCollection.countDocuments(validFilter);
+            long totalFeeds = feedsCollection.countDocuments();
+            
+            log.info("📊 Comments Migration Final Status:");
+            log.info("   - Total feeds: {}", totalFeeds);
+            log.info("   - Feeds with valid comments array: {}", validCount);
+            
+            if (validCount == totalFeeds) {
+                log.info("✅ All feeds have valid comments field - migration successful!");
+            } else {
+                log.warn("⚠️  {} feeds still missing valid comments field", totalFeeds - validCount);
+            }
+            
+        } catch (Exception e) {
+            log.error("❌ Comments field migration failed", e);
+            throw new RuntimeException("Comments migration failed", e);
         }
     }
     

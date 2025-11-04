@@ -31,6 +31,7 @@ public class NotificationResponse {
     private String actorFullName;
     private String actorProfileImageUrl;
     private String feedImageUrl;
+    private String commentText; // Comment text for COMMENT type notifications
     
     private LocalDateTime updatedAt;
     
@@ -61,6 +62,7 @@ public class NotificationResponse {
         this.actorFullName = notification.getActorFullName();
         this.actorProfileImageUrl = notification.getActorProfileImageUrl();
         this.feedImageUrl = notification.getFeedImageUrl();
+        this.commentText = notification.getCommentText();
         
         this.updatedAt = notification.getUpdatedAt();
         
@@ -147,6 +149,14 @@ public class NotificationResponse {
     
     public void setFeedImageUrl(String feedImageUrl) {
         this.feedImageUrl = feedImageUrl;
+    }
+    
+    public String getCommentText() {
+        return commentText;
+    }
+    
+    public void setCommentText(String commentText) {
+        this.commentText = commentText;
     }
     
     public boolean isRead() {

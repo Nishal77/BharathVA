@@ -80,6 +80,9 @@ public class Notification {
     @Field("feedImageUrl")
     private String feedImageUrl; // First image URL from the feed (for thumbnail)
     
+    @Field("commentText")
+    private String commentText; // Actual comment text for COMMENT type notifications
+    
     @Field("updatedAt")
     private LocalDateTime updatedAt;
     
@@ -259,6 +262,14 @@ public class Notification {
     
     public void setFeedImageUrl(String feedImageUrl) {
         this.feedImageUrl = feedImageUrl;
+    }
+    
+    public String getCommentText() {
+        return commentText;
+    }
+    
+    public void setCommentText(String commentText) {
+        this.commentText = commentText;
     }
     
     public boolean isRead() {

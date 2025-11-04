@@ -94,4 +94,17 @@ public class WebSocketService {
             log.error("❌ Error sending feed unliked event: {}", e.getMessage(), e);
         }
     }
+    
+    /**
+     * Notify WebSocket clients when a feed is commented
+     */
+    public void notifyFeedCommented(String userId, String feedId) {
+        try {
+            FeedEvent event = new FeedEvent("FEED_COMMENTED", feedId, userId, null);
+            messagingTemplate.convertAndSend("/topic/feeds", event);
+            log.info("📤 Sent feed commented event for user: {}, feed: {}", userId, feedId);
+        } catch (Exception e) {
+            log.error("❌ Error sending feed commented event: {}", e.getMessage(), e);
+        }
+    }
 }

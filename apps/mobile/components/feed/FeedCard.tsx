@@ -110,8 +110,14 @@ export default function FeedCard({
             likes={likes > 0 ? likes : undefined}
             likedByUserIds={likedByUserIds}
             userLiked={userLiked}
-            comments={replies > 0 ? replies : undefined}
+            comments={replies !== undefined ? replies : 0}
             shares={retweets > 0 ? retweets : undefined}
+            onCommentAdded={() => {
+              // Refresh feed list when comment is added
+              if (onFeedPress) {
+                onFeedPress(id);
+              }
+            }}
           />
 
           <FeedStatsSection
