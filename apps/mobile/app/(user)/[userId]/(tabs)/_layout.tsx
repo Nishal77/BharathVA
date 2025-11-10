@@ -1,9 +1,10 @@
 import { BlurView } from 'expo-blur';
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Image, Platform, Text, View, useColorScheme } from 'react-native';
+import { Image, Platform, Text, View, useColorScheme, StyleSheet } from 'react-native';
 import { Svg, Path, Circle, Line, Rect } from 'react-native-svg';
 import { useTabStyles } from '../../../../hooks/useTabStyles';
+import { useNotificationCount } from '../../../../hooks/useNotificationCount';
 
 // Theme-aware SVG Icons
 const HomeIcon = ({ size, color, focused }: { size: number; color: string; focused?: boolean }) => {
@@ -238,13 +239,25 @@ const SquarePlusIcon = ({ size, color, focused }: { size: number; color: string;
   );
 };
 
-// Notification icon
-function NotificationTabIcon({ size, color, focused }: { size: number; color: string; focused?: boolean }) {
-  return <BellIcon size={size} color={color} focused={focused} />;
-}
+// Notification Badge Component
+const NotificationBadge = ({ count, isDark }: { count: number; isDark: boolean }) => {
+  if (count <= 0) return null;
+
+  const displayCount = count > 99 ? '99+' : count.toString();
+  const borderColor = isDark ? '#000000' : '#FFFFFF';
+
+  return (
+    <View style={[styles.badgeContainer, { borderColor }]}>
+      <Text style={styles.badgeText}>{displayCount}</Text>
+    </View>
+  );
+};
 
 export default function TabLayout() {
   const tabStyles = useTabStyles();
+  const { count: notificationCount } = useNotificationCount();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
   return (
     <Tabs
@@ -317,7 +330,10 @@ export default function TabLayout() {
         name="notifications"
         options={{
           tabBarIcon: ({ size, focused }) => (
-            <NotificationTabIcon size={size} color={tabStyles.text.active} focused={focused} />
+            <View style={styles.iconContainer}>
+              <BellIcon size={size} color={tabStyles.text.active} focused={focused} />
+              <NotificationBadge count={notificationCount} isDark={isDark} />
+            </View>
           ),
         }}
       />
@@ -332,3 +348,33 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  iconContainer: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeContainer: {
+    position: 'absolute',
+    top: -6,
+    right: -8,
+    minWidth: 18,
+    height: 18,
+    backgroundColor: '#FF3B30',
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 5,
+    borderWidth: 2,
+    zIndex: 10,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 12,
+    letterSpacing: 0,
+  },
+});

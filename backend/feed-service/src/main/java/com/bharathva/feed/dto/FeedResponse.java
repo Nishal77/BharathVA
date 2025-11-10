@@ -1,6 +1,5 @@
 package com.bharathva.feed.dto;
 
-import com.bharathva.feed.model.Comment;
 import com.bharathva.feed.model.Feed;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -28,8 +27,16 @@ public class FeedResponse {
     @JsonInclude(JsonInclude.Include.ALWAYS)
     private List<CommentResponse> comments = new ArrayList<>();
     
+    @JsonProperty("likesCount")
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     private int likesCount;
+    
+    @JsonProperty("commentsCount")
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     private int commentsCount;
+    
+    @JsonProperty("userLiked")
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     private boolean userLiked;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

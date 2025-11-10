@@ -12,9 +12,9 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { profileService } from '../../../services/api/profileService';
+import { profileService } from '../../services/api/profileService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -108,7 +108,7 @@ export default function VideoIntro({ onSkip }: VideoIntroProps) {
       
       {/* Full Screen Video */}
       <Video
-        source={require('../../../assets/Videos/clip1.mp4')}
+        source={require('../../assets/Videos/clip1.mp4')}
         style={{
           width: width,
           height: height,

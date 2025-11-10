@@ -56,6 +56,7 @@ export interface CommentResponse {
   userId: string;
   text: string;
   createdAt: string;
+  replyToCommentIndex?: number | null; // Index of the comment being replied to (null/undefined for top-level comments)
 }
 
 export interface PostResponse {
@@ -892,8 +893,8 @@ export const deletePost = async (feedId: string): Promise<ApiResponse<{ success:
   }
 };
 
-// Add comment to a feed
-export const addComment = async (feedId: string, text: string): Promise<ApiResponse<PostResponse>> => {
+// Add comment to a feed (with optional reply to comment)
+export const addComment = async (feedId: string, text: string, replyToCommentIndex?: number): Promise<ApiResponse<PostResponse>> => {
   try {
     log('Adding comment', { feedId, text: text.substring(0, 50) + '...' });
     
@@ -945,9 +946,17 @@ export const addComment = async (feedId: string, text: string): Promise<ApiRespo
     }
     
     // Create request payload
-    const payload = {
+    const payload: {
+      text: string;
+      replyToCommentIndex?: number;
+    } = {
       text: text.trim(),
     };
+    
+    // Add replyToCommentIndex if provided
+    if (replyToCommentIndex !== undefined && replyToCommentIndex !== null) {
+      payload.replyToCommentIndex = replyToCommentIndex;
+    }
     
     // Make API request
     const response = await apiRequest<PostResponse>(`/api/feed/${feedId}/comment`, {
@@ -1080,6 +1089,7 @@ export interface EnhancedFeedItem extends FeedItem {
     username: string;
     profilePicture?: string | null;
     profileImageUrl?: string | null;
+    isDeleted?: boolean; // Mark deleted users
   };
 }
 
@@ -1089,6 +1099,7 @@ interface CachedUserProfile {
   username: string;
   profilePicture?: string | null;
   profileImageUrl?: string | null;
+  isDeleted?: boolean; // Mark deleted users
   timestamp: number;
 }
 
@@ -1096,14 +1107,19 @@ const userProfileCache = new Map<string, CachedUserProfile>();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 // Helper function to get cached user profile
-const getCachedUserProfile = (userId: string): { fullName: string; username: string; profilePicture?: string | null; profileImageUrl?: string | null } | null => {
+const getCachedUserProfile = (userId: string): { fullName: string; username: string; profilePicture?: string | null; profileImageUrl?: string | null; isDeleted?: boolean } | null => {
   const cached = userProfileCache.get(userId);
+  // CRITICAL: Don't use cache for deleted users - always fetch fresh to check if user still exists
+  if (cached && cached.isDeleted) {
+    return null; // Force fresh fetch for deleted users
+  }
   if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
     return {
       fullName: cached.fullName,
       username: cached.username,
       profilePicture: cached.profilePicture,
-      profileImageUrl: cached.profileImageUrl
+      profileImageUrl: cached.profileImageUrl,
+      isDeleted: cached.isDeleted
     };
   }
   return null;
@@ -1115,6 +1131,15 @@ const cacheUserProfile = (userId: string, profile: { fullName: string; username:
     ...profile,
     timestamp: Date.now()
   });
+};
+
+/**
+ * Clear in-memory user profile cache
+ * Call this when logging out or when user data changes to force fresh fetches
+ */
+export const clearUserProfileCache = (): void => {
+  userProfileCache.clear();
+  console.log('✅ User profile cache cleared');
 };
 
 // Fetch all feeds with real user data from backend
@@ -1152,9 +1177,25 @@ export const getAllFeedsWithUserData = async (page: number = 0, size: number = 2
     const feeds = feedsResponse.data.content;
     log('Fetched feeds', { count: feeds.length });
     
-    // Get unique user IDs
-    const userIds = [...new Set(feeds.map(feed => feed.userId))];
-    log('Unique user IDs', { count: userIds.length, userIds });
+    // Get unique user IDs from feed authors
+    const feedAuthorIds = [...new Set(feeds.map(feed => feed.userId))];
+    
+    // Get unique user IDs from likes arrays (users who liked posts)
+    const likerIds = new Set<string>();
+    feeds.forEach(feed => {
+      if (feed.likes && Array.isArray(feed.likes)) {
+        feed.likes.forEach((userId: string) => likerIds.add(userId));
+      }
+    });
+    
+    // Combine all unique user IDs (authors + likers)
+    const userIds = [...new Set([...feedAuthorIds, ...Array.from(likerIds)])];
+    log('Unique user IDs', { 
+      feedAuthorCount: feedAuthorIds.length,
+      likerCount: likerIds.size,
+      totalUniqueCount: userIds.length,
+      userIds 
+    });
     
     // Fetch user profiles for all unique users
     const userProfiles = new Map<string, { fullName: string; username: string; profilePicture?: string | null; profileImageUrl?: string | null }>();
@@ -1219,48 +1260,94 @@ export const getAllFeedsWithUserData = async (page: number = 0, size: number = 2
             hasImage: !!validatedImageUrl
           });
         } else {
-          // Set fallback profile data (no random images - use null)
-          const shortUserId = userId.substring(0, 8);
-          const fallbackProfile = {
-            fullName: `User ${shortUserId}`,
-            username: `user_${shortUserId}`,
-            profilePicture: null,
-            profileImageUrl: null,
-          };
-          
-          userProfiles.set(userId, fallbackProfile);
-          cacheUserProfile(userId, fallbackProfile); // Cache fallback too
-          
-          logError('Failed to fetch user profile from NeonDB, using fallback', { userId, error: userResponse.error });
+          // CRITICAL: Check if user was deleted from NeonDB
+          if (userResponse.error?.code === 'USER_NOT_FOUND') {
+            // User deleted - mark as deleted user (but don't add to userProfiles)
+            // This will cause feeds from this user to be filtered out
+            log(`🗑️ User ${userId} deleted from NeonDB - will filter out their feeds`);
+            // Don't add to userProfiles - this ensures feeds from deleted users are filtered out
+          } else {
+            // CRITICAL: If user fetch failed for any other reason, don't add fallback
+            // Only show users that actually exist in MongoDB
+            logError('Failed to fetch user profile from NeonDB - will filter out feeds from this user', { userId, error: userResponse.error });
+            // Don't add to userProfiles - this ensures we only show users that exist
+          }
         }
       } catch (error) {
-        logError('Failed to fetch user profile from NeonDB', { userId, error });
-        // Set fallback profile data (no random images - use null)
-        const shortUserId = userId.substring(0, 8);
-        const fallbackProfile = {
-          fullName: `User ${shortUserId}`,
-          username: `user_${shortUserId}`,
-          profilePicture: null,
-          profileImageUrl: null,
-        };
-        
-        userProfiles.set(userId, fallbackProfile);
-        cacheUserProfile(userId, fallbackProfile); // Cache fallback too
+        logError('Failed to fetch user profile from NeonDB - will filter out feeds from this user', { userId, error });
+        // CRITICAL: Don't add fallback profiles - only show users that actually exist in MongoDB
+        // Check if error indicates user not found
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes('not found') || errorMessage.includes('USER_NOT_FOUND')) {
+          log(`🗑️ User ${userId} deleted from NeonDB (from exception) - will filter out their feeds`);
+        }
+        // Don't add to userProfiles - this ensures feeds from users that don't exist are filtered out
       }
     }
     
     // Create enhanced feeds with real user profile data from NeonDB
-    const enhancedFeeds: EnhancedFeedItem[] = feeds.map(feed => ({
-      ...feed,
-      userProfile: userProfiles.get(feed.userId) || {
-        fullName: `User ${feed.userId.substring(0, 8)}`,
-        username: `user_${feed.userId.substring(0, 8)}`,
-        profilePicture: null,
-        profileImageUrl: null,
-      }
-    }));
+    // CRITICAL: Filter out feeds from deleted users - only show data that exists in MongoDB
+    const enhancedFeeds: EnhancedFeedItem[] = feeds
+      .map(feed => {
+        // Ensure commentsCount is properly set - use backend value or calculate from array
+        const commentsCount = feed.commentsCount !== undefined 
+          ? feed.commentsCount 
+          : (feed.comments && Array.isArray(feed.comments) ? feed.comments.length : 0);
+        
+        // Log if there's a mismatch for debugging
+        if (feed.commentsCount !== feed.comments?.length && feed.comments && feed.comments.length > 0) {
+          log('⚠️ Comment count mismatch detected:', {
+            feedId: feed.id,
+            commentsCountFromBackend: feed.commentsCount,
+            commentsArrayLength: feed.comments.length,
+            willUse: commentsCount
+          });
+        }
+        
+        // Get user profile - check if user is deleted
+        const userProfile = userProfiles.get(feed.userId);
+        const isDeletedUser = userProfile?.fullName === '[Deleted User]' || 
+                             userProfile?.username?.startsWith('[deleted_') ||
+                             (userProfile as any)?.isDeleted === true;
+        
+        // CRITICAL: Skip feeds from deleted users - don't add them to the feed
+        if (isDeletedUser) {
+          log(`🗑️ Filtering out feed from deleted user: ${feed.userId}`, { feedId: feed.id });
+          return null;
+        }
+        
+        // CRITICAL: If user profile doesn't exist and we couldn't fetch it, skip this feed
+        // Only show feeds from users that actually exist in MongoDB
+        if (!userProfile) {
+          log(`⚠️ Filtering out feed from user without profile: ${feed.userId}`, { feedId: feed.id });
+          return null;
+        }
+        
+        // Filter out deleted users from likes array
+        const validLikes = feed.likes ? feed.likes.filter((likeUserId: string) => {
+          const likeUserProfile = userProfiles.get(likeUserId);
+          const isLikeUserDeleted = likeUserProfile?.fullName === '[Deleted User]' || 
+                                   likeUserProfile?.username?.startsWith('[deleted_') ||
+                                   (likeUserProfile as any)?.isDeleted === true;
+          return !isLikeUserDeleted && likeUserProfile !== undefined;
+        }) : [];
+        
+        return {
+          ...feed,
+          commentsCount: commentsCount, // Ensure commentsCount is always set
+          likes: validLikes, // Only include likes from users that exist
+          likesCount: validLikes.length, // Update likes count to match filtered array
+          userProfile: userProfile
+        };
+      })
+      .filter((feed): feed is EnhancedFeedItem => feed !== null); // Remove null entries
     
-    log('✅ Enhanced feeds created successfully', { count: enhancedFeeds.length });
+    log('✅ Enhanced feeds created successfully', { 
+      originalCount: feeds.length,
+      filteredCount: enhancedFeeds.length,
+      removedDeletedUsers: feeds.length - enhancedFeeds.length,
+      feedsWithComments: enhancedFeeds.filter(f => (f.commentsCount || 0) > 0).length
+    });
     
     return {
       success: true,

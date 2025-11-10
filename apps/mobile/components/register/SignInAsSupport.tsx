@@ -2,7 +2,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import { Dimensions, Pressable, Text, TextInput, View, useColorScheme, Alert } from 'react-native';
-import { runNetworkTests } from '../../../services/api/networkTest';
+import { runNetworkTests } from '../../services/api/networkTest';
 
 const { height, width } = Dimensions.get('window');
 
@@ -55,7 +55,7 @@ export default function SignInAsSupport({
     <View className="flex-1" style={{ backgroundColor: bgColor }}>
       {/* Header Image - 40% Height */}
       <Image
-        source={require('../../../assets/images/indiaflag.jpeg')}
+        source={require('../../assets/images/indiaflag.jpeg')}
         style={{
           position: 'absolute',
           top: 0,
@@ -132,7 +132,7 @@ export default function SignInAsSupport({
           >
             {/* Google Logo */}
             <Image
-              source={require('../../../assets/logo/Google.png')}
+              source={require('../../assets/logo/Google.png')}
               style={{ width: 20, height: 20, marginRight: 10 }}
               contentFit="contain"
             />
@@ -165,7 +165,7 @@ export default function SignInAsSupport({
           >
             {/* Apple Logo */}
             <Image
-              source={require('../../../assets/logo/Apple.png')}
+              source={require('../../assets/logo/Apple.png')}
               style={{ width: 20, height: 20, marginRight: 10 }}
               contentFit="contain"
             />

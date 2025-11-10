@@ -155,9 +155,7 @@ const apiRequest = async <T>(
 // Get user profile by ID - Try multiple endpoints
 export const getUserProfileById = async (userId: string): Promise<ApiResponse<UserProfile>> => {
   try {
-    log('Fetching user profile by ID', { userId });
-    
-    // Get authentication token
+    // Get authentication token first
     const token = await getAuthToken();
     if (!token) {
       return {
@@ -170,6 +168,39 @@ export const getUserProfileById = async (userId: string): Promise<ApiResponse<Us
       };
     }
     
+    // CRITICAL: Extract user ID from token to verify consistency
+    // This ensures we're using the correct user ID from the token, not stale data
+    let tokenUserId: string | null = null;
+    try {
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const base64Url = parts[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+          atob(base64)
+            .split('')
+            .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+            .join('')
+        );
+        const payload = JSON.parse(jsonPayload);
+        tokenUserId = payload.userId || payload.sub || null;
+      }
+    } catch (error) {
+      logError('Could not extract user ID from token', error);
+    }
+    
+    // CRITICAL: If userId parameter doesn't match token's user ID, log warning
+    // But still proceed - userId might be for a different user (e.g., viewing someone's profile)
+    if (tokenUserId && userId !== tokenUserId) {
+      log(`ℹ️  Fetching profile for different user: requested=${userId}, token=${tokenUserId}`);
+    }
+    
+    log('Fetching user profile by ID', { 
+      userId,
+      tokenUserId: tokenUserId || 'unknown',
+      userIdMatch: tokenUserId === userId
+    });
+    
     // Try different possible endpoints for user profile
     // Put the working endpoint first to reduce 404s
     const possibleEndpoints = [
@@ -179,6 +210,9 @@ export const getUserProfileById = async (userId: string): Promise<ApiResponse<Us
       `/api/profile/${userId}`,
       `/api/user/profile/${userId}`
     ];
+    
+    let allEndpointsReturned404 = true;
+    let lastError: any = null;
     
     for (const endpoint of possibleEndpoints) {
       try {
@@ -191,7 +225,42 @@ export const getUserProfileById = async (userId: string): Promise<ApiResponse<Us
           },
         });
         
-        if (response.success && response.data) {
+        // CRITICAL: Check for USER_NOT_FOUND error (user deleted from NeonDB)
+        if (!response.success && response.error?.code === 'USER_NOT_FOUND') {
+          log(`ℹ️  User ${userId} not found in NeonDB (likely deleted)`);
+          return {
+            success: false,
+            error: {
+              code: 'USER_NOT_FOUND',
+              message: 'User profile not found - user may have been deleted',
+            },
+            timestamp: new Date().toISOString(),
+          };
+        }
+        
+        // CRITICAL: Check if this is the primary endpoint (/api/auth/user/{userId}) returning 404
+        // If the primary endpoint returns 404, it means user doesn't exist (not endpoint discovery)
+        if (!response.success && response.error?.code === 'HTTP_404') {
+          if (endpoint === `/api/auth/user/${userId}`) {
+            // Primary endpoint returned 404 - user doesn't exist
+            log(`ℹ️  User ${userId} not found in NeonDB (404 from primary endpoint - user deleted)`);
+            return {
+              success: false,
+              error: {
+                code: 'USER_NOT_FOUND',
+                message: 'User profile not found - user may have been deleted',
+              },
+              timestamp: new Date().toISOString(),
+            };
+          } else {
+            // Other endpoints returning 404 is expected (endpoint discovery)
+            log(`ℹ️  Endpoint ${endpoint} not found (404) - trying next...`);
+            lastError = response.error;
+          }
+        } else if (response.success && response.data) {
+          // Success - user found
+          allEndpointsReturned404 = false;
+          
           // Backend returns ApiResponse<T> where T is Map<String, Object>
           // Structure: { success: true, message: "...", data: { id: "...", profileImageUrl: "...", ... }, timestamp: "..." }
           // So response.data is the entire ApiResponse object, and response.data.data is the actual user data Map
@@ -271,26 +340,40 @@ export const getUserProfileById = async (userId: string): Promise<ApiResponse<Us
             timestamp: new Date().toISOString(),
           };
         } else {
-          // Log 404s as info instead of errors since they're expected during endpoint discovery
-          if (response.error?.code === 'HTTP_404') {
-            log(`ℹ️  Endpoint ${endpoint} not found (404) - trying next...`);
-          } else {
-            log(`⚠️  Endpoint ${endpoint} failed: ${response.error?.message} - trying next...`);
-          }
+          // Other errors (not 404)
+          allEndpointsReturned404 = false;
+          lastError = response.error;
+          log(`⚠️  Endpoint ${endpoint} failed: ${response.error?.message} - trying next...`);
         }
       } catch (error) {
+        allEndpointsReturned404 = false;
+        lastError = error;
         log(`⚠️  Endpoint ${endpoint} failed with exception: ${error instanceof Error ? error.message : 'Unknown error'} - trying next...`);
         continue;
       }
     }
     
-    // If all endpoints fail, return error
-    logError('❌ All user profile endpoints failed', { userId });
+    // If all endpoints returned 404, user doesn't exist (deleted)
+    if (allEndpointsReturned404) {
+      log(`ℹ️  User ${userId} not found in NeonDB (all endpoints returned 404 - user deleted)`);
+      return {
+        success: false,
+        error: {
+          code: 'USER_NOT_FOUND',
+          message: 'User profile not found - user may have been deleted',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+    // If we get here, endpoints failed for other reasons (not all 404s)
+    logError('❌ All user profile endpoints failed', { userId, lastError });
     return {
       success: false,
       error: {
-        code: 'USER_NOT_FOUND',
-        message: 'User profile not found',
+        code: 'UNEXPECTED_ERROR',
+        message: 'Failed to fetch user profile from all endpoints',
+        details: lastError,
       },
       timestamp: new Date().toISOString(),
     };

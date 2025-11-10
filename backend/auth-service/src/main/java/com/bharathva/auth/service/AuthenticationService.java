@@ -56,6 +56,11 @@ public class AuthenticationService {
             throw new InvalidCredentialsException("Incorrect email or password");
         }
 
+        // Clear all existing sessions for this user before creating new one
+        // This ensures only one active session per user and prevents token confusion
+        userSessionRepository.deleteAllByUserId(user.getId());
+        log.info("Cleared existing sessions for user: {}", user.getEmail());
+
         String accessToken = jwtService.generateAccessToken(user.getId(), user.getEmail(), user.getUsername());
         String refreshToken = jwtService.generateRefreshToken();
 
@@ -157,15 +162,26 @@ public class AuthenticationService {
             throw new RuntimeException("Refresh token has expired");
         }
 
+        User user = session.getUser();
+        
+        // Generate new refresh token and update session
+        String newRefreshToken = jwtService.generateRefreshToken();
+        LocalDateTime refreshExpiresAt = LocalDateTime.now()
+                .plusSeconds(jwtService.getRefreshExpirationMillis() / 1000);
+        
+        session.setRefreshToken(newRefreshToken);
+        session.setExpiresAt(refreshExpiresAt);
         session.setLastUsedAt(LocalDateTime.now());
         userSessionRepository.save(session);
-
-        User user = session.getUser();
+        
+        // Generate new access token
         String newAccessToken = jwtService.generateAccessToken(user.getId(), user.getEmail(), user.getUsername());
+
+        log.info("Token refreshed successfully for user: {}", user.getEmail());
 
         return new LoginResponse(
                 newAccessToken,
-                refreshToken,
+                newRefreshToken,
                 user.getId(),
                 user.getEmail(),
                 user.getUsername(),

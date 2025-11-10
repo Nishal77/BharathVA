@@ -1,12 +1,12 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { View, useColorScheme, Alert, ActivityIndicator } from 'react-native';
-import CreatePassword from './CreatePassword';
-import Details from './details';
-import OTPVerification from './OTPVerification';
-import SignInAsSupport from './SignInAsSupport';
-import Username from './Username';
-import ProfileSetup from './profile-setup';
+import CreatePassword from '../../../components/register/CreatePassword';
+import Details from '../../../components/register/details';
+import OTPVerification from '../../../components/register/OTPVerification';
+import SignInAsSupport from '../../../components/register/SignInAsSupport';
+import Username from '../../../components/register/Username';
+import ProfileSetup from '../../../components/register/profile-setup';
 import { authService, ApiError } from '../../../services/api/authService';
 import { useAuth } from '../../../contexts/AuthContext';
 

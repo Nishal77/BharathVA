@@ -4,6 +4,7 @@
 import { authService, tokenManager, ApiError } from '../services/api/authService';
 import { API_CONFIG, ENDPOINTS } from '../services/api/config';
 import { networkTester } from './networkTest';
+import { runRefreshTokenFlowTests } from './refreshTokenFlowTests';
 
 interface TestResult {
   testName: string;
@@ -36,6 +37,9 @@ class UnitTester {
 
     // Test 5: Error Handling
     await this.testErrorHandling();
+
+    // Test 6: Refresh Token Flow (if user is logged in)
+    await this.testRefreshTokenFlow();
 
     console.log('==========================================');
     console.log('🏁 Unit Tests Complete!');
@@ -119,19 +123,21 @@ class UnitTester {
       await tokenManager.clearTokens();
       
       // Test saving tokens
+      // Note: Only access token is saved locally, refresh token is fetched from database
       await tokenManager.saveTokens(testTokens.accessToken, testTokens.refreshToken);
       
       // Test retrieving tokens
       const retrievedAccessToken = await tokenManager.getAccessToken();
-      const retrievedRefreshToken = await tokenManager.getRefreshToken();
       
       if (retrievedAccessToken !== testTokens.accessToken) {
         throw new Error('Access token not saved/retrieved correctly');
       }
       
-      if (retrievedRefreshToken !== testTokens.refreshToken) {
-        throw new Error('Refresh token not saved/retrieved correctly');
-      }
+      // Note: getRefreshToken() now fetches from database, so it may return null in unit tests
+      // This is expected behavior - refresh token is not stored locally anymore
+      const retrievedRefreshToken = await tokenManager.getRefreshToken();
+      // In unit tests, refresh token fetch from database will fail, so it may be null
+      // This is acceptable - the real app will fetch from database when needed
       
       // Test user data storage
       const testUserData = {
@@ -151,11 +157,12 @@ class UnitTester {
       // Test clearing tokens
       await tokenManager.clearTokens();
       const clearedAccessToken = await tokenManager.getAccessToken();
-      const clearedRefreshToken = await tokenManager.getRefreshToken();
       
-      if (clearedAccessToken !== null || clearedRefreshToken !== null) {
-        throw new Error('Tokens not cleared properly');
+      if (clearedAccessToken !== null) {
+        throw new Error('Access token not cleared properly');
       }
+      
+      // Note: Refresh token is not stored locally, so we don't check for it here
       
       console.log('   Result: ✅ Token Manager is working correctly');
       
@@ -305,6 +312,50 @@ class UnitTester {
         testName: 'Error Handling',
         success: false,
         error: error.message,
+      });
+    }
+    console.log('');
+  }
+
+  private async testRefreshTokenFlow(): Promise<void> {
+    console.log('6️⃣ Testing Refresh Token Flow...');
+    
+    try {
+      const accessToken = await tokenManager.getAccessToken();
+      if (!accessToken) {
+        console.log('   ⚠️  No access token available (skipping refresh token tests)');
+        this.results.push({
+          testName: 'Refresh Token Flow',
+          success: true,
+          error: 'Skipped - user not logged in',
+        });
+        return;
+      }
+
+      console.log('   🔄 Running refresh token flow tests...');
+      const refreshTokenResults = await runRefreshTokenFlowTests();
+      
+      refreshTokenResults.forEach(result => {
+        this.results.push({
+          testName: `Refresh Token: ${result.testName}`,
+          success: result.success,
+          error: result.success ? undefined : result.message,
+          details: result.details,
+        });
+      });
+
+      const failed = refreshTokenResults.filter(r => !r.success).length;
+      if (failed === 0) {
+        console.log('   ✅ All refresh token flow tests passed');
+      } else {
+        console.log(`   ⚠️  ${failed} refresh token tests failed`);
+      }
+    } catch (error) {
+      console.error('   ❌ Refresh token flow test error:', error);
+      this.results.push({
+        testName: 'Refresh Token Flow',
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
       });
     }
     console.log('');

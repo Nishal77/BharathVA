@@ -31,7 +31,9 @@ public class NotificationResponse {
     private String actorFullName;
     private String actorProfileImageUrl;
     private String feedImageUrl;
-    private String commentText; // Comment text for COMMENT type notifications
+    private String commentText; // Comment/reply text for COMMENT/REPLY type notifications
+    private String originalCommentText; // Original comment text that was replied to (for REPLY type notifications)
+    private String commentId; // ID/index of the comment being replied to (for REPLY type notifications)
     
     private LocalDateTime updatedAt;
     
@@ -63,6 +65,8 @@ public class NotificationResponse {
         this.actorProfileImageUrl = notification.getActorProfileImageUrl();
         this.feedImageUrl = notification.getFeedImageUrl();
         this.commentText = notification.getCommentText();
+        this.originalCommentText = notification.getOriginalCommentText();
+        this.commentId = notification.getCommentId();
         
         this.updatedAt = notification.getUpdatedAt();
         
@@ -159,6 +163,22 @@ public class NotificationResponse {
         this.commentText = commentText;
     }
     
+    public String getOriginalCommentText() {
+        return originalCommentText;
+    }
+    
+    public void setOriginalCommentText(String originalCommentText) {
+        this.originalCommentText = originalCommentText;
+    }
+    
+    public String getCommentId() {
+        return commentId;
+    }
+    
+    public void setCommentId(String commentId) {
+        this.commentId = commentId;
+    }
+    
     public boolean isRead() {
         return isRead;
     }
@@ -189,5 +209,37 @@ public class NotificationResponse {
     
     public void setTimeAgoHours(long timeAgoHours) {
         this.timeAgoHours = timeAgoHours;
+    }
+    
+    public String getMessage() {
+        return message;
+    }
+    
+    public void setMessage(String message) {
+        this.message = message;
+    }
+    
+    public String getSenderId() {
+        return senderId;
+    }
+    
+    public void setSenderId(String senderId) {
+        this.senderId = senderId;
+    }
+    
+    public String getReceiverId() {
+        return receiverId;
+    }
+    
+    public void setReceiverId(String receiverId) {
+        this.receiverId = receiverId;
+    }
+    
+    public String getPostId() {
+        return postId;
+    }
+    
+    public void setPostId(String postId) {
+        this.postId = postId;
     }
 }

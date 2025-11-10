@@ -18,10 +18,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import Svg, { Path } from 'react-native-svg';
-import { profileService } from '../../../services/api/profileService';
-import { authService } from '../../../services/api/authService';
+import { profileService } from '../../services/api/profileService';
+import { authService } from '../../services/api/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 const GENDER_OPTIONS = [
   'male',

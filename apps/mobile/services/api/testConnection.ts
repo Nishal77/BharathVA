@@ -20,14 +20,19 @@ export const testApiConnection = async (): Promise<ConnectionTestResult> => {
     console.log('🔍 Testing API connection...');
     console.log(`📍 API Base URL: ${API_CONFIG.BASE_URL}`);
     
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+    
     const response = await fetch(`${API_CONFIG.BASE_URL}/register/health`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      signal: AbortSignal.timeout(API_CONFIG.TIMEOUT),
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
     
     const responseTime = Date.now() - startTime;
     
@@ -81,6 +86,9 @@ export const testRegistrationEndpoint = async (): Promise<ConnectionTestResult> 
     console.log('🔍 Testing registration endpoint...');
     
     const testEmail = 'test@example.com';
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+    
     const response = await fetch(`${API_CONFIG.BASE_URL}/register/email`, {
       method: 'POST',
       headers: {
@@ -88,8 +96,10 @@ export const testRegistrationEndpoint = async (): Promise<ConnectionTestResult> 
         'Accept': 'application/json',
       },
       body: JSON.stringify({ email: testEmail }),
-      signal: AbortSignal.timeout(API_CONFIG.TIMEOUT),
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
     
     const responseTime = Date.now() - startTime;
     const data = await response.json();

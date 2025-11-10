@@ -8,7 +8,7 @@ interface IconProps {
   color?: string;
 }
 
-export const SettingsIcon = ({ name, size = 24, color = '#000' }: IconProps) => {
+const SettingsIcon = ({ name, size = 24, color = '#000' }: IconProps) => {
   const renderIcon = () => {
     switch (name) {
       case 'security':
@@ -1041,3 +1041,6 @@ const styles = StyleSheet.create({
     height: '100%',
   },
 });
+
+export default SettingsIcon;
+export { SettingsIcon };

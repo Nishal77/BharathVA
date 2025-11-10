@@ -11,19 +11,26 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { BlurView } from 'expo-blur';
 import { Svg, Path } from 'react-native-svg';
 import { Ellipsis } from 'lucide-react-native';
 import CommentsAction from './CommentsAction';
-import { addComment, getAllFeeds, getFeedById } from '../../../services/api/feedService';
+import CommentMenuDropdown from './CommentMenuDropdown';
+import { addComment, getAllFeeds, getFeedById, deleteComment } from '../../../services/api/feedService';
 import { getUserProfileById } from '../../../services/api/userService';
+import * as SecureStore from 'expo-secure-store';
+import webSocketService from '../../../services/api/websocketService';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface Comment {
   id: string;
+  userId: string; // Add userId to track comment ownership
+  originalIndex: number; // Track original index from backend for deletion
+  replyToCommentIndex?: number | null; // Index of parent comment (for replies)
   name?: string;
   username: string;
   avatar: string;
@@ -87,12 +94,17 @@ export default function CommentsModal({
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [comments, setComments] = useState<Comment[]>([]);
+  const [databaseCommentsCount, setDatabaseCommentsCount] = useState<number>(0); // Database is source of truth for count
   const [inputText, setInputText] = useState('');
   const [clappedComments, setClappedComments] = useState<Set<string>>(new Set());
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
   const [showReplies, setShowReplies] = useState<Set<string>>(new Set());
   const [isLoadingComments, setIsLoadingComments] = useState(false);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [menuVisibleForComment, setMenuVisibleForComment] = useState<string | null>(null);
+  const [isDeletingComment, setIsDeletingComment] = useState<string | null>(null);
+  const [replyingToComment, setReplyingToComment] = useState<Comment | null>(null); // Track which comment is being replied to
 
   // Theme-compatible color for "Show replies" text - works in both light and dark
   const showRepliesColor = isDark ? '#60A5FA' : '#2563EB';
@@ -101,25 +113,114 @@ export default function CommentsModal({
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
-  // Fetch comments from backend when modal opens
+  // Get authenticated user ID from token on mount
+  useEffect(() => {
+    const getAuthenticatedUserId = async () => {
+      try {
+        const token = await SecureStore.getItemAsync('accessToken');
+        if (token) {
+          const base64Url = token.split('.')[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split('')
+              .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+              .join('')
+          );
+          const payload = JSON.parse(jsonPayload);
+          const userId = payload.userId || payload.sub || null;
+          if (userId) {
+            setCurrentUserId(userId);
+            console.log('[CommentsModal] ✅ Authenticated user ID extracted:', userId);
+          }
+        }
+      } catch (error) {
+        console.warn('[CommentsModal] ⚠️ Could not extract authenticated user ID:', error);
+      }
+    };
+    getAuthenticatedUserId();
+  }, []);
+
+  // Setup WebSocket listener for comment deletion
+  useEffect(() => {
+    if (!visible || !postId) return;
+
+    const setupWebSocket = () => {
+      webSocketService.connect({
+        onCommentDeleted: (event: any) => {
+          if (event.feedId === postId && event.message) {
+            console.log('[CommentsModal] 📥 Received comment deletion event:', event);
+            const deletedOriginalIndex = parseInt(event.message, 10);
+            if (!isNaN(deletedOriginalIndex)) {
+              // Optimistically remove comment by originalIndex
+              setComments((prevComments) =>
+                prevComments.filter((c) => c.originalIndex !== deletedOriginalIndex)
+              );
+              // Refresh comments from backend to ensure consistency and update count
+              fetchComments();
+              // Notify parent to refresh feed list and count
+              onCommentAdded?.();
+            } else {
+              console.warn('[CommentsModal] Received COMMENT_DELETED event with invalid originalIndex:', event.message);
+              // Fallback: sync with database (database is source of truth)
+              console.log('[CommentsModal] 🔄 Syncing with database after deletion event');
+              fetchComments();
+              onCommentAdded?.();
+            }
+          } else if (event.feedId === postId) {
+            // Fallback: sync with database if no message/index provided
+            console.log('[CommentsModal] 📥 Received comment deletion event without index, syncing with database');
+            fetchComments();
+            onCommentAdded?.();
+          }
+        },
+      });
+    };
+
+    setupWebSocket();
+
+    return () => {
+      // Cleanup handled by singleton
+    };
+  }, [visible, postId]);
+
+  // Fetch comments from backend when modal opens - ALWAYS sync with database
   useEffect(() => {
     if (visible && postId) {
+      console.log('[CommentsModal] Modal opened, fetching fresh comments from database for postId:', postId);
       fetchComments();
     } else if (visible && !postId) {
       // If no postId, initialize with empty array
       setComments([]);
+      setDatabaseCommentsCount(0);
     }
+  }, [visible, postId]);
+  
+  // Sync with database periodically when modal is open (similar to likes sync)
+  useEffect(() => {
+    if (!visible || !postId) return;
+    
+    // Sync with database every 5 seconds when modal is open
+    const syncInterval = setInterval(() => {
+      console.log('[CommentsModal] Periodic sync: Fetching fresh comments from database');
+      fetchComments();
+    }, 5000);
+    
+    return () => {
+      clearInterval(syncInterval);
+    };
   }, [visible, postId]);
 
   const fetchComments = async () => {
     if (!postId) {
       console.log('[CommentsModal] No postId provided, skipping fetch');
       setComments([]);
+      setDatabaseCommentsCount(0);
       return;
     }
     
     setIsLoadingComments(true);
-    console.log('[CommentsModal] Fetching comments for postId:', postId);
+    console.log('[CommentsModal] 🔄 Fetching fresh comments from database for postId:', postId);
     
     try {
       // Fetch the specific feed by ID (more efficient than fetching all feeds)
@@ -132,34 +233,40 @@ export default function CommentsModal({
         comments: response.data?.comments
       });
       
-      if (response.success && response.data) {
+        if (response.success && response.data) {
         const feed = response.data;
         
-        console.log('[CommentsModal] Feed data:', {
+        // CRITICAL: Database is the source of truth - always use database values
+        const dbCommentsCount = feed.commentsCount || 0;
+        const dbCommentsArray = feed.comments || [];
+        
+        console.log('[CommentsModal] 🔄 Syncing from database:', {
           feedId: feed.id,
-          commentsCountFromBackend: feed.commentsCount,
-          commentsArrayLength: feed.comments?.length || 0,
-          commentsArray: feed.comments
+          databaseCommentsCount: dbCommentsCount,
+          databaseCommentsArrayLength: dbCommentsArray.length,
+          currentLocalCommentsCount: comments.length,
+          willUpdate: dbCommentsArray.length !== comments.length || dbCommentsCount !== databaseCommentsCount
         });
         
-        // Always process comments if they exist - check both comments array and commentsCount
-        const hasComments = feed.comments && Array.isArray(feed.comments) && feed.comments.length > 0;
-        const hasCommentsCount = feed.commentsCount && feed.commentsCount > 0;
+        // Always update database count (source of truth)
+        setDatabaseCommentsCount(dbCommentsCount);
         
-        console.log('[CommentsModal] Comment check:', {
+        // Always process comments from database - database is source of truth
+        const hasComments = dbCommentsArray && Array.isArray(dbCommentsArray) && dbCommentsArray.length > 0;
+        
+        console.log('[CommentsModal] Database sync check:', {
           hasComments,
-          hasCommentsCount,
-          commentsArrayLength: feed.comments?.length || 0,
-          commentsCount: feed.commentsCount,
-          commentsArray: feed.comments
+          databaseCommentsCount: dbCommentsCount,
+          databaseCommentsArrayLength: dbCommentsArray.length,
+          previousLocalCount: comments.length
         });
         
         if (hasComments) {
-          console.log('[CommentsModal] Processing', feed.comments.length, 'comments from array');
+          console.log('[CommentsModal] Processing', dbCommentsArray.length, 'comments from database array');
           
           // Fetch user profiles for all comment authors
-          const userIds = [...new Set(feed.comments.map(c => c.userId))];
-          console.log('[CommentsModal] Unique user IDs:', userIds);
+          const userIds = [...new Set(dbCommentsArray.map(c => c.userId))];
+          console.log('[CommentsModal] Unique user IDs from database:', userIds);
           
           const userProfiles = new Map<string, { username: string; fullName: string; profileImageUrl?: string | null }>();
           
@@ -176,9 +283,34 @@ export default function CommentsModal({
                     profileImageUrl: userResponse.data.profileImageUrl || userResponse.data.profilePicture || null,
                   }
                 };
+              } else if (userResponse.error?.code === 'USER_NOT_FOUND') {
+                // User deleted from NeonDB - mark as deleted
+                console.log(`[CommentsModal] User ${userId} deleted from NeonDB`);
+                return {
+                  userId,
+                  profile: {
+                    username: `[deleted_${userId.substring(0, 8)}]`,
+                    fullName: `[Deleted User]`,
+                    profileImageUrl: null,
+                    isDeleted: true,
+                  }
+                };
               }
             } catch (error) {
               console.error(`[CommentsModal] Failed to fetch user profile for ${userId}:`, error);
+              // Check if error indicates user not found
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              if (errorMessage.includes('not found') || errorMessage.includes('USER_NOT_FOUND')) {
+                return {
+                  userId,
+                  profile: {
+                    username: `[deleted_${userId.substring(0, 8)}]`,
+                    fullName: `[Deleted User]`,
+                    profileImageUrl: null,
+                    isDeleted: true,
+                  }
+                };
+              }
             }
             return {
               userId,
@@ -199,14 +331,26 @@ export default function CommentsModal({
           
           // Convert backend comments to frontend Comment format
           // Ensure we process ALL comments - don't filter or limit
-          console.log('[CommentsModal] Mapping comments:', feed.comments.length, 'total comments');
-          const formattedComments: Comment[] = feed.comments
-            .map((comment, index) => {
-              console.log('[CommentsModal] Mapping comment', index, ':', {
+          console.log('[CommentsModal] Mapping comments:', dbCommentsArray.length, 'total comments from database');
+          
+          // Note: Comments are stored in chronological order (oldest first) in backend
+          // We reverse them to show newest first, but need to track original index
+          // CRITICAL: Always use database array - database is source of truth
+          const commentsArray = [...dbCommentsArray];
+          const formattedComments: Comment[] = commentsArray
+            .map((comment, originalIndex) => {
+              // CRITICAL: Extract replyToCommentIndex from backend comment
+              const replyToIndex = (comment as any).replyToCommentIndex ?? null;
+              const isReply = replyToIndex !== null && replyToIndex !== undefined;
+              
+              console.log('[CommentsModal] Mapping comment', originalIndex, ':', {
                 userId: comment.userId,
                 text: comment.text,
-                createdAt: comment.createdAt
+                createdAt: comment.createdAt,
+                replyToCommentIndex: replyToIndex,
+                isReply: isReply
               });
+              
               const userProfile = userProfiles.get(comment.userId) || {
                 username: `user_${comment.userId.substring(0, 8)}`,
                 fullName: `User ${comment.userId.substring(0, 8)}`,
@@ -222,20 +366,25 @@ export default function CommentsModal({
               const timestampStr = new Date(comment.createdAt).getTime().toString();
               const textHash = comment.text.substring(0, 15).replace(/[^a-zA-Z0-9]/g, '_');
               // Include index to ensure uniqueness even if timestamps match
-              const uniqueId = `comment_${postId}_${comment.userId}_${timestampStr}_${index}_${textHash}`;
+              const uniqueId = `comment_${postId}_${comment.userId}_${timestampStr}_${originalIndex}_${textHash}`;
               
               console.log('[CommentsModal] Generated comment ID:', uniqueId, {
-                index,
+                originalIndex,
                 text: comment.text.substring(0, 20),
                 timestamp: comment.createdAt,
-                userId: comment.userId.substring(0, 8)
+                userId: comment.userId.substring(0, 8),
+                replyToIndex: replyToIndex,
+                isReply: isReply
               });
               
               return {
                 id: uniqueId,
+                userId: comment.userId, // Store userId for ownership check
+                originalIndex, // Store original index for deletion
+                replyToCommentIndex: replyToIndex, // Store reply relationship
                 name: userProfile.fullName,
                 username: userProfile.username,
-                avatar: userProfile.profileImageUrl || `https://i.pravatar.cc/150?img=${index + 1}`,
+                avatar: userProfile.profileImageUrl || `https://i.pravatar.cc/150?img=${originalIndex + 1}`,
                 comment: comment.text,
                 timestamp,
                 claps: 0,
@@ -243,45 +392,99 @@ export default function CommentsModal({
                 isClapped: false,
                 showReplies: false,
               };
-            })
-            .reverse(); // Show newest first
+            });
+          
+          // CRITICAL: Organize comments into parent-child structure
+          // Separate top-level comments from replies
+          const topLevelComments: Comment[] = [];
+          const replyMap = new Map<number, Comment[]>(); // Map parent index -> replies
+          
+          formattedComments.forEach(comment => {
+            if (comment.replyToCommentIndex !== null && comment.replyToCommentIndex !== undefined) {
+              // This is a reply - add it to the reply map
+              const parentIndex = comment.replyToCommentIndex;
+              if (!replyMap.has(parentIndex)) {
+                replyMap.set(parentIndex, []);
+              }
+              replyMap.get(parentIndex)!.push(comment);
+              console.log('[CommentsModal] Added reply to parent index', parentIndex, ':', comment.comment.substring(0, 20));
+            } else {
+              // This is a top-level comment
+              topLevelComments.push(comment);
+            }
+          });
+          
+          // Attach replies to their parent comments
+          topLevelComments.forEach(parentComment => {
+            const replies = replyMap.get(parentComment.originalIndex) || [];
+            if (replies.length > 0) {
+              parentComment.repliesList = replies;
+              parentComment.replies = replies.length;
+              parentComment.showReplies = true; // Auto-expand if has replies
+              console.log('[CommentsModal] Attached', replies.length, 'replies to parent comment at index', parentComment.originalIndex);
+            }
+          });
+          
+          // Reverse to show newest first
+          const organizedComments = topLevelComments.reverse();
           
           // Verify we have all comments before setting state
-          console.log('[CommentsModal] Formatted comments:', formattedComments.length, 'out of', feed.comments.length, 'original');
-          console.log('[CommentsModal] Comment details:', formattedComments.map((c, idx) => ({
-            index: idx,
-            id: c.id,
-            text: c.comment,
-            username: c.username,
-            name: c.name
-          })));
+          console.log('[CommentsModal] ✅ Synced from database:', {
+            databaseCommentsCount: dbCommentsCount,
+            databaseArrayLength: dbCommentsArray.length,
+            formattedCommentsLength: formattedComments.length,
+            previousLocalCount: comments.length,
+            synced: formattedComments.length === dbCommentsArray.length
+          });
           
-          // Verify count matches
-          if (formattedComments.length !== feed.comments.length) {
-            console.error('[CommentsModal] ERROR: Comment count mismatch!', {
-              expected: feed.comments.length,
-              actual: formattedComments.length,
-              commentsCount: feed.commentsCount,
-              feedComments: feed.comments.map((c, i) => ({ index: i, text: c.text, userId: c.userId }))
+          // CRITICAL: Always set comments from database - database is source of truth
+          // Only display comments that exist in the database array
+          setComments(organizedComments);
+          
+          // CRITICAL: Always use database array length as the count (database is source of truth)
+          // This ensures the count matches exactly what's stored in MongoDB
+          const actualDatabaseCount = dbCommentsArray.length;
+          setDatabaseCommentsCount(actualDatabaseCount);
+          
+          // Log organization results
+          const totalReplies = Array.from(replyMap.values()).reduce((sum, replies) => sum + replies.length, 0);
+          console.log('[CommentsModal] ✅ Comment organization:', {
+            databaseArrayLength: actualDatabaseCount,
+            topLevelComments: organizedComments.length,
+            totalReplies: totalReplies,
+            organizedCommentsWithReplies: organizedComments.filter(c => c.repliesList && c.repliesList.length > 0).length,
+            match: organizedComments.length + totalReplies === actualDatabaseCount
+          });
+          
+          // Verify all comments are accounted for
+          if (organizedComments.length + totalReplies !== actualDatabaseCount) {
+            console.warn('[CommentsModal] ⚠️ Comment count mismatch after organization:', {
+              databaseArrayLength: actualDatabaseCount,
+              topLevelComments: organizedComments.length,
+              totalReplies: totalReplies,
+              total: organizedComments.length + totalReplies
             });
           }
-          
-          setComments(formattedComments);
         } else {
-          // Check if commentsCount suggests there should be comments
-          if (feed.commentsCount && feed.commentsCount > 0) {
-            console.warn('[CommentsModal] WARNING: Feed has commentsCount =', feed.commentsCount, 'but comments array is empty or missing');
-          }
-          console.log('[CommentsModal] No comments to display - comments array is empty or missing');
+          // No comments in database - clear local state
+          console.log('[CommentsModal] ✅ Database has no comments - clearing local state');
           setComments([]);
+          setDatabaseCommentsCount(0);
+          
+          // Warn if there's a mismatch
+          if (dbCommentsCount > 0) {
+            console.warn('[CommentsModal] ⚠️ Database commentsCount =', dbCommentsCount, 'but comments array is empty');
+          }
         }
       } else {
         console.warn('[CommentsModal] Failed to fetch feeds or no data:', response.error);
         setComments([]);
+        setDatabaseCommentsCount(0);
       }
     } catch (error) {
       console.error('[CommentsModal] Failed to fetch comments:', error);
       setComments([]);
+      setDatabaseCommentsCount(0);
     } finally {
       setIsLoadingComments(false);
     }
@@ -391,6 +594,7 @@ export default function CommentsModal({
     
     setIsSubmittingComment(true);
     const commentText = inputText.trim();
+    const replyToIndex = replyingToComment?.originalIndex; // Get the original index of the comment being replied to
     
     try {
       // Optimistic update - add comment immediately
@@ -401,6 +605,8 @@ export default function CommentsModal({
       // For now, use placeholder - will be updated after API call
       const optimisticComment: Comment = {
         id: `temp_${Date.now()}`,
+        userId: currentUserId || 'unknown',
+        originalIndex: -1, // Will be updated after fetch
         name: 'You',
         username: 'you',
         avatar: 'https://i.pravatar.cc/150?img=1',
@@ -414,16 +620,18 @@ export default function CommentsModal({
       
       setComments((prev) => [optimisticComment, ...prev]);
       setInputText('');
+      setReplyingToComment(null); // Clear reply state
       
-      // Submit comment to backend
-      const response = await addComment(postId, commentText);
+      // Submit comment to backend (with optional replyToCommentIndex)
+      const response = await addComment(postId, commentText, replyToIndex);
       
       if (response.success && response.data) {
-        console.log('[CommentsModal] Comment added successfully, refreshing comments:', {
+        console.log('[CommentsModal] Comment added successfully, syncing with database:', {
           responseCommentsCount: response.data.commentsCount,
-          responseCommentsLength: response.data.comments?.length || 0
+          responseCommentsLength: response.data.comments?.length || 0,
+          isReply: replyToIndex !== undefined && replyToIndex !== null
         });
-        // Refresh comments to get all comments including the new one
+        // CRITICAL: Always refresh from database after adding comment (database is source of truth)
         await fetchComments();
         // Notify parent to refresh feed list to update comment count
         onCommentAdded?.();
@@ -438,6 +646,99 @@ export default function CommentsModal({
       setComments((prev) => prev.filter(c => !c.id.startsWith('temp_')));
     } finally {
       setIsSubmittingComment(false);
+    }
+  };
+  
+  const handleReplyToComment = (comment: Comment) => {
+    setReplyingToComment(comment);
+    // Focus on input field (if needed, you can add a ref)
+  };
+  
+  const handleCancelReply = () => {
+    setReplyingToComment(null);
+  };
+
+  const handleDeleteComment = async (comment: Comment) => {
+    console.log('[CommentsModal] handleDeleteComment called:', {
+      postId,
+      commentId: comment.id,
+      originalIndex: comment.originalIndex,
+      userId: comment.userId,
+      currentUserId,
+      commentText: comment.comment.substring(0, 30),
+    });
+
+    if (!postId || !comment) {
+      console.error('[CommentsModal] Cannot delete comment: missing postId or comment');
+      Alert.alert('Error', 'Cannot delete comment: missing information');
+      return;
+    }
+
+    if (comment.originalIndex < 0) {
+      console.error('[CommentsModal] Cannot delete comment: invalid originalIndex:', comment.originalIndex);
+      Alert.alert('Error', 'Cannot delete comment: invalid comment index');
+      return;
+    }
+
+    if (comment.userId !== currentUserId) {
+      console.warn('[CommentsModal] User attempted to delete someone else\'s comment');
+      Alert.alert('Error', 'You can only delete your own comments');
+      return;
+    }
+
+    // Close menu immediately
+    setMenuVisibleForComment(null);
+    setIsDeletingComment(comment.id);
+
+    try {
+      console.log('[CommentsModal] Deleting comment from backend:', {
+        feedId: postId,
+        commentIndex: comment.originalIndex,
+      });
+
+      // Optimistic update - remove comment immediately from UI
+      const previousComments = [...comments];
+      setComments((prev) => {
+        const filtered = prev.filter(c => c.id !== comment.id);
+        console.log('[CommentsModal] Optimistic update: removed comment, remaining:', filtered.length);
+        return filtered;
+      });
+
+      // Delete comment from backend database
+      const response = await deleteComment(postId, comment.originalIndex);
+
+      if (response.success && response.data) {
+        console.log('[CommentsModal] ✅ Comment deleted successfully from database');
+        console.log('[CommentsModal] Database comment count after deletion:', response.data.commentsCount);
+        
+        // CRITICAL: Always refresh from database after deletion (database is source of truth)
+        await fetchComments();
+        
+        // Notify parent to refresh feed list to update comment count
+        onCommentAdded?.();
+        
+        console.log('[CommentsModal] ✅ Comment deletion complete - UI synced with database');
+      } else {
+        // Revert optimistic update on error
+        console.error('[CommentsModal] ❌ Failed to delete comment from backend:', response.error);
+        setComments(previousComments);
+        Alert.alert('Error', response.error?.message || 'Failed to delete comment. Please try again.');
+      }
+    } catch (error) {
+      // Revert optimistic update on error
+      console.error('[CommentsModal] ❌ Exception while deleting comment:', error);
+      setComments((prev) => {
+        const commentExists = prev.find(c => c.id === comment.id);
+        if (!commentExists) {
+          console.log('[CommentsModal] Reverting optimistic update - restoring comment');
+          return [...prev, comment];
+        }
+        return prev;
+      });
+      Alert.alert('Error', 'An error occurred while deleting the comment. Please try again.');
+    } finally {
+      setIsDeletingComment(null);
+      setMenuVisibleForComment(null);
     }
   };
 
@@ -618,7 +919,7 @@ export default function CommentsModal({
                         marginLeft: 10,
                       }}
                     >
-                      {comments.length > 0 ? comments.length : (commentsCount > 0 ? commentsCount : 0)} Responses
+                      {databaseCommentsCount} Responses
                     </Text>
                   </View>
                 </View>
@@ -710,7 +1011,7 @@ export default function CommentsModal({
                           }}
                         >
                           {/* Profile Section - Single Flex View */}
-                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 0 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 0, position: 'relative' }}>
                             {/* Profile Avatar with Golden Star Badge */}
                             <View style={{ position: 'relative', marginRight: 10, zIndex: 3 }}>
                               <Image
@@ -806,10 +1107,38 @@ export default function CommentsModal({
                               )}
                             </View>
 
-                            {/* Ellipsis Icon - End of Profile Line */}
-                            <Pressable>
-                              <Ellipsis size={20} color={secondaryTextColor} />
-                            </Pressable>
+                            {/* 3-Dot Menu Icon - Top Right - Only show for own comments */}
+                            {currentUserId && comment.userId === currentUserId && (
+                              <Pressable
+                                onPress={() => {
+                                  console.log('[CommentsModal] Opening menu for comment:', comment.id, 'originalIndex:', comment.originalIndex);
+                                  setMenuVisibleForComment(comment.id);
+                                }}
+                                disabled={isDeletingComment === comment.id}
+                                style={{ 
+                                  opacity: isDeletingComment === comment.id ? 0.5 : 1,
+                                  padding: 4,
+                                  marginLeft: 8,
+                                }}
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                              >
+                                <Ellipsis size={20} color={secondaryTextColor} />
+                              </Pressable>
+                            )}
+                            
+                            {/* Comment Menu Dropdown */}
+                            <CommentMenuDropdown
+                              visible={menuVisibleForComment === comment.id}
+                              onClose={() => {
+                                console.log('[CommentsModal] Closing menu for comment:', comment.id);
+                                setMenuVisibleForComment(null);
+                              }}
+                              onDelete={() => {
+                                console.log('[CommentsModal] Delete button clicked for comment:', comment.id, 'originalIndex:', comment.originalIndex);
+                                handleDeleteComment(comment);
+                              }}
+                              isOwnComment={currentUserId === comment.userId}
+                            />
                           </View>
 
                           {/* Comment Text - Starts Below Profile */}
@@ -853,7 +1182,7 @@ export default function CommentsModal({
                             <CommentsAction
                               timestamp={comment.timestamp}
                               onBoost={() => {}}
-                              onReply={() => {}}
+                              onReply={() => handleReplyToComment(comment)}
                             />
                           </View>
 
@@ -1068,30 +1397,74 @@ export default function CommentsModal({
                     paddingHorizontal: 20,
                   }}
                 >
-              {/* Premium Pill-Shaped Input Field with Integrated Circular Send Button */}
+              {/* Classic Premium Input Field with Send Icon */}
               <View
                 style={{
                   width: '100%',
                   flexDirection: 'row',
                   alignItems: 'center',
-                  backgroundColor: '#F5F5F5',
-                  borderRadius: 30,
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+                  borderRadius: 24,
                   paddingLeft: 20,
-                  paddingRight: 6,
-                  paddingVertical: 10,
+                  paddingRight: 12,
+                  paddingVertical: 12,
                   borderWidth: 1,
-                  borderColor: 'rgba(0, 0, 0, 0.1)',
-                  minHeight: 52,
+                  borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
+                  minHeight: 48,
                   shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.06,
-                  shadowRadius: 6,
-                  elevation: 4,
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 3,
+                  elevation: 2,
                 }}
               >
+                {replyingToComment && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: -40,
+                      left: 0,
+                      right: 0,
+                      paddingHorizontal: 20,
+                      paddingVertical: 8,
+                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+                      borderRadius: 8,
+                      marginBottom: 8,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        color: secondaryTextColor,
+                        flex: 1,
+                      }}
+                    >
+                      Replying to <Text style={{ fontWeight: '600', color: textColor }}>{replyingToComment.username}</Text>
+                    </Text>
+                    <Pressable
+                      onPress={handleCancelReply}
+                      style={{
+                        padding: 4,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          color: '#EF4444',
+                          fontWeight: '600',
+                        }}
+                      >
+                        Cancel
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
                 <TextInput
-                  placeholder="Share your thoughts..."
-                  placeholderTextColor="rgba(0, 0, 0, 0.5)"
+                  placeholder={replyingToComment ? `Reply ${replyingToComment.username}...` : "Share your thoughts..."}
+                  placeholderTextColor={isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.5)'}
                   value={inputText}
                   onChangeText={setInputText}
                   style={{
@@ -1099,38 +1472,51 @@ export default function CommentsModal({
                     fontSize: 15,
                     color: textColor,
                     padding: 0,
-                    marginRight: 6,
+                    marginRight: 12,
                     paddingVertical: 2,
+                    lineHeight: 20,
                   }}
                   multiline
                   maxLength={500}
                 />
                 
-                {/* Integrated Circular Send Button */}
+                {/* Premium Send Icon Button */}
                 <Pressable
                   onPress={inputText.trim().length > 0 && !isSubmittingComment ? handleSendComment : undefined}
                   disabled={inputText.trim().length === 0 || isSubmittingComment}
                   style={({ pressed }) => ({
-                    width: 36,
-                    height: 36,
-                    borderRadius: 18,
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
                     backgroundColor: inputText.trim().length > 0 
-                      ? '#000000'
-                      : 'rgba(0, 0, 0, 0.06)',
+                      ? (isDark ? '#FFFFFF' : '#000000')
+                      : 'transparent',
                     justifyContent: 'center',
                     alignItems: 'center',
-                    opacity: pressed ? 0.8 : (inputText.trim().length > 0 ? 1 : 0.6),
+                    opacity: pressed ? 0.7 : (inputText.trim().length > 0 ? 1 : 0.4),
                     transform: [{ scale: pressed ? 0.95 : 1 }],
                   })}
                 >
-                  <Svg width={16} height={16} viewBox="0 0 24 24">
+                  <Svg width={12} height={12} viewBox="0 0 12 12">
                     <Path
-                      d="M5,12H19M19,12L12,5M19,12L12,19"
-                      stroke={inputText.trim().length > 0 ? '#FFFFFF' : 'rgba(0, 0, 0, 0.4)'}
-                      strokeWidth="2.5"
+                      d="m11.21,1.8l-2.859,8.893c-.213.661-1.108.759-1.457.159l-2.01-3.447c-.07-.12-.169-.219-.289-.289l-3.447-2.01c-.6-.35-.502-1.245.159-1.457L10.2.79c.622-.2,1.21.388,1.01,1.01Z"
+                      fill="none"
+                      stroke={inputText.trim().length > 0 
+                        ? (isDark ? '#000000' : '#FFFFFF')
+                        : (isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)')}
+                      strokeWidth="1.5"
                       strokeLinecap="round"
                       strokeLinejoin="round"
+                    />
+                    <Path
+                      d="M10.961,1.039 L4.82,7.18"
                       fill="none"
+                      stroke={inputText.trim().length > 0 
+                        ? (isDark ? '#000000' : '#FFFFFF')
+                        : (isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)')}
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                     />
                   </Svg>
                 </Pressable>

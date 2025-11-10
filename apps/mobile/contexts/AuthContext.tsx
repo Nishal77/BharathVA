@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter, useSegments } from 'expo-router';
 import { authService, tokenManager } from '../services/api/authService';
+import { clearAuthCaches, clearFeedCaches } from '../utils/cacheManager';
+import { clearUserProfileCache } from '../services/api/feedService';
 
 interface AuthContextType {
   user: UserData | null;
@@ -47,9 +49,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user && !inAuthGroup && router) {
       router.replace('/(auth)/login');
     } else if (user && inAuthGroup && router) {
+      console.log('✅ [AuthContext] User authenticated in auth group, redirecting to home:', user.userId);
       router.replace(`/(user)/${user.userId}/(tabs)`);
     }
-  }, [user, segments, isLoading]);
+  }, [user, segments, isLoading, router]);
 
   const checkAuthStatus = async () => {
     try {
@@ -58,6 +61,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const userData = await tokenManager.getUserData();
 
       if (!accessToken || !refreshToken || !userData) {
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+
+      // CRITICAL: Verify user ID from token matches userData
+      // This prevents using stale userData from a different user
+      const tokenUserId = await tokenManager.getUserIdFromToken();
+      if (tokenUserId && userData.userId && tokenUserId !== userData.userId) {
+        console.warn('⚠️ [AuthContext] User ID mismatch detected. Clearing tokens and forcing re-login.', {
+          tokenUserId,
+          userDataUserId: userData.userId
+        });
+        // Clear all caches when user ID mismatch is detected
+        try {
+          await clearAuthCaches();
+          await clearFeedCaches();
+          clearUserProfileCache();
+        } catch (error) {
+          console.warn('⚠️ [AuthContext] Error clearing caches:', error);
+        }
+        await tokenManager.clearSecureStore();
         setUser(null);
         setIsLoading(false);
         return;
@@ -72,19 +97,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const refreshed = await authService.refreshAccessToken();
 
           if (refreshed) {
+            // CRITICAL: Get fresh userData after refresh
+            // Token refresh updates userData to match the new token
             const newUserData = await tokenManager.getUserData();
-            setUser(newUserData);
+            if (newUserData) {
+              setUser(newUserData);
+            } else {
+              console.warn('⚠️ [AuthContext] No userData after token refresh, forcing re-login');
+              // Clear all caches when forcing re-login
+              try {
+                await clearAuthCaches();
+                await clearFeedCaches();
+                clearUserProfileCache();
+              } catch (cacheError) {
+                console.warn('⚠️ [AuthContext] Error clearing caches:', cacheError);
+              }
+              await tokenManager.clearSecureStore();
+              setUser(null);
+            }
           } else {
-            await tokenManager.clearTokens();
+            // Clear all caches when refresh fails
+            try {
+              await clearAuthCaches();
+              await clearFeedCaches();
+              clearUserProfileCache();
+            } catch (cacheError) {
+              console.warn('⚠️ [AuthContext] Error clearing caches:', cacheError);
+            }
+            await tokenManager.clearSecureStore();
             setUser(null);
           }
         } catch (refreshError) {
-          await tokenManager.clearTokens();
+          console.error('❌ [AuthContext] Token refresh error:', refreshError);
+          // Clear all caches on refresh error
+          try {
+            await clearAuthCaches();
+            await clearFeedCaches();
+            clearUserProfileCache();
+          } catch (cacheError) {
+            console.warn('⚠️ [AuthContext] Error clearing caches:', cacheError);
+          }
+          await tokenManager.clearSecureStore();
           setUser(null);
         }
       }
     } catch (error) {
-      await tokenManager.clearTokens();
+      console.error('❌ [AuthContext] Auth check error:', error);
+      // Clear all caches on auth check error
+      try {
+        await clearAuthCaches();
+        await clearFeedCaches();
+        clearUserProfileCache();
+      } catch (cacheError) {
+        console.warn('⚠️ [AuthContext] Error clearing caches:', cacheError);
+      }
+      await tokenManager.clearSecureStore();
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -118,6 +185,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Silent fail for backend logout
       }
       
+      // CRITICAL: Clear all caches and reset state
+      // authService.logout() already clears caches, but we ensure state is reset here
+      try {
+        await clearAuthCaches();
+        await clearFeedCaches();
+        clearUserProfileCache();
+      } catch (cacheError) {
+        console.warn('⚠️ [AuthContext] Error clearing caches on logout:', cacheError);
+      }
+      
       await tokenManager.clearTokens();
       setUser(null);
 
@@ -125,6 +202,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         router.replace('/(auth)/login');
       }
     } catch (error) {
+      // Ensure cleanup even if logout fails
+      try {
+        await clearAuthCaches();
+        await clearFeedCaches();
+        clearUserProfileCache();
+      } catch (cacheError) {
+        console.warn('⚠️ [AuthContext] Error clearing caches on logout error:', cacheError);
+      }
       await tokenManager.clearTokens();
       setUser(null);
       if (router) {

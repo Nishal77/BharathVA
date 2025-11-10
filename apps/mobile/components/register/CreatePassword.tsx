@@ -85,7 +85,7 @@ export default function CreatePassword({
     <View className="flex-1" style={{ backgroundColor: bgColor, minHeight: availableHeight }}>
       {/* Header Image - Dynamic scaling based on device dimensions */}
       <Image
-        source={require('../../../assets/images/Amber Fort.jpeg')}
+        source={require('../../assets/images/Amber Fort.jpeg')}
         style={{
           position: 'absolute',
           top: 0,
@@ -138,7 +138,7 @@ export default function CreatePassword({
           style={{ backgroundColor: 'rgba(255, 255, 255, 0.2)' }}
         >
           <Image
-            source={require('../../../assets/logo/arrow.png')}
+            source={require('../../assets/logo/arrow.png')}
             style={{
               width: 20,
               height: 20,

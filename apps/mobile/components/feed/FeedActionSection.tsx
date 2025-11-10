@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Pressable, Text, View, useColorScheme, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 // Removed MessageCircle import - using custom SVG
@@ -8,6 +8,7 @@ import ReactionsPicker from '../../components/ReactionsPicker';
 import CommentsModal from './components/CommentsModal';
 import { toggleLike } from '../../services/api/feedService';
 import { getUserProfileById, getUsernamesBatch, UserProfile } from '../../services/api/userService';
+import { webSocketService, FeedEvent } from '../../services/api/websocketService';
 import * as SecureStore from 'expo-secure-store';
 
 // Get device dimensions
@@ -76,6 +77,9 @@ export default function FeedActionSection({
   // Store authenticated user ID for fallback check
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   
+  // Track processed WebSocket events to prevent duplicate processing
+  const processedEventsRef = useRef<Set<string>>(new Set());
+  
   // Get authenticated user ID from token on mount
   useEffect(() => {
     const getAuthenticatedUserId = async () => {
@@ -106,27 +110,59 @@ export default function FeedActionSection({
     getAuthenticatedUserId();
   }, []);
   
-  // Sync local state with prop - always update when prop changes
+  // DATABASE IS THE SOURCE OF TRUTH - Sync with prop changes from MongoDB
+  // This ensures the UI always reflects the actual database state
   useEffect(() => {
-    const newValue = likedByUserIds || [];
-    console.log('🔄 Syncing likedByUserIds prop:', {
-      propValue: likedByUserIds,
-      propLength: likedByUserIds?.length || 0,
-      newValueLength: newValue.length,
-      newValue: newValue
-    });
-    setLocalLikedByUserIds(newValue);
-  }, [likedByUserIds]);
-  
-  // Sync with prop changes
-  useEffect(() => {
-    if (likes !== undefined) {
-      setDisplayLikes(likes);
-    } else if (likedByUserIds && likedByUserIds.length > 0) {
-      // If likes prop is not provided, use likedByUserIds length
-      setDisplayLikes(likedByUserIds.length);
+    // Priority 1: Use likedByUserIds array from database (most accurate - direct from MongoDB)
+    if (likedByUserIds && Array.isArray(likedByUserIds)) {
+      const dbLikesCount = likedByUserIds.length;
+      const currentLocalArray = localLikedByUserIds || [];
+      
+      // Check if arrays are different
+      const arraysEqual = dbLikesCount === currentLocalArray.length &&
+        dbLikesCount > 0 && 
+        dbLikesCount === currentLocalArray.filter(id => likedByUserIds.includes(id)).length;
+      
+      if (!arraysEqual || displayLikes !== dbLikesCount) {
+        console.log('🔄 Syncing from database (likedByUserIds):', {
+          databaseArray: likedByUserIds,
+          databaseLength: dbLikesCount,
+          currentLocalArray: currentLocalArray,
+          currentLocalLength: currentLocalArray.length,
+          currentDisplayLikes: displayLikes,
+          willUpdate: true
+        });
+        
+        // Always sync localLikedByUserIds with database state
+        setLocalLikedByUserIds([...likedByUserIds]);
+        
+        // Always sync display count with database array length
+        setDisplayLikes(dbLikesCount);
+      }
     }
-  }, [likes, likedByUserIds]);
+    // Priority 2: Use likes prop if likedByUserIds not available
+    else if (likes !== undefined) {
+      console.log('🔄 Syncing displayLikes with likes prop (fallback):', likes);
+      if (displayLikes !== likes) {
+        setDisplayLikes(likes);
+      }
+    }
+    // Priority 3: Reset to 0 if no likes data available
+    else {
+      if (displayLikes !== 0 || localLikedByUserIds.length > 0) {
+        console.log('🔄 Resetting displayLikes to 0 (no likes data from database)');
+        setDisplayLikes(0);
+        setLocalLikedByUserIds([]);
+      }
+    }
+  }, [likes, likedByUserIds]); // Only depend on props from database, not local state
+  
+  // Sync comment count with prop changes
+  useEffect(() => {
+    if (comments !== undefined) {
+      setDisplayComments(comments);
+    }
+  }, [comments]);
   
   // BULLETPROOF: Sync heart active state with userLiked prop changes
   // This ensures the heart state always reflects the backend truth, even after refresh
@@ -159,8 +195,13 @@ export default function FeedActionSection({
     }
   }, [initialUserLiked, feedId, currentUserId, localLikedByUserIds, isHeartActive]);
   
-  // Use actual comment count from backend, default to 0
-  const displayComments = comments !== undefined ? comments : 0;
+  // Real-time comment count state (starts with prop value)
+  const initialComments = comments !== undefined ? comments : 0;
+  const [displayComments, setDisplayComments] = useState(initialComments);
+  
+  // Ref to track if we've already processed a like/unlike event from current user
+  // This prevents double-counting when user likes/unlikes (optimistic update + WebSocket)
+  const lastProcessedLikeEventRef = useRef<{ userId: string; timestamp: string } | null>(null);
   
   const randomShares = React.useMemo(() => {
     if (shares !== undefined && shares > 0) {
@@ -242,52 +283,66 @@ export default function FeedActionSection({
             
             const selectedUsername = fetchedUsernameMap[selectedUserId];
             
+            // CRITICAL: Only show usernames that exist in MongoDB
+            // Don't use fallback usernames - if user doesn't exist, don't show them
             if (selectedUsername && typeof selectedUsername === 'string' && selectedUsername.trim().length > 0) {
-              setLikerUsername(selectedUsername.trim());
-              console.log('✅ Selected username for display:', selectedUsername);
+              // Filter out deleted user markers
+              if (!selectedUsername.startsWith('[deleted_') && selectedUsername !== '[Deleted User]') {
+                setLikerUsername(selectedUsername.trim());
+                console.log('✅ Selected username for display:', selectedUsername);
+              } else {
+                // User is deleted - try to find another valid user
+                const availableUsernames = Object.entries(fetchedUsernameMap)
+                  .filter(([_, username]) => 
+                    typeof username === 'string' && 
+                    username.trim().length > 0 &&
+                    !username.startsWith('[deleted_') &&
+                    username !== '[Deleted User]'
+                  )
+                  .map(([_, username]) => username as string);
+                
+                if (availableUsernames.length > 0) {
+                  setLikerUsername(availableUsernames[0]);
+                  console.log('✅ Using alternative username (selected user was deleted):', availableUsernames[0]);
+                } else {
+                  // No valid users found - clear the display
+                  setLikerUsername(null);
+                  setUsernameMap({});
+                  console.log('⚠️ No valid users found in likes (all deleted or not found)');
+                }
+              }
             } else {
-              // Fallback: use first available username from the map
+              // Try to find any valid username from the map
               const availableUsernames = Object.values(fetchedUsernameMap).filter(
-                (u): u is string => typeof u === 'string' && u.trim().length > 0
+                (u): u is string => 
+                  typeof u === 'string' && 
+                  u.trim().length > 0 &&
+                  !u.startsWith('[deleted_') &&
+                  u !== '[Deleted User]'
               );
               
               if (availableUsernames.length > 0) {
-                const firstAvailableUsername = availableUsernames[0];
-                setLikerUsername(firstAvailableUsername);
-                console.log('⚠️ Selected userId not found in map, using first available username:', firstAvailableUsername);
+                setLikerUsername(availableUsernames[0]);
+                console.log('✅ Using first available username:', availableUsernames[0]);
               } else {
-                // Last resort: generate from userId
-                setLikerUsername(`user_${selectedUserId.substring(0, 8)}`);
-                console.warn('⚠️ No usernames available in map, using generated fallback');
+                // No valid users - clear display
+                setLikerUsername(null);
+                setUsernameMap({});
+                console.log('⚠️ No valid usernames found (all users deleted or not found)');
               }
             }
           } else {
-            console.warn('⚠️ Failed to batch fetch usernames, using fallback');
-            // Fallback: create usernames from user IDs
-            const fallbackUsernameMap: Record<string, string> = {};
-            validUserIds.forEach(userId => {
-              fallbackUsernameMap[userId] = `user_${userId.substring(0, 8)}`;
-            });
-            setUsernameMap(fallbackUsernameMap);
-            
-            const selectedUserId = displayLikes === 1 
-              ? validUserIds[0] 
-              : validUserIds[Math.floor(Math.random() * validUserIds.length)];
-            setLikerUsername(fallbackUsernameMap[selectedUserId]);
+            // CRITICAL: If batch fetch failed, don't show fallback usernames
+            // Only show users that actually exist in MongoDB
+            console.warn('⚠️ Failed to batch fetch usernames - not showing fallback usernames');
+            setUsernameMap({});
+            setLikerUsername(null);
           }
         } catch (error) {
           console.error('❌ Error batch fetching usernames:', error);
-          // Fallback: create usernames from user IDs
-          const fallbackUsernameMap: Record<string, string> = {};
-          validUserIds.forEach(userId => {
-            fallbackUsernameMap[userId] = `user_${userId.substring(0, 8)}`;
-          });
-          setUsernameMap(fallbackUsernameMap);
-          
-          const selectedUserId = displayLikes === 1 
-            ? validUserIds[0] 
-            : validUserIds[Math.floor(Math.random() * validUserIds.length)];
-          setLikerUsername(fallbackUsernameMap[selectedUserId]);
+          // CRITICAL: Don't show fallback usernames - only show users that exist
+          setUsernameMap({});
+          setLikerUsername(null);
         } finally {
           setIsLoadingLikerProfile(false);
         }
@@ -315,6 +370,7 @@ export default function FeedActionSection({
   }, [localLikedByUserIds, displayLikes]);
   
   // Generate avatar URLs for "Liked by" section (up to 2 avatars from actual likers)
+  // CRITICAL: Only show avatars for users that exist in MongoDB
   const likedByUsers = React.useMemo(() => {
     // Always show avatars if there are likes, even if we don't have localLikedByUserIds yet
     const shouldShowAvatars = displayLikes > 0 || (localLikedByUserIds && localLikedByUserIds.length > 0);
@@ -325,26 +381,40 @@ export default function FeedActionSection({
     
     // Use localLikedByUserIds if available, otherwise create placeholder avatars based on displayLikes
     if (localLikedByUserIds && localLikedByUserIds.length > 0) {
-      // Get up to 2 random user IDs from the likes array
-      const shuffled = [...localLikedByUserIds].sort(() => 0.5 - Math.random());
-      const selectedUserIds = shuffled.slice(0, Math.min(2, localLikedByUserIds.length));
+      // CRITICAL: Filter out deleted users - only show users that exist
+      const validUserIds = localLikedByUserIds.filter(userId => {
+        const username = usernameMap[userId];
+        // Only include users that have a valid username (exist in MongoDB)
+        // Exclude deleted users and users without usernames
+        return username && 
+               typeof username === 'string' && 
+               username.trim().length > 0 &&
+               !username.startsWith('[deleted_') &&
+               username !== '[Deleted User]';
+      });
+      
+      if (validUserIds.length === 0) {
+        // No valid users - don't show avatars
+        return [];
+      }
+      
+      // Get up to 2 random user IDs from the valid likes array
+      const shuffled = [...validUserIds].sort(() => 0.5 - Math.random());
+      const selectedUserIds = shuffled.slice(0, Math.min(2, validUserIds.length));
       
       // Use profile images from username map if available
       return selectedUserIds.map((userId, index) => ({
         userId,
-        avatar        : `https://i.pravatar.cc/150?img=${12 + index}`,
-      }));
-    } else if (displayLikes > 0) {
-      // Fallback: create placeholder avatars when we have likes count but no user IDs
-      const avatarCount = Math.min(2, displayLikes);
-      return Array.from({ length: avatarCount }, (_, index) => ({
-        userId: `placeholder_${index}`,
         avatar: `https://i.pravatar.cc/150?img=${12 + index}`,
       }));
+    } else if (displayLikes > 0) {
+      // CRITICAL: Don't show placeholder avatars - only show users that exist
+      // If we don't have user IDs, don't show avatars
+      return [];
     }
     
     return [];
-  }, [localLikedByUserIds, displayLikes]);
+  }, [localLikedByUserIds, displayLikes, usernameMap]);
   
   // Background colors for action buttons
   const likeBgColor = isDark ? '#4B1F1F' : '#FEE2E2';
@@ -375,62 +445,300 @@ export default function FeedActionSection({
     // Optimistic update
     const previousState = isHeartActive;
     const previousLikes = displayLikes;
+    const previousLikedByUserIds = [...localLikedByUserIds];
     
+    // Optimistic UI update
     setIsHeartActive(!previousState);
-    setDisplayLikes(previousState ? previousLikes - 1 : previousLikes + 1);
+    
+    // Update localLikedByUserIds optimistically
+    if (!previousState) {
+      // Adding like - add current user to array if not already present
+      if (currentUserId && !previousLikedByUserIds.includes(currentUserId)) {
+        const optimisticLikes = [...previousLikedByUserIds, currentUserId];
+        setLocalLikedByUserIds(optimisticLikes);
+        setDisplayLikes(optimisticLikes.length);
+      }
+    } else {
+      // Removing like - remove current user from array
+      if (currentUserId) {
+        const optimisticLikes = previousLikedByUserIds.filter(id => id !== currentUserId);
+        setLocalLikedByUserIds(optimisticLikes);
+        setDisplayLikes(optimisticLikes.length);
+      }
+    }
+    
     onLike?.();
     
-    // If feedId is provided, sync with backend
+    // Mark that we're processing a like event from current user to prevent double-counting
+    if (currentUserId && feedId) {
+      lastProcessedLikeEventRef.current = {
+        userId: currentUserId,
+        timestamp: new Date().toISOString()
+      };
+    }
+    
+    // If feedId is provided, sync with backend (database is source of truth)
     if (feedId && !isLiking) {
       setIsLiking(true);
       try {
         const response = await toggleLike(feedId);
         if (response.success && response.data) {
-          // Update with actual backend data - this is the source of truth
+          // Update with actual backend data - this is the source of truth from MongoDB
           const newLikesCount = response.data.likesCount || 0;
           const newUserLiked = response.data.userLiked !== undefined ? response.data.userLiked : false;
           
-          setDisplayLikes(newLikesCount);
-          setIsHeartActive(newUserLiked);
-          
-          console.log('✅ Like toggle response received:', {
+          console.log('✅ Like toggle response received from database:', {
             feedId,
             newLikesCount,
             newUserLiked,
             likesArray: response.data.likes,
+            likesArrayLength: response.data.likes?.length || 0,
             userLikedFromBackend: response.data.userLiked
           });
           
-          // If response includes the likes array, update immediately
-          // This allows us to fetch the username right away without waiting for parent refresh
+          // CRITICAL: Always update from backend response (database is source of truth)
           if (response.data.likes && Array.isArray(response.data.likes)) {
-            console.log('✅ Updating likedByUserIds from toggleLike response:', response.data.likes);
+            console.log('✅ Syncing likedByUserIds from database:', response.data.likes);
             setLocalLikedByUserIds(response.data.likes);
-            
-            // Also verify: if current user ID is in the array, ensure heart is active
-            if (currentUserId && response.data.likes.includes(currentUserId) && !newUserLiked) {
-              console.warn('⚠️ Inconsistency detected: User ID in likes array but userLiked is false. Setting to true.');
-              setIsHeartActive(true);
-            }
+            // Count should match array length from database
+            setDisplayLikes(response.data.likes.length);
           } else {
-            console.warn('⚠️ toggleLike response does not include likes array. Response:', response.data);
-            // Even if response doesn't have likes, we'll wait for parent to update the prop
+            // Fallback: use likesCount if array not provided
+            console.warn('⚠️ toggleLike response does not include likes array, using likesCount');
+            setDisplayLikes(newLikesCount);
+          }
+          
+          // Always sync heart state with backend
+          setIsHeartActive(newUserLiked);
+          
+          // Verify consistency
+          if (currentUserId && response.data.likes && Array.isArray(response.data.likes)) {
+            const isInArray = response.data.likes.includes(currentUserId);
+            if (isInArray !== newUserLiked) {
+              console.warn('⚠️ Inconsistency detected: User ID in likes array:', isInArray, 'but userLiked:', newUserLiked);
+              // Trust the array over userLiked flag
+              setIsHeartActive(isInArray);
+            }
           }
         } else {
-          // Revert on error
+          // Revert on error - restore previous state
+          console.error('❌ Like toggle failed, reverting optimistic update');
           setIsHeartActive(previousState);
+          setLocalLikedByUserIds(previousLikedByUserIds);
           setDisplayLikes(previousLikes);
         }
       } catch (error) {
-        // Revert on error
+        // Revert on error - restore previous state
+        console.error('❌ Error toggling like, reverting optimistic update:', error);
         setIsHeartActive(previousState);
+        setLocalLikedByUserIds(previousLikedByUserIds);
         setDisplayLikes(previousLikes);
-        console.error('Error toggling like:', error);
       } finally {
         setIsLiking(false);
       }
     }
   };
+  
+  // Setup WebSocket listeners for real-time like and comment updates
+  useEffect(() => {
+    if (!feedId) {
+      return; // Don't setup WebSocket if no feedId
+    }
+    
+    console.log('🔌 Setting up WebSocket listeners for feed:', feedId);
+    
+    const handleFeedLiked = (event: FeedEvent) => {
+      // Only process events for this specific feed
+      if (event.feedId !== feedId || !event.userId) {
+        return;
+      }
+      
+      // Create unique event ID to prevent duplicate processing
+      const eventId = `${event.feedId}-${event.userId}-${event.timestamp}`;
+      if (processedEventsRef.current.has(eventId)) {
+        console.log('⏭️ Skipping duplicate like event:', eventId);
+        return;
+      }
+      processedEventsRef.current.add(eventId);
+      
+      // Skip if this is our own like action (already handled optimistically via API response)
+      if (currentUserId && event.userId === currentUserId) {
+        const eventTime = new Date(event.timestamp).getTime();
+        const lastProcessedTime = lastProcessedLikeEventRef.current?.timestamp 
+          ? new Date(lastProcessedLikeEventRef.current.timestamp).getTime() 
+          : 0;
+        
+        // If event is within 3 seconds of our last action, skip it (already processed)
+        if (lastProcessedTime > 0 && Math.abs(eventTime - lastProcessedTime) < 3000) {
+          console.log('⏭️ Skipping own like event (already processed optimistically)');
+          processedEventsRef.current.delete(eventId); // Remove so it can be processed later if needed
+          return;
+        }
+      }
+      
+      console.log('📥 WebSocket: Feed liked event received for feed:', feedId, 'by user:', event.userId);
+      
+      // CRITICAL: Only increment if this user is NOT already in the likedByUserIds array
+      // This prevents double-counting when the same event is received multiple times
+      setLocalLikedByUserIds(prev => {
+        if (prev.includes(event.userId!)) {
+          console.log('⚠️ User already in likes array, not incrementing count. User:', event.userId);
+          return prev; // User already liked, don't change
+        }
+        
+        // Add user to the array
+        const updated = [...prev, event.userId!];
+        console.log('✅ Adding user to likes array. New count:', updated.length);
+        
+        // Update display count based on array length (source of truth)
+        setDisplayLikes(updated.length);
+        
+        return updated;
+      });
+    };
+    
+    const handleFeedUnliked = (event: FeedEvent) => {
+      // Only process events for this specific feed
+      if (event.feedId !== feedId || !event.userId) {
+        return;
+      }
+      
+      // Create unique event ID to prevent duplicate processing
+      const eventId = `${event.feedId}-${event.userId}-${event.timestamp}`;
+      if (processedEventsRef.current.has(eventId)) {
+        console.log('⏭️ Skipping duplicate unlike event:', eventId);
+        return;
+      }
+      processedEventsRef.current.add(eventId);
+      
+      // Skip if this is our own unlike action (already handled optimistically via API response)
+      if (currentUserId && event.userId === currentUserId) {
+        const eventTime = new Date(event.timestamp).getTime();
+        const lastProcessedTime = lastProcessedLikeEventRef.current?.timestamp 
+          ? new Date(lastProcessedLikeEventRef.current.timestamp).getTime() 
+          : 0;
+        
+        // If event is within 3 seconds of our last action, skip it (already processed)
+        if (lastProcessedTime > 0 && Math.abs(eventTime - lastProcessedTime) < 3000) {
+          console.log('⏭️ Skipping own unlike event (already processed optimistically)');
+          processedEventsRef.current.delete(eventId); // Remove so it can be processed later if needed
+          return;
+        }
+      }
+      
+      console.log('📥 WebSocket: Feed unliked event received for feed:', feedId, 'by user:', event.userId);
+      
+      // CRITICAL: Only decrement if this user IS in the likedByUserIds array
+      // This prevents decrementing when the user wasn't in the count to begin with
+      setLocalLikedByUserIds(prev => {
+        if (!prev.includes(event.userId!)) {
+          console.log('⚠️ User not in likes array, not decrementing count. User:', event.userId);
+          return prev; // User wasn't in the list, don't change
+        }
+        
+        // Remove user from the array
+        const updated = prev.filter(id => id !== event.userId);
+        console.log('✅ Removing user from likes array. New count:', updated.length);
+        
+        // Update display count based on array length (source of truth)
+        setDisplayLikes(Math.max(0, updated.length)); // Ensure count never goes below 0
+        
+        return updated;
+      });
+    };
+    
+    const handleFeedCommented = (event: FeedEvent) => {
+      // Only process events for this specific feed
+      if (event.feedId !== feedId || !event.userId) {
+        return;
+      }
+      
+      // Create unique event ID to prevent duplicate processing
+      const eventId = `comment-${event.feedId}-${event.userId}-${event.timestamp}`;
+      if (processedEventsRef.current.has(eventId)) {
+        console.log('⏭️ Skipping duplicate comment event:', eventId);
+        return;
+      }
+      processedEventsRef.current.add(eventId);
+      
+      console.log('📥 WebSocket: Feed commented event received for feed:', feedId, 'by user:', event.userId);
+      
+      // Increment comment count (comments are always additive, no need to check array)
+      setDisplayComments(prev => {
+        const newCount = prev + 1;
+        console.log('✅ Updated comment count via WebSocket:', prev, '->', newCount);
+        return newCount;
+      });
+      
+      // Notify parent component that a comment was added (will trigger feed refresh)
+      onCommentAdded?.();
+    };
+    
+    const handleCommentDeleted = (event: FeedEvent) => {
+      // Only process events for this specific feed
+      if (event.feedId !== feedId) {
+        return;
+      }
+      
+      // Create unique event ID to prevent duplicate processing
+      const eventId = `comment-delete-${event.feedId}-${event.timestamp}`;
+      if (processedEventsRef.current.has(eventId)) {
+        console.log('⏭️ Skipping duplicate comment deletion event:', eventId);
+        return;
+      }
+      processedEventsRef.current.add(eventId);
+      
+      console.log('📥 WebSocket: Comment deleted event received for feed:', feedId, 'by user:', event.userId);
+      
+      // Decrement comment count (ensure it never goes below 0)
+      setDisplayComments(prev => {
+        const newCount = Math.max(0, prev - 1);
+        console.log('✅ Updated comment count via WebSocket:', prev, '->', newCount);
+        return newCount;
+      });
+      
+      // Notify parent component that a comment was deleted (will trigger feed refresh)
+      onCommentAdded?.();
+    };
+    
+    // Connect to WebSocket with feed-specific callbacks
+    // This will merge callbacks with existing ones and ensure connection is active
+    webSocketService.connect({
+      onFeedLiked: handleFeedLiked,
+      onFeedUnliked: handleFeedUnliked,
+      onFeedCommented: handleFeedCommented,
+      onCommentDeleted: handleCommentDeleted,
+      onConnectionEstablished: () => {
+        console.log('✅ WebSocket connection established for FeedActionSection, feed:', feedId);
+      },
+      onError: (error) => {
+        console.error('❌ WebSocket error in FeedActionSection:', error);
+      },
+    });
+    
+    // Ensure WebSocket is connected - check after a short delay
+    const checkConnection = setTimeout(() => {
+      if (!webSocketService.isWebSocketConnected()) {
+        console.warn('⚠️ WebSocket not connected, attempting to reconnect...');
+        webSocketService.connect({
+          onFeedLiked: handleFeedLiked,
+          onFeedUnliked: handleFeedUnliked,
+          onFeedCommented: handleFeedCommented,
+          onCommentDeleted: handleCommentDeleted,
+        });
+      }
+    }, 1000);
+    
+    // Cleanup is handled by the WebSocket service singleton
+    return () => {
+      clearTimeout(checkConnection);
+      // Clear processed events for this feed to allow fresh processing on remount
+      processedEventsRef.current.clear();
+      // Note: We don't disconnect as WebSocket is shared across components
+      // The service manages its own lifecycle
+      console.log('🧹 Cleaning up WebSocket listeners for feed:', feedId);
+    };
+  }, [feedId, currentUserId, onCommentAdded]);
 
   // Only show "Liked by" section if there are actual likes
   // Show if either displayLikes > 0 OR localLikedByUserIds has items

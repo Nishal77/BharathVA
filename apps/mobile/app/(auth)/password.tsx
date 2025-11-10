@@ -1,7 +1,7 @@
 import { useFonts } from 'expo-font';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Alert,
   Dimensions,
@@ -25,7 +25,7 @@ export default function PasswordScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const email = params.email as string || '';
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -58,6 +58,15 @@ export default function PasswordScreen() {
     setPasswordError('');
   };
 
+  // CRITICAL: Watch for user authentication and redirect to home
+  useEffect(() => {
+    if (user?.userId) {
+      console.log('✅ [PasswordScreen] User authenticated, redirecting to home:', user.userId);
+      // Use replace to prevent going back to password screen
+      router.replace(`/(user)/${user.userId}/(tabs)`);
+    }
+  }, [user?.userId, router]);
+
   const handleLogin = async () => {
     clearPasswordError();
     
@@ -76,6 +85,21 @@ export default function PasswordScreen() {
       
       // Success - user authenticated and session created
       showToastMessage('Login successful! Welcome back!', 'success');
+      
+      // CRITICAL: Redirect will be handled by useEffect hook above when user state updates
+      // Also add immediate fallback redirect using tokenManager
+      setTimeout(async () => {
+        try {
+          const { tokenManager } = await import('../../services/api/authService');
+          const userData = await tokenManager.getUserData();
+          if (userData?.userId) {
+            console.log('✅ [PasswordScreen] Fallback redirect using tokenManager:', userData.userId);
+            router.replace(`/(user)/${userData.userId}/(tabs)`);
+          }
+        } catch (error) {
+          console.error('❌ [PasswordScreen] Error in fallback redirect:', error);
+        }
+      }, 200);
       
     } catch (error) {
       // Password doesn't match database or other error occurred

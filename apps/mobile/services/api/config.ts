@@ -25,6 +25,7 @@ export const ENDPOINTS = {
     VALIDATE: '/validate',
     PROFILE: '/profile',
     GET_SESSIONS: '/sessions',
+    GET_CURRENT_REFRESH_TOKEN: '/sessions/current-refresh-token',
     LOGOUT_SESSION: '/sessions/logout',
     LOGOUT_ALL_OTHER: '/sessions/logout-all-other',
     USER_ME: '/user/me',

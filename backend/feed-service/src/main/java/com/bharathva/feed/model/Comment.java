@@ -11,6 +11,7 @@ public class Comment {
     private String userId;
     private String text;
     private LocalDateTime createdAt;
+    private Integer replyToCommentIndex; // Index of the comment being replied to (null for top-level comments)
     
     // Constructors
     public Comment() {
@@ -21,6 +22,14 @@ public class Comment {
         this();
         this.userId = userId;
         this.text = text;
+        this.replyToCommentIndex = null; // Default to top-level comment
+    }
+    
+    public Comment(String userId, String text, Integer replyToCommentIndex) {
+        this();
+        this.userId = userId;
+        this.text = text;
+        this.replyToCommentIndex = replyToCommentIndex;
     }
     
     // Getters and Setters
@@ -46,6 +55,18 @@ public class Comment {
     
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+    
+    public Integer getReplyToCommentIndex() {
+        return replyToCommentIndex;
+    }
+    
+    public void setReplyToCommentIndex(Integer replyToCommentIndex) {
+        this.replyToCommentIndex = replyToCommentIndex;
+    }
+    
+    public boolean isReply() {
+        return replyToCommentIndex != null;
     }
     
     @Override

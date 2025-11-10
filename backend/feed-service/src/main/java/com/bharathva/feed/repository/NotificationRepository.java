@@ -4,7 +4,6 @@ import com.bharathva.feed.model.Notification;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
-import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -29,15 +28,20 @@ public interface NotificationRepository extends MongoRepository<Notification, St
     List<Notification> findByReceiverIdAndIsReadFalseOrderByCreatedAtDesc(String receiverId);
     
     /**
-     * Mark all notifications as read for a receiver
+     * Find all unread notifications for a receiver (used for bulk update)
      */
-    @Query("{ 'receiverId': ?0, 'isRead': false }")
-    void markAllAsRead(String receiverId);
+    List<Notification> findByReceiverIdAndIsReadFalse(String receiverId);
     
     /**
      * Delete old notifications (for cleanup)
      */
     void deleteByReceiverIdAndCreatedAtBefore(String receiverId, java.time.LocalDateTime before);
+    
+    /**
+     * Delete comment notifications for a specific feed and sender
+     * This is used when a comment is deleted to remove its associated notification
+     */
+    void deleteBySenderIdAndPostIdAndType(String senderId, String postId, Notification.NotificationType type);
     
     // Legacy Methods (for backward compatibility - these use old field names but work via getters)
     /**
@@ -68,13 +72,13 @@ public interface NotificationRepository extends MongoRepository<Notification, St
     }
     
     /**
-     * Mark all notifications as read for a recipient
-     * @deprecated Use markAllAsRead with receiverId instead
+     * Mark all notifications as read for a recipient (legacy method)
+     * @deprecated Use findByReceiverIdAndIsReadFalse and update in service layer instead
      */
     @Deprecated
-    @Query("{ 'recipientUserId': ?0, 'isRead': false }")
     default void markAllAsReadLegacy(String recipientUserId) {
-        markAllAsRead(recipientUserId);
+        // This method is deprecated - use NotificationService.markAllAsRead instead
+        // Kept for backward compatibility only
     }
     
     /**

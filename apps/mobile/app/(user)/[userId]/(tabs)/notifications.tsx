@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, useColorScheme } from 'react-native';
-import { NotificationsHeader, NotificationsContent } from '../notifications';
+import NotificationsHeader from '../notifications/NotificationsHeader';
+import NotificationsContent from '../notifications/NotificationsContent';
 
 export default function NotificationsScreen() {
   const colorScheme = useColorScheme();

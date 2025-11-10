@@ -233,17 +233,43 @@ export default function HomeScreen() {
       ? feed.userLiked 
       : false; // Default to false if backend doesn't provide userLiked (shouldn't happen with auth)
 
+    // CRITICAL: Database is source of truth - use database array length for comment count
+    // This ensures we only show what's actually stored in MongoDB
+    const dbCommentsArray = feed.comments && Array.isArray(feed.comments) ? feed.comments : [];
+    const commentsCount = dbCommentsArray.length; // Always use database array length
+    
+    // Log if there's a mismatch between commentsCount field and array length
+    if (feed.commentsCount !== undefined && feed.commentsCount !== dbCommentsArray.length) {
+      console.warn('⚠️ Comment count mismatch - using database array length as source of truth:', {
+        feedId: feed.id,
+        commentsCountField: feed.commentsCount,
+        databaseArrayLength: dbCommentsArray.length,
+        finalCount: commentsCount
+      });
+    }
+
+    // CRITICAL: Handle deleted users - check if userProfile indicates deleted user
+    const isDeletedUser = feed.userProfile?.fullName === '[Deleted User]' || 
+                          feed.userProfile?.username?.startsWith('[deleted_') ||
+                          (feed.userProfile as any)?.isDeleted === true;
+    
     const feedCardData = {
       id: feed.id,
-      name: feed.userProfile?.fullName || 'Unknown User',
-      handle: feed.userProfile?.username || 'unknown',
+      name: isDeletedUser 
+        ? '[Deleted User]' 
+        : (feed.userProfile?.fullName || 'Unknown User'),
+      handle: isDeletedUser 
+        ? `[deleted_${feed.userId.substring(0, 8)}]` 
+        : (feed.userProfile?.username || 'unknown'),
       time: timeAgo,
-      avatar: feed.userProfile?.profileImageUrl || feed.userProfile?.profilePicture || null,
+      avatar: isDeletedUser 
+        ? null 
+        : (feed.userProfile?.profileImageUrl || feed.userProfile?.profilePicture || null),
       verified: false,
       content: feed.message,
       emojis: [],
       media: media,
-      replies: feed.commentsCount !== undefined ? feed.commentsCount : (feed.comments?.length || 0), // Real comment count from backend
+      replies: commentsCount, // Use calculated comment count
       retweets: 0,
       likes: feed.likesCount !== undefined ? feed.likesCount : (feed.likes?.length || 0),
       likedByUserIds: feed.likes || [], // Array of user IDs who liked the post

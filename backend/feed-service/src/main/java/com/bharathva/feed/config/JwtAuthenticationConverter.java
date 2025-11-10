@@ -9,7 +9,6 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 
 import java.util.Collection;
-import java.util.Collections;
 
 public class JwtAuthenticationConverter implements Converter<Jwt, AbstractAuthenticationToken> {
     

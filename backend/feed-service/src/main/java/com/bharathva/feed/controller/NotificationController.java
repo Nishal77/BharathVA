@@ -81,7 +81,9 @@ public class NotificationController {
         try {
             if (authentication == null || !authentication.isAuthenticated()) {
                 log.warn("Unauthenticated request to unread count endpoint");
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("count", 0);
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
             }
             
             String authenticatedUserId = getUserIdFromAuthentication(authentication);
@@ -90,10 +92,14 @@ public class NotificationController {
             return ResponseEntity.ok(Map.of("count", count));
         } catch (RuntimeException e) {
             log.error("Authentication error getting unread count: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("count", 0);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
         } catch (Exception e) {
             log.error("Error getting unread count: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("count", 0);
+            return ResponseEntity.ok(errorResponse); // Return 0 instead of 500 to prevent UI breaking
         }
     }
     
@@ -118,14 +124,44 @@ public class NotificationController {
      * Mark all notifications as read
      */
     @PutMapping("/read-all")
-    public ResponseEntity<Void> markAllAsRead(Authentication authentication) {
+    public ResponseEntity<Map<String, Object>> markAllAsRead(Authentication authentication) {
         try {
+            if (authentication == null || !authentication.isAuthenticated()) {
+                log.warn("Unauthenticated request to mark all notifications as read");
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("success", false);
+                errorResponse.put("error", "Unauthenticated");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
+            }
+            
             String authenticatedUserId = getUserIdFromAuthentication(authentication);
-            notificationService.markAllAsRead(authenticatedUserId);
-            return ResponseEntity.ok().build();
+            log.info("Received request to mark all notifications as read for user: {}", authenticatedUserId);
+            
+            // Mark all as read and get updated count in one call
+            long unreadCount = notificationService.markAllAsRead(authenticatedUserId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("unreadCount", unreadCount);
+            response.put("message", "All notifications marked as read");
+            
+            log.info("Successfully processed mark all as read for user: {}, remaining unread: {}", 
+                authenticatedUserId, unreadCount);
+            
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            log.error("Authentication error marking all notifications as read: {}", e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Authentication failed");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
         } catch (Exception e) {
-            log.error("Error marking all notifications as read: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            log.error("Unexpected error marking all notifications as read: {}", e.getMessage(), e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Internal server error");
+            errorResponse.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
     }
     

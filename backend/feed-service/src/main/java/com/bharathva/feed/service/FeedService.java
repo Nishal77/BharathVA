@@ -15,6 +15,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
+import com.mongodb.client.result.UpdateResult;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +41,9 @@ public class FeedService {
     
     @Autowired
     private FeedRepository feedRepository;
+    
+    @Autowired
+    private MongoTemplate mongoTemplate;
     
     @Autowired
     private WebSocketService webSocketService;
@@ -76,7 +84,10 @@ public class FeedService {
         
         log.info("Feed created successfully with ID: {} and {} images", 
                 savedFeed.getId(), savedFeed.getImageUrls().size());
-        return new FeedResponse(savedFeed);
+        FeedResponse response = new FeedResponse(savedFeed);
+        // Ensure commentsCount is explicitly set (should be 0 for new feeds)
+        response.setCommentsCount(savedFeed.getCommentsCount());
+        return response;
     }
     
     /**
@@ -152,10 +163,22 @@ public class FeedService {
         log.info("Retrieved {} feeds from database", feeds.getTotalElements());
         
         // Map feeds to FeedResponse with userLiked status if currentUserId is provided
+        // Explicitly set commentsCount to ensure it's included in JSON response
         if (currentUserId != null && !currentUserId.trim().isEmpty()) {
-            return feeds.map(feed -> new FeedResponse(feed, currentUserId));
+            return feeds.map(feed -> {
+                FeedResponse response = new FeedResponse(feed, currentUserId);
+                response.setCommentsCount(feed.getCommentsCount());
+                log.debug("Feed {} - commentsCount: {}, comments array size: {}", 
+                    feed.getId(), response.getCommentsCount(), 
+                    feed.getComments() != null ? feed.getComments().size() : 0);
+                return response;
+            });
         } else {
-            return feeds.map(FeedResponse::new);
+            return feeds.map(feed -> {
+                FeedResponse response = new FeedResponse(feed);
+                response.setCommentsCount(feed.getCommentsCount());
+                return response;
+            });
         }
     }
     
@@ -179,7 +202,14 @@ public class FeedService {
         Page<Feed> feeds = feedRepository.findByUserId(userId, pageable);
         
         log.info("Retrieved {} feeds for user {} from database", feeds.getTotalElements(), userId);
-        return feeds.map(FeedResponse::new);
+        
+        // Map feeds to responses and ensure commentsCount is explicitly set
+        return feeds.map(feed -> {
+            FeedResponse response = new FeedResponse(feed);
+            // Explicitly set commentsCount to ensure it's included in JSON response
+            response.setCommentsCount(feed.getCommentsCount());
+            return response;
+        });
     }
     
     // Get user feeds as list (for profile)
@@ -195,9 +225,12 @@ public class FeedService {
         List<Feed> feeds = feedRepository.findByUserIdOrderByCreatedAtDesc(userId);
         log.info("Retrieved {} feeds for user {} from database", feeds.size(), userId);
         
-        return feeds.stream()
-                .map(FeedResponse::new)
-                .collect(Collectors.toList());
+        // Map feeds to responses and ensure commentsCount is explicitly set
+        return feeds.stream().map(feed -> {
+            FeedResponse response = new FeedResponse(feed);
+            response.setCommentsCount(feed.getCommentsCount());
+            return response;
+        }).collect(Collectors.toList());
     }
     
     // Get feed by ID
@@ -218,7 +251,10 @@ public class FeedService {
         
         Feed feed = feedOptional.get();
         log.info("Retrieved feed with ID: {} for user: {}", feedId, feed.getUserId());
-        return new FeedResponse(feed);
+        FeedResponse response = new FeedResponse(feed);
+        // Explicitly set commentsCount to ensure it's included in JSON response
+        response.setCommentsCount(feed.getCommentsCount());
+        return response;
     }
     
     // Search feeds
@@ -241,7 +277,13 @@ public class FeedService {
         Page<Feed> feeds = feedRepository.findByMessageContainingIgnoreCase(query.trim(), pageable);
         
         log.info("Found {} feeds matching query: {}", feeds.getTotalElements(), query);
-        return feeds.map(FeedResponse::new);
+        
+        // Map feeds to responses and ensure commentsCount is explicitly set
+        return feeds.map(feed -> {
+            FeedResponse response = new FeedResponse(feed);
+            response.setCommentsCount(feed.getCommentsCount());
+            return response;
+        });
     }
     
     // Count feeds by user
@@ -316,7 +358,13 @@ public class FeedService {
         Page<Feed> feeds = feedRepository.findByCreatedAtAfter(yesterday, pageable);
         
         log.info("Retrieved {} recent feeds from database", feeds.getTotalElements());
-        return feeds.map(FeedResponse::new);
+        
+        // Map feeds to responses and ensure commentsCount is explicitly set
+        return feeds.map(feed -> {
+            FeedResponse response = new FeedResponse(feed);
+            response.setCommentsCount(feed.getCommentsCount());
+            return response;
+        });
     }
     
     // Get feed statistics
@@ -440,6 +488,9 @@ public class FeedService {
         log.info("Like toggled successfully. Feed {} now has {} likes", feedId, verifiedFeed.getLikesCount());
         FeedResponse feedResponse = new FeedResponse(verifiedFeed, userId);
         
+        // Ensure commentsCount is explicitly set in response
+        feedResponse.setCommentsCount(verifiedFeed.getCommentsCount());
+        
         // Ensure likes array is set correctly - explicitly set it from verified feed
         // The constructor should already set it, but we'll double-check and ensure it's not null
         List<String> feedLikes = verifiedFeed.getLikes();
@@ -504,21 +555,63 @@ public class FeedService {
         
         Feed feed = feedOptional.get();
         
-        // Create comment
-        Comment comment = new Comment(userId, request.getText().trim());
+        // Store original comment info BEFORE adding new comment (to avoid index issues)
+        Comment originalComment = null;
+        String originalCommentText = null;
+        String repliedToUserId = null;
+        
+        // Validate replyToCommentIndex if provided and get original comment BEFORE adding new one
+        if (request.getReplyToCommentIndex() != null) {
+            int replyIndex = request.getReplyToCommentIndex();
+            if (replyIndex < 0 || replyIndex >= feed.getCommentsCount()) {
+                log.warn("Invalid replyToCommentIndex: {} for feed with {} comments", replyIndex, feed.getCommentsCount());
+                throw new IllegalArgumentException("Invalid comment index for reply");
+            }
+            
+            // Get original comment BEFORE adding the new reply comment
+            originalComment = feed.getComments().get(replyIndex);
+            repliedToUserId = originalComment.getUserId();
+            originalCommentText = originalComment.getText();
+            log.info("📌 Retrieved original comment at index {}: userId={}, text={}", 
+                replyIndex, repliedToUserId, originalCommentText);
+        }
+        
+        // Create comment (with optional replyToCommentIndex)
+        Comment comment;
+        if (request.getReplyToCommentIndex() != null) {
+            comment = new Comment(userId, request.getText().trim(), request.getReplyToCommentIndex());
+            log.info("📝 Creating REPLY comment - replyToCommentIndex: {}, text: '{}'", 
+                request.getReplyToCommentIndex(), request.getText().trim());
+        } else {
+            comment = new Comment(userId, request.getText().trim());
+            // CRITICAL: Explicitly set replyToCommentIndex to null to ensure MongoDB stores it
+            comment.setReplyToCommentIndex(null);
+            log.info("📝 Creating TOP-LEVEL comment - replyToCommentIndex: null, text: '{}'", 
+                request.getText().trim());
+        }
+        
+        // CRITICAL: Log the comment state before saving
+        log.info("💾 Comment state before save: userId={}, text='{}', replyToCommentIndex={}, isReply={}", 
+            comment.getUserId(), 
+            comment.getText(), 
+            comment.getReplyToCommentIndex(), 
+            comment.isReply());
+        
         feed.addComment(comment);
         feed.updateTimestamp();
         
-        // Save feed
+        // CRITICAL: Save using repository - MongoDB Spring Data will serialize Comment with all fields
+        // The Comment object has replyToCommentIndex set (even if null), so it should be saved
         Feed savedFeed = feedRepository.save(feed);
         
-        // Verify the save was successful
         if (savedFeed == null) {
             log.error("❌ Failed to save feed - save returned null");
             throw new RuntimeException("Failed to save feed after adding comment");
         }
         
-        // Reload from database to verify
+        log.info("✅ Comment added via repository save");
+        
+        // Reload feed to verify the save
         Optional<Feed> verifyOptional = feedRepository.findById(feedId);
         if (verifyOptional.isEmpty()) {
             log.error("❌ Feed not found after save - persistence issue");
@@ -526,25 +619,92 @@ public class FeedService {
         }
         
         Feed verifiedFeed = verifyOptional.get();
-        log.info("✅ Comment added successfully. Feed {} now has {} comments", feedId, verifiedFeed.getCommentsCount());
         
-        // Create notification for comment (unless user commented on their own post)
-        try {
-            if (!userId.equals(verifiedFeed.getUserId())) {
-                log.info("🔔 User {} commented on feed {}, creating notification", userId, feedId);
-                notificationService.createCommentNotification(feedId, userId, request.getText().trim());
-                log.info("✅ Comment notification created for feed: {} by user: {}", feedId, userId);
+        // Verify the save was successful
+        if (verifiedFeed == null) {
+            log.error("❌ Failed to save feed - save returned null");
+            throw new RuntimeException("Failed to save feed after adding comment");
+        }
+        int actualCommentsCount = verifiedFeed.getCommentsCount();
+        log.info("✅ Comment added successfully. Feed {} now has {} comments (verified from DB)", feedId, actualCommentsCount);
+        
+        // CRITICAL: Verify replyToCommentIndex was saved correctly
+        List<Comment> savedComments = verifiedFeed.getComments();
+        if (!savedComments.isEmpty()) {
+            Comment lastComment = savedComments.get(savedComments.size() - 1);
+            log.info("🔍 Verification - Last saved comment: userId={}, text='{}', replyToCommentIndex={}, isReply={}", 
+                lastComment.getUserId(), 
+                lastComment.getText(), 
+                lastComment.getReplyToCommentIndex(), 
+                lastComment.isReply());
+            
+            if (request.getReplyToCommentIndex() != null && lastComment.getReplyToCommentIndex() == null) {
+                log.error("❌ CRITICAL: replyToCommentIndex was NOT saved to MongoDB! Expected: {}, Got: null", 
+                    request.getReplyToCommentIndex());
+            } else if (request.getReplyToCommentIndex() == null && lastComment.getReplyToCommentIndex() != null) {
+                log.warn("⚠️ Unexpected: replyToCommentIndex is set but should be null for top-level comment");
             } else {
-                log.info("ℹ️ User {} commented on their own post {}, skipping notification", userId, feedId);
+                log.info("✅ replyToCommentIndex correctly saved: {}", lastComment.getReplyToCommentIndex());
+            }
+        }
+        
+        // Log detailed comment count information for debugging
+        log.info("📊 Comment count details - Feed: {}, Comments array size: {}, CommentsCount method: {}", 
+            feedId, 
+            verifiedFeed.getComments() != null ? verifiedFeed.getComments().size() : 0,
+            actualCommentsCount);
+        
+        // Create notification for comment or reply
+        try {
+            if (request.getReplyToCommentIndex() != null && originalComment != null) {
+                // This is a reply to a comment - use the original comment info we stored BEFORE adding
+                int replyToIndex = request.getReplyToCommentIndex();
+                
+                // Only create notification if replying to someone else's comment
+                if (!userId.equals(repliedToUserId)) {
+                    log.info("🔔 User {} replied to comment {} on feed {}, creating reply notification to user {}", 
+                        userId, replyToIndex, feedId, repliedToUserId);
+                    log.info("🔔 Original comment text: {}", originalCommentText);
+                    log.info("🔔 Reply text: {}", request.getText().trim());
+                    
+                    notificationService.createReplyNotification(
+                        feedId, 
+                        userId, 
+                        repliedToUserId, 
+                        replyToIndex,
+                        request.getText().trim(),
+                        originalCommentText,
+                        String.valueOf(replyToIndex) // Use comment index as commentId
+                    );
+                    log.info("✅ Reply notification created for feed: {} by user: {} to comment author: {}", 
+                        feedId, userId, repliedToUserId);
+                } else {
+                    log.info("ℹ️ User {} replied to their own comment, skipping notification", userId);
+                }
+            } else {
+                // This is a top-level comment
+                if (!userId.equals(verifiedFeed.getUserId())) {
+                    log.info("🔔 User {} commented on feed {}, creating notification", userId, feedId);
+                    notificationService.createCommentNotification(feedId, userId, request.getText().trim());
+                    log.info("✅ Comment notification created for feed: {} by user: {}", feedId, userId);
+                } else {
+                    log.info("ℹ️ User {} commented on their own post {}, skipping notification", userId, feedId);
+                }
             }
             webSocketService.notifyFeedCommented(userId, feedId);
         } catch (Exception e) {
-            log.error("❌ CRITICAL: Failed to create notification for comment - feed: {}, user: {}, error: {}", 
+            log.error("❌ CRITICAL: Failed to create notification for comment/reply - feed: {}, user: {}, error: {}", 
                 feedId, userId, e.getMessage(), e);
-            // Don't break comment functionality if notification fails
+            // Log full stack trace for debugging
+            log.error("❌ Full stack trace:", e);
+            // Don't break comment functionality if notification fails, but log it clearly
+            // The comment is already saved, so we continue
         }
         
         FeedResponse feedResponse = new FeedResponse(verifiedFeed, userId);
+        // Ensure commentsCount is explicitly set in response
+        feedResponse.setCommentsCount(actualCommentsCount);
+        log.info("📤 Returning FeedResponse with commentsCount: {} for feed: {}", feedResponse.getCommentsCount(), feedId);
         return feedResponse;
     }
     
@@ -587,30 +747,95 @@ public class FeedService {
             throw new RuntimeException("User " + userId + " is not authorized to delete this comment");
         }
         
-        // Remove comment
-        feed.removeComment(commentIndex);
-        feed.updateTimestamp();
+        // Use MongoDB native update to remove comment from array by index
+        // This ensures the deletion is persisted correctly
+        log.info("🔄 Removing comment at index {} from feed {} using MongoDB native update", commentIndex, feedId);
         
-        // Save feed
-        Feed savedFeed = feedRepository.save(feed);
-        
-        // Verify the save was successful
-        if (savedFeed == null) {
-            log.error("❌ Failed to save feed - save returned null");
-            throw new RuntimeException("Failed to save feed after deleting comment");
+        try {
+            // Build query to find the feed
+            Query query = new Query(Criteria.where("_id").is(feedId));
+            
+            // Use $unset to remove the element at the specific index
+            // MongoDB doesn't directly support removing by index, so we need to:
+            // 1. Get the current comments array
+            // 2. Remove the element at the index
+            // 3. Set the new array
+            
+            // First, remove comment from in-memory object
+            feed.removeComment(commentIndex);
+            feed.updateTimestamp();
+            
+            // Use $set to update the entire comments array and updatedAt
+            Update update = new Update();
+            update.set("comments", feed.getComments());
+            update.set("updatedAt", feed.getUpdatedAt());
+            
+            // Execute the update
+            com.mongodb.client.result.UpdateResult updateResult = mongoTemplate.updateFirst(
+                query,
+                update,
+                Feed.class
+            );
+            
+            long modifiedCount = updateResult.getModifiedCount();
+            long matchedCount = updateResult.getMatchedCount();
+            
+            log.info("📊 MongoDB update result - Matched: {}, Modified: {}", matchedCount, modifiedCount);
+            
+            if (matchedCount == 0) {
+                log.error("❌ Feed not found in MongoDB for deletion: {}", feedId);
+                throw new RuntimeException("Feed not found in MongoDB");
+            }
+            
+            if (modifiedCount == 0) {
+                log.warn("⚠️ Feed matched but not modified - comment may already be deleted or array unchanged");
+                // Continue anyway - reload to verify
+            }
+            
+        } catch (Exception e) {
+            log.error("❌ Error performing MongoDB update for comment deletion: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to delete comment from MongoDB: " + e.getMessage(), e);
         }
         
-        // Reload from database to verify
+        // Reload from database to verify the deletion
         Optional<Feed> verifyOptional = feedRepository.findById(feedId);
         if (verifyOptional.isEmpty()) {
-            log.error("❌ Feed not found after save - persistence issue");
-            throw new RuntimeException("Feed not found after save");
+            log.error("❌ Feed not found after update - persistence issue");
+            throw new RuntimeException("Feed not found after update");
         }
         
         Feed verifiedFeed = verifyOptional.get();
-        log.info("✅ Comment deleted successfully. Feed {} now has {} comments", feedId, verifiedFeed.getCommentsCount());
+        int actualCommentsCount = verifiedFeed.getCommentsCount();
+        log.info("✅ Comment deleted successfully. Feed {} now has {} comments (expected: {})", 
+            feedId, actualCommentsCount, feed.getCommentsCount());
+        
+        // Verify the comment was actually removed
+        if (actualCommentsCount != feed.getCommentsCount()) {
+            log.warn("⚠️ Comment count mismatch: expected {}, actual {}. This may indicate a persistence issue.", 
+                feed.getCommentsCount(), actualCommentsCount);
+        }
+        
+        // Delete associated comment notification
+        try {
+            notificationService.deleteCommentNotification(feedId, userId);
+            log.info("✅ Comment notification deleted for feed: {} by user: {}", feedId, userId);
+        } catch (Exception e) {
+            log.warn("⚠️ Failed to delete comment notification: {}", e.getMessage());
+            // Don't break comment deletion if notification deletion fails
+        }
+        
+        // Notify WebSocket clients about the comment deletion
+        try {
+            webSocketService.notifyCommentDeleted(userId, feedId, commentIndex);
+        } catch (Exception e) {
+            log.warn("⚠️ Failed to send WebSocket notification for comment deletion: {}", e.getMessage());
+        }
         
         FeedResponse feedResponse = new FeedResponse(verifiedFeed, userId);
+        // Ensure commentsCount is explicitly set in response after deletion
+        feedResponse.setCommentsCount(verifiedFeed.getCommentsCount());
+        log.info("📤 Returning FeedResponse with commentsCount: {} for feed: {} (after deletion)", 
+            feedResponse.getCommentsCount(), feedId);
         return feedResponse;
     }
 }

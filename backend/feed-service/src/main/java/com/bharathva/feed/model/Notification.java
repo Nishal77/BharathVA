@@ -81,7 +81,13 @@ public class Notification {
     private String feedImageUrl; // First image URL from the feed (for thumbnail)
     
     @Field("commentText")
-    private String commentText; // Actual comment text for COMMENT type notifications
+    private String commentText; // Actual comment/reply text for COMMENT/REPLY type notifications
+    
+    @Field("originalCommentText")
+    private String originalCommentText; // Original comment text that was replied to (for REPLY type notifications)
+    
+    @Field("commentId")
+    private String commentId; // ID/index of the comment being replied to (for REPLY type notifications)
     
     @Field("updatedAt")
     private LocalDateTime updatedAt;
@@ -270,6 +276,22 @@ public class Notification {
     
     public void setCommentText(String commentText) {
         this.commentText = commentText;
+    }
+    
+    public String getOriginalCommentText() {
+        return originalCommentText;
+    }
+    
+    public void setOriginalCommentText(String originalCommentText) {
+        this.originalCommentText = originalCommentText;
+    }
+    
+    public String getCommentId() {
+        return commentId;
+    }
+    
+    public void setCommentId(String commentId) {
+        this.commentId = commentId;
     }
     
     public boolean isRead() {

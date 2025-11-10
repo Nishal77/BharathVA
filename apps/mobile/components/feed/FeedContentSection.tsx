@@ -32,11 +32,14 @@ export default function FeedContentSection({
         <View className="flex-row items-center flex-1">
           <Text 
             className="text-base font-bold mr-1"
-            style={{ color: textColor }}
+            style={{ 
+              color: name === '[Deleted User]' ? secondaryTextColor : textColor,
+              fontStyle: name === '[Deleted User]' ? 'italic' : 'normal'
+            }}
           >
             {name}
           </Text>
-          {verified && (
+          {verified && name !== '[Deleted User]' && (
             <Image
               source={{ uri: 'https://cdn-icons-png.flaticon.com/512/3256/3256004.png' }}
               style={{ 
@@ -50,7 +53,10 @@ export default function FeedContentSection({
           )}
           <Text 
             className="text-sm mr-2"
-            style={{ color: secondaryTextColor }}
+            style={{ 
+              color: handle.startsWith('[deleted_') ? secondaryTextColor : secondaryTextColor,
+              fontStyle: handle.startsWith('[deleted_') ? 'italic' : 'normal'
+            }}
           >
             @{handle}
           </Text>

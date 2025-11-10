@@ -1,20 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, useColorScheme, Image, TextInput, ActivityIndicator, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from 'expo-router';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
-import { getNotifications, Notification } from '../../../../services/api/notificationService';
+import { getNotifications, Notification as NotificationType, markAllAsRead, getUnreadCount } from '../../../../services/api/notificationService';
 import { getUserProfileById } from '../../../../services/api/userService';
+import { webSocketService, NotificationEvent } from '../../../../services/api/websocketService';
+import { useNotificationCount } from '../../../../hooks/useNotificationCount';
+import { addComment } from '../../../../services/api/feedService';
 
 export default function NotificationsContent() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<NotificationType[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [userProfileCache, setUserProfileCache] = useState<Map<string, { username: string; fullName: string; profileImageUrl: string | null }>>(new Map());
+  const { count: notificationCount, refresh: refreshNotificationCount, setNotificationsTabActive } = useNotificationCount();
+  const hasMarkedAsReadRef = useRef<boolean>(false);
+  const isFocusedRef = useRef<boolean>(false);
 
   const colors = {
     background: isDark ? '#000000' : '#FFFFFF',
@@ -112,9 +119,52 @@ export default function NotificationsContent() {
                     actorFullName: userData.fullName || notification.actorFullName || '',
                     actorProfileImageUrl: userData.profileImageUrl || userData.profilePicture || notification.actorProfileImageUrl,
                   };
+                } else if (userResponse.error?.code === 'USER_NOT_FOUND') {
+                  // User deleted from NeonDB
+                  console.log('[NotificationsContent] User deleted from NeonDB:', userId);
+                  const deletedProfile = {
+                    username: `[deleted_${userId.substring(0, 8)}]`,
+                    fullName: '[Deleted User]',
+                    profileImageUrl: null,
+                  };
+                  
+                  setUserProfileCache(prev => {
+                    const newCache = new Map(prev);
+                    newCache.set(userId, deletedProfile);
+                    return newCache;
+                  });
+                  
+                  return {
+                    ...notification,
+                    actorUsername: deletedProfile.username,
+                    actorFullName: deletedProfile.fullName,
+                    actorProfileImageUrl: null,
+                  };
                 }
               } catch (error) {
                 console.warn('[NotificationsContent] Failed to fetch user details for userId:', userId, error);
+                // Check if error indicates user not found
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                if (errorMessage.includes('not found') || errorMessage.includes('USER_NOT_FOUND')) {
+                  const deletedProfile = {
+                    username: `[deleted_${userId.substring(0, 8)}]`,
+                    fullName: '[Deleted User]',
+                    profileImageUrl: null,
+                  };
+                  
+                  setUserProfileCache(prev => {
+                    const newCache = new Map(prev);
+                    newCache.set(userId, deletedProfile);
+                    return newCache;
+                  });
+                  
+                  return {
+                    ...notification,
+                    actorUsername: deletedProfile.username,
+                    actorFullName: deletedProfile.fullName,
+                    actorProfileImageUrl: null,
+                  };
+                }
               }
             }
             
@@ -162,6 +212,55 @@ export default function NotificationsContent() {
     }
   };
 
+  useFocusEffect(
+    useCallback(() => {
+      isFocusedRef.current = true;
+      
+      setNotificationsTabActive(true);
+      
+      setNotifications(prev => 
+        prev.map(notification => ({
+          ...notification,
+          isRead: true
+        }))
+      );
+      
+      const markAllNotificationsAsRead = async () => {
+        if (hasMarkedAsReadRef.current) {
+          return;
+        }
+        
+        hasMarkedAsReadRef.current = true;
+        
+        try {
+          const markResponse = await markAllAsRead();
+          
+          if (markResponse.success) {
+            console.log('All notifications marked as read successfully');
+          } else {
+            if (markResponse.error?.code === 'HTTP_401' || markResponse.error?.code === 'AUTH_ERROR') {
+              console.log('Backend authorization issue (401) - UI already updated optimistically');
+            }
+          }
+        } catch (markError) {
+          console.log('Exception while marking all as read (non-critical):', markError);
+        } finally {
+          setTimeout(() => {
+            hasMarkedAsReadRef.current = false;
+          }, 3000);
+        }
+      };
+      
+      markAllNotificationsAsRead();
+      
+      return () => {
+        isFocusedRef.current = false;
+        setNotificationsTabActive(false);
+        hasMarkedAsReadRef.current = false;
+      };
+    }, [setNotificationsTabActive])
+  );
+
   // Initial load and refresh
   useEffect(() => {
     fetchNotifications(0, false);
@@ -171,6 +270,303 @@ export default function NotificationsContent() {
     setRefreshing(true);
     fetchNotifications(0, false);
   };
+
+  // Helper function to add a new notification to the list in real-time
+  const addNewNotification = useCallback(async (event: NotificationEvent) => {
+    try {
+      console.log('📥 WebSocket: Processing new notification event:', event);
+      
+      // Check if full notification data is available in the event (instant display)
+      if (event.notification) {
+        console.log('✅ Full notification data available in WebSocket event, adding instantly');
+        const newNotification = event.notification;
+        
+        // Fetch user details if needed (only if missing)
+        const userId = newNotification.senderId || newNotification.actorUserId;
+        let enrichedNotification = { ...newNotification };
+        
+        if (userId && (!newNotification.actorUsername || newNotification.actorUsername.trim() === '' || newNotification.actorUsername === 'unknown')) {
+          // Check cache first
+          const cached = userProfileCache.get(userId);
+          if (cached) {
+            enrichedNotification = {
+              ...enrichedNotification,
+              actorUsername: cached.username,
+              actorFullName: cached.fullName,
+              actorProfileImageUrl: cached.profileImageUrl || newNotification.actorProfileImageUrl,
+            };
+          } else {
+            // Fetch user details in background (non-blocking)
+            getUserProfileById(userId).then(userResponse => {
+              if (userResponse.success && userResponse.data) {
+                const userData = userResponse.data;
+                setUserProfileCache(prev => {
+                  const newCache = new Map(prev);
+                  newCache.set(userId, {
+                    username: userData.username || '',
+                    fullName: userData.fullName || '',
+                    profileImageUrl: userData.profileImageUrl || userData.profilePicture || null,
+                  });
+                  return newCache;
+                });
+                
+                // Update notification with user details
+                setNotifications(prev => {
+                  const updated = prev.map(n => 
+                    n.id === newNotification.id 
+                      ? {
+                          ...n,
+                          actorUsername: userData.username || n.actorUsername || '',
+                          actorFullName: userData.fullName || n.actorFullName || '',
+                          actorProfileImageUrl: userData.profileImageUrl || userData.profilePicture || n.actorProfileImageUrl,
+                        }
+                      : n
+                  );
+                  return updated;
+                });
+              } else if (userResponse.error?.code === 'USER_NOT_FOUND') {
+                // User deleted from NeonDB
+                const deletedProfile = {
+                  username: `[deleted_${userId.substring(0, 8)}]`,
+                  fullName: '[Deleted User]',
+                  profileImageUrl: null,
+                };
+                
+                setUserProfileCache(prev => {
+                  const newCache = new Map(prev);
+                  newCache.set(userId, deletedProfile);
+                  return newCache;
+                });
+                
+                // Update notification with deleted user info
+                setNotifications(prev => {
+                  const updated = prev.map(n => 
+                    n.id === newNotification.id 
+                      ? {
+                          ...n,
+                          actorUsername: deletedProfile.username,
+                          actorFullName: deletedProfile.fullName,
+                          actorProfileImageUrl: null,
+                        }
+                      : n
+                  );
+                  return updated;
+                });
+              }
+            }).catch(error => {
+              console.warn('[NotificationsContent] Failed to fetch user details for new notification:', error);
+              // Check if error indicates user not found
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              if (errorMessage.includes('not found') || errorMessage.includes('USER_NOT_FOUND')) {
+                const deletedProfile = {
+                  username: `[deleted_${userId.substring(0, 8)}]`,
+                  fullName: '[Deleted User]',
+                  profileImageUrl: null,
+                };
+                
+                setUserProfileCache(prev => {
+                  const newCache = new Map(prev);
+                  newCache.set(userId, deletedProfile);
+                  return newCache;
+                });
+              }
+            });
+          }
+        }
+        
+        // Add the new notification to the top of the list instantly
+        setNotifications(prev => {
+          // Check if notification already exists (prevent duplicates)
+          const exists = prev.some(n => n.id === newNotification.id);
+          if (exists) {
+            console.log('⚠️ Notification already exists in list, skipping duplicate');
+            return prev;
+          }
+          
+          // Log REPLY notifications specifically for debugging
+          if (enrichedNotification.type === 'REPLY') {
+            console.log('📬 Adding REPLY notification to list:', {
+              id: enrichedNotification.id,
+              actorName: enrichedNotification.actorFullName || enrichedNotification.actorUsername,
+              replyText: enrichedNotification.commentText,
+              originalCommentText: enrichedNotification.originalCommentText,
+              postId: enrichedNotification.postId || enrichedNotification.feedId,
+            });
+          }
+          
+          // Prepend new notification to the list
+          const updated = [enrichedNotification, ...prev];
+          console.log('✅ Added new notification to list instantly. Total count:', updated.length, 'Type:', enrichedNotification.type);
+          return updated;
+        });
+        
+        return; // Successfully added, no need to fetch
+      }
+      
+      // Fallback: If full notification data not available, fetch it
+      if (event.notificationId && event.senderId && event.postId) {
+        console.log('🔄 Full notification data not in event, fetching from API...');
+        
+        // Fetch first page which will include the new notification (sorted by latest first)
+        const response = await getNotifications(0, 20);
+        
+        if (response.success && response.data && response.data.content) {
+          const fetchedNotifications = response.data.content;
+          
+          // Find the new notification in the fetched list
+          const newNotification = fetchedNotifications.find(n => n.id === event.notificationId);
+          
+          if (newNotification) {
+            console.log('✅ Found new notification in API response, adding to list:', newNotification.id);
+            
+            // Fetch user details if needed
+            const userId = newNotification.senderId || newNotification.actorUserId;
+            let enrichedNotification = { ...newNotification };
+            
+            if (userId && (!newNotification.actorUsername || newNotification.actorUsername.trim() === '' || newNotification.actorUsername === 'unknown')) {
+              // Check cache first
+              const cached = userProfileCache.get(userId);
+              if (cached) {
+                enrichedNotification = {
+                  ...enrichedNotification,
+                  actorUsername: cached.username,
+                  actorFullName: cached.fullName,
+                  actorProfileImageUrl: cached.profileImageUrl || newNotification.actorProfileImageUrl,
+                };
+              } else {
+                // Fetch user details
+                try {
+                  const userResponse = await getUserProfileById(userId);
+                  if (userResponse.success && userResponse.data) {
+                    const userData = userResponse.data;
+                    setUserProfileCache(prev => {
+                      const newCache = new Map(prev);
+                      newCache.set(userId, {
+                        username: userData.username || '',
+                        fullName: userData.fullName || '',
+                        profileImageUrl: userData.profileImageUrl || userData.profilePicture || null,
+                      });
+                      return newCache;
+                    });
+                    
+                    enrichedNotification = {
+                      ...enrichedNotification,
+                      actorUsername: userData.username || newNotification.actorUsername || '',
+                      actorFullName: userData.fullName || newNotification.actorFullName || '',
+                      actorProfileImageUrl: userData.profileImageUrl || userData.profilePicture || newNotification.actorProfileImageUrl,
+                    };
+                  } else if (userResponse.error?.code === 'USER_NOT_FOUND') {
+                    // User deleted from NeonDB
+                    const deletedProfile = {
+                      username: `[deleted_${userId.substring(0, 8)}]`,
+                      fullName: '[Deleted User]',
+                      profileImageUrl: null,
+                    };
+                    
+                    setUserProfileCache(prev => {
+                      const newCache = new Map(prev);
+                      newCache.set(userId, deletedProfile);
+                      return newCache;
+                    });
+                    
+                    enrichedNotification = {
+                      ...enrichedNotification,
+                      actorUsername: deletedProfile.username,
+                      actorFullName: deletedProfile.fullName,
+                      actorProfileImageUrl: null,
+                    };
+                  }
+                } catch (error) {
+                  console.warn('[NotificationsContent] Failed to fetch user details for new notification:', error);
+                  // Check if error indicates user not found
+                  const errorMessage = error instanceof Error ? error.message : String(error);
+                  if (errorMessage.includes('not found') || errorMessage.includes('USER_NOT_FOUND')) {
+                    const deletedProfile = {
+                      username: `[deleted_${userId.substring(0, 8)}]`,
+                      fullName: '[Deleted User]',
+                      profileImageUrl: null,
+                    };
+                    
+                    setUserProfileCache(prev => {
+                      const newCache = new Map(prev);
+                      newCache.set(userId, deletedProfile);
+                      return newCache;
+                    });
+                    
+                    enrichedNotification = {
+                      ...enrichedNotification,
+                      actorUsername: deletedProfile.username,
+                      actorFullName: deletedProfile.fullName,
+                      actorProfileImageUrl: null,
+                    };
+                  }
+                }
+              }
+            }
+            
+            // Add the new notification to the top of the list
+            setNotifications(prev => {
+              // Check if notification already exists (prevent duplicates)
+              const exists = prev.some(n => n.id === event.notificationId);
+              if (exists) {
+                console.log('⚠️ Notification already exists in list, skipping duplicate');
+                return prev;
+              }
+              
+              // Prepend new notification to the list
+              const updated = [enrichedNotification, ...prev];
+              console.log('✅ Added new notification to list. Total count:', updated.length);
+              return updated;
+            });
+          } else {
+            // If notification not found in first page, do a full refresh as fallback
+            console.log('⚠️ New notification not found in first page, doing full refresh');
+            await fetchNotifications(0, false);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error adding new notification:', error);
+      // Fallback to full refresh on error
+      try {
+        await fetchNotifications(0, false);
+      } catch (refreshError) {
+        console.error('❌ Error in fallback refresh:', refreshError);
+      }
+    }
+  }, [userProfileCache, fetchNotifications]);
+
+  // Setup WebSocket listener for real-time notifications
+  useEffect(() => {
+    const handleNotificationCreated = async (event: NotificationEvent) => {
+      console.log('📥 WebSocket: New notification received in real-time:', event);
+      
+      // Add notification instantly - uses full data from WebSocket if available
+      if (event.notificationId) {
+        await addNewNotification(event);
+      }
+    };
+
+    const handleCountUpdated = (event: NotificationEvent) => {
+      console.log('📥 WebSocket: Notification count updated:', event.unreadCount);
+      // Update the notification count immediately
+      if (event.unreadCount !== undefined && event.unreadCount !== null) {
+        refreshNotificationCount();
+      }
+    };
+
+    // Connect to WebSocket immediately with notification callbacks
+    // This ensures we receive notifications in real-time
+    webSocketService.connect({
+      onNotificationCreated: handleNotificationCreated,
+      onNotificationCountUpdated: handleCountUpdated,
+    });
+
+    // Cleanup is handled by the WebSocket service singleton
+    return () => {
+      // Note: We don't disconnect as WebSocket is shared across components
+    };
+  }, [addNewNotification]);
 
   // Badge Icons
   const CommentBadge = () => null;
@@ -256,6 +652,8 @@ export default function NotificationsContent() {
     mainText,
     commentText,
     replyTo,
+    postId,
+    commentIndex,
   }: {
     avatar: string;
     timestamp: string;
@@ -263,8 +661,35 @@ export default function NotificationsContent() {
     mainText: string;
     commentText: string;
     replyTo: string;
+    postId: string;
+    commentIndex?: number;
   }) => {
     const [replyText, setReplyText] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleSendReply = async () => {
+      if (!replyText.trim() || !postId || isSubmitting) {
+        return;
+      }
+
+      setIsSubmitting(true);
+      const textToSend = replyText.trim();
+
+      try {
+        const response = await addComment(postId, textToSend, commentIndex);
+        
+        if (response.success) {
+          setReplyText('');
+          console.log('[NotificationsContent] Reply sent successfully');
+        } else {
+          console.error('[NotificationsContent] Failed to send reply:', response.error);
+        }
+      } catch (error) {
+        console.error('[NotificationsContent] Error sending reply:', error);
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
 
     return (
       <NotificationEntry
@@ -279,42 +704,60 @@ export default function NotificationsContent() {
           <Text style={[styles.commentText, { color: colors.primaryText }]}>{commentText}</Text>
         </View>
 
-        {/* Reply Input */}
-        <Pressable style={[styles.replyInput, { backgroundColor: colors.inputBackground }]}>
-          <View style={styles.replyInputLeft}>
-            <Text style={[styles.replyPlaceholder, { color: colors.secondaryText }]}>
-              Reply {replyTo}
-      </Text>
-          </View>
-          <View style={styles.replyIcons}>
-            <Svg width={18} height={18} viewBox="0 0 18 18" style={styles.replyIcon}>
-              <Circle cx="9" cy="9" r="8" fill="none" stroke={colors.secondaryText} strokeWidth="1" />
-              <Circle cx="6.5" cy="8.5" r="0.8" fill={colors.secondaryText} />
+        {/* Reply Input - Classic Premium Design */}
+        <View style={[styles.replyInput, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+          <TextInput
+            placeholder={`Reply ${replyTo}...`}
+            placeholderTextColor={colors.secondaryText}
+            value={replyText}
+            onChangeText={setReplyText}
+            style={[styles.replyTextInput, { color: colors.primaryText }]}
+            multiline
+            maxLength={500}
+            editable={!isSubmitting}
+          />
+          
+          {/* Premium Send Icon Button */}
+    <Pressable
+            onPress={handleSendReply}
+            disabled={replyText.trim().length === 0 || isSubmitting}
+            style={({ pressed }) => ({
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: replyText.trim().length > 0 
+                ? (isDark ? '#FFFFFF' : '#000000')
+                : 'transparent',
+              justifyContent: 'center',
+              alignItems: 'center',
+              opacity: pressed ? 0.7 : (replyText.trim().length > 0 ? 1 : 0.4),
+              transform: [{ scale: pressed ? 0.95 : 1 }],
+            })}
+          >
+            <Svg width={12} height={12} viewBox="0 0 12 12">
               <Path
-                d="M11.5 8.5c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2z"
+                d="m11.21,1.8l-2.859,8.893c-.213.661-1.108.759-1.457.159l-2.01-3.447c-.07-.12-.169-.219-.289-.289l-3.447-2.01c-.6-.35-.502-1.245.159-1.457L10.2.79c.622-.2,1.21.388,1.01,1.01Z"
                 fill="none"
-                stroke={colors.secondaryText}
-                strokeWidth="1"
+                stroke={replyText.trim().length > 0 
+                  ? (isDark ? '#000000' : '#FFFFFF')
+                  : (isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)')}
+                strokeWidth="1.5"
                 strokeLinecap="round"
+                strokeLinejoin="round"
               />
               <Path
-                d="M7.5 10.5c.5.5 1.3.8 2 .8s1.5-.3 2-.8"
+                d="M10.961,1.039 L4.82,7.18"
                 fill="none"
-                stroke={colors.secondaryText}
-                strokeWidth="1"
+                stroke={replyText.trim().length > 0 
+                  ? (isDark ? '#000000' : '#FFFFFF')
+                  : (isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)')}
+                strokeWidth="1.5"
                 strokeLinecap="round"
+                strokeLinejoin="round"
               />
             </Svg>
-            <View style={styles.keyboardShortcutContainer}>
-              <Svg width={16} height={16} viewBox="0 0 16 16" style={styles.keyboardIcon}>
-                <Rect x="2" y="4" width="12" height="10" rx="1" fill="none" stroke={colors.secondaryText} strokeWidth="1" />
-                <Path d="M2 8h12" stroke={colors.secondaryText} strokeWidth="1" />
-                <Rect x="4" y="2" width="2" height="1.5" rx="0.3" fill={colors.secondaryText} />
-              </Svg>
-              <Text style={[styles.keyboardShortcut, { color: colors.secondaryText }]}>⌘/</Text>
-            </View>
-          </View>
     </Pressable>
+        </View>
       </NotificationEntry>
     );
   };
@@ -328,6 +771,8 @@ export default function NotificationsContent() {
     commentText,
     replyTo,
     imageUri,
+    postId,
+    commentIndex,
   }: {
     avatar: string;
     timestamp: string;
@@ -336,8 +781,35 @@ export default function NotificationsContent() {
     commentText: string;
     replyTo: string;
     imageUri: string;
+    postId: string;
+    commentIndex?: number;
   }) => {
     const [replyText, setReplyText] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleSendReply = async () => {
+      if (!replyText.trim() || !postId || isSubmitting) {
+        return;
+      }
+
+      setIsSubmitting(true);
+      const textToSend = replyText.trim();
+
+      try {
+        const response = await addComment(postId, textToSend, commentIndex);
+        
+        if (response.success) {
+          setReplyText('');
+          console.log('[NotificationsContent] Reply sent successfully');
+        } else {
+          console.error('[NotificationsContent] Failed to send reply:', response.error);
+        }
+      } catch (error) {
+        console.error('[NotificationsContent] Error sending reply:', error);
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
 
     return (
       <NotificationEntry
@@ -374,42 +846,183 @@ export default function NotificationsContent() {
           </View>
         </View>
 
-        {/* Reply Input */}
-        <Pressable style={[styles.replyInput, { backgroundColor: colors.inputBackground }]}>
-          <View style={styles.replyInputLeft}>
-            <Text style={[styles.replyPlaceholder, { color: colors.secondaryText }]}>
-              Reply {replyTo}
+        {/* Reply Input - Classic Premium Design */}
+        <View style={[styles.replyInput, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}>
+          <TextInput
+            placeholder={`Reply ${replyTo}...`}
+            placeholderTextColor={colors.secondaryText}
+            value={replyText}
+            onChangeText={setReplyText}
+            style={[styles.replyTextInput, { color: colors.primaryText }]}
+            multiline
+            maxLength={500}
+            editable={!isSubmitting}
+          />
+          
+          {/* Premium Send Icon Button */}
+          <Pressable
+            onPress={handleSendReply}
+            disabled={replyText.trim().length === 0 || isSubmitting}
+            style={({ pressed }) => ({
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: replyText.trim().length > 0 
+                ? (isDark ? '#FFFFFF' : '#000000')
+                : 'transparent',
+              justifyContent: 'center',
+              alignItems: 'center',
+              opacity: pressed ? 0.7 : (replyText.trim().length > 0 ? 1 : 0.4),
+              transform: [{ scale: pressed ? 0.95 : 1 }],
+            })}
+          >
+            <Svg width={12} height={12} viewBox="0 0 12 12">
+              <Path
+                d="m11.21,1.8l-2.859,8.893c-.213.661-1.108.759-1.457.159l-2.01-3.447c-.07-.12-.169-.219-.289-.289l-3.447-2.01c-.6-.35-.502-1.245.159-1.457L10.2.79c.622-.2,1.21.388,1.01,1.01Z"
+                fill="none"
+                stroke={replyText.trim().length > 0 
+                  ? (isDark ? '#000000' : '#FFFFFF')
+                  : (isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)')}
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <Path
+                d="M10.961,1.039 L4.82,7.18"
+                fill="none"
+                stroke={replyText.trim().length > 0 
+                  ? (isDark ? '#000000' : '#FFFFFF')
+                  : (isDark ? 'rgba(255, 255, 255, 0.4)' : 'rgba(0, 0, 0, 0.4)')}
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+      </Svg>
+    </Pressable>
+        </View>
+      </NotificationEntry>
+    );
+  };
+
+  // Reply Notification - Shows when someone replies to your comment
+  // This notification is sent to User2 (the comment author) when User1 replies to their comment
+  const ReplyNotification = ({
+    avatar,
+    timestamp,
+    projectInfo,
+    mainText,
+    originalCommentText,
+    replyText,
+    imageUri,
+  }: {
+    avatar: string;
+    timestamp: string;
+    projectInfo: string;
+    mainText: string; // Format: "{User1 name} replied to your comment: {comment message}"
+    originalCommentText: string; // The comment that was replied to (User2's original comment)
+    replyText: string; // The reply text (User1's reply message)
+    imageUri?: string;
+  }) => {
+    const hasImage = imageUri && imageUri.trim().length > 0;
+
+    return (
+      <NotificationEntry
+        avatar={avatar}
+        badge={<CommentBadge />}
+        timestamp={timestamp}
+        projectInfo={projectInfo}
+        mainText={mainText}
+      >
+        {hasImage && (
+          <View style={styles.imageCommentContainer}>
+            {/* Image Preview */}
+            <Pressable
+              style={[styles.imagePreviewContainer, { borderColor: colors.border }]}
+              onPress={() => {}}
+            >
+              <Image
+                source={{ uri: imageUri }}
+                style={styles.imagePreview}
+                resizeMode="cover"
+              />
+              <LinearGradient
+                colors={['transparent', 'rgba(0, 0, 0, 0.15)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+                style={styles.imageOverlay}
+              />
+            </Pressable>
+    </View>
+        )}
+
+        {/* Original Comment Bubble - Shows User2's comment that was replied to */}
+        {originalCommentText && originalCommentText.trim().length > 0 && (
+          <View style={[styles.commentBubble, { 
+            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
+            marginTop: hasImage ? 12 : 0,
+            borderLeftWidth: 3,
+            borderLeftColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
+            paddingLeft: 12,
+            paddingVertical: 10,
+          }]}>
+            <Text style={[styles.commentText, { 
+              color: colors.secondaryText, 
+              fontSize: 12, 
+              fontStyle: 'italic',
+              marginBottom: 6,
+              fontWeight: '500',
+            }]}>
+              Your comment:
+            </Text>
+            <Text style={[styles.commentText, { 
+              color: colors.primaryText, 
+              fontSize: 14,
+              fontStyle: 'normal',
+              lineHeight: 20,
+            }]}>
+              "{originalCommentText}"
             </Text>
           </View>
-          <View style={styles.replyIcons}>
-            <Svg width={18} height={18} viewBox="0 0 18 18" style={styles.replyIcon}>
-              <Circle cx="9" cy="9" r="8" fill="none" stroke={colors.secondaryText} strokeWidth="1" />
-              <Circle cx="6.5" cy="8.5" r="0.8" fill={colors.secondaryText} />
-              <Path
-                d="M11.5 8.5c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2z"
-                fill="none"
-                stroke={colors.secondaryText}
-                strokeWidth="1"
-                strokeLinecap="round"
-              />
-              <Path
-                d="M7.5 10.5c.5.5 1.3.8 2 .8s1.5-.3 2-.8"
-                fill="none"
-                stroke={colors.secondaryText}
-                strokeWidth="1"
-                strokeLinecap="round"
-              />
-            </Svg>
-            <View style={styles.keyboardShortcutContainer}>
-              <Svg width={16} height={16} viewBox="0 0 16 16" style={styles.keyboardIcon}>
-                <Rect x="2" y="4" width="12" height="10" rx="1" fill="none" stroke={colors.secondaryText} strokeWidth="1" />
-                <Path d="M2 8h12" stroke={colors.secondaryText} strokeWidth="1" />
-                <Rect x="4" y="2" width="2" height="1.5" rx="0.3" fill={colors.secondaryText} />
-      </Svg>
-              <Text style={[styles.keyboardShortcut, { color: colors.secondaryText }]}>⌘/</Text>
-            </View>
-          </View>
-    </Pressable>
+        )}
+
+        {/* Reply Bubble - Shows User1's reply message */}
+        <View style={[styles.commentBubble, { 
+          backgroundColor: isDark ? 'rgba(59, 130, 246, 0.1)' : 'rgba(37, 99, 235, 0.08)', 
+          marginTop: 10,
+          borderLeftWidth: 3,
+          borderLeftColor: isDark ? '#60A5FA' : '#2563EB',
+          paddingLeft: 12,
+          paddingVertical: 10,
+          minHeight: 40,
+        }]}>
+          <Text style={[styles.commentText, { 
+            color: colors.secondaryText, 
+            fontSize: 12, 
+            fontStyle: 'italic',
+            marginBottom: 6,
+            fontWeight: '500',
+          }]}>
+            Reply:
+          </Text>
+          {replyText && replyText.trim().length > 0 ? (
+            <Text style={[styles.commentText, { 
+              color: colors.primaryText, 
+              fontSize: 15, 
+              lineHeight: 22,
+              fontWeight: '400',
+            }]}>
+              {replyText}
+            </Text>
+          ) : (
+            <Text style={[styles.commentText, { 
+              color: colors.secondaryText, 
+              fontSize: 14, 
+              fontStyle: 'italic' 
+            }]}>
+              Reply message not available
+            </Text>
+      )}
+    </View>
       </NotificationEntry>
     );
   };
@@ -463,8 +1076,8 @@ export default function NotificationsContent() {
           >
             <Text style={styles.approveButtonText}>Approve</Text>
           </Pressable>
-        </View>
-      </View>
+          </View>
+          </View>
     </View>
   );
 
@@ -511,7 +1124,7 @@ export default function NotificationsContent() {
               </Text>
               <Text style={{ fontWeight: '400' }}> liked your post</Text>
             </Text>
-          </View>
+      </View>
 
           {/* Small Image Preview - Aligned to top with header */}
           <Pressable
@@ -545,7 +1158,7 @@ export default function NotificationsContent() {
       {/* Profile Image without Badge */}
       <View style={styles.avatarContainer}>
         <Image source={{ uri: avatar }} style={styles.avatar} />
-      </View>
+        </View>
 
       {/* Content Area */}
       <View style={styles.contentArea}>
@@ -554,7 +1167,7 @@ export default function NotificationsContent() {
           <Text style={[styles.timestamp, { color: colors.secondaryText }]}>{timestamp}</Text>
           <Text style={[styles.separator, { color: colors.secondaryText }]}>·</Text>
           <Text style={[styles.projectInfo, { color: colors.secondaryText }]}>{projectInfo}</Text>
-        </View>
+      </View>
 
         {/* Main Text with Bold Name */}
         <Text style={[styles.mainText, { color: colors.primaryText, marginBottom: 4, marginTop: 0 }]}>
@@ -572,9 +1185,9 @@ export default function NotificationsContent() {
           >
             <Text style={[styles.followingButtonText, { color: colors.primaryText }]}>Following</Text>
           </Pressable>
+          </View>
         </View>
       </View>
-    </View>
   );
 
   // Get default avatar if profile image is not available
@@ -625,10 +1238,7 @@ export default function NotificationsContent() {
       {notifications.length === 0 && !loading ? (
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 }}>
           <Text style={{ fontSize: 16, color: colors.secondaryText, textAlign: 'center', marginBottom: 8 }}>
-            No notifications yet
-          </Text>
-          <Text style={{ fontSize: 14, color: colors.secondaryText, textAlign: 'center', opacity: 0.7 }}>
-            When someone likes or comments on your posts, you'll see them here
+            No notifications yet!!!
           </Text>
         </View>
       ) : notifications.length > 0 ? (
@@ -655,6 +1265,13 @@ export default function NotificationsContent() {
             case 'COMMENT':
               // Check if feed has image - use ImageCommentNotification if image exists, otherwise regular CommentNotification
               const hasImage = notification.feedImageUrl && notification.feedImageUrl.trim().length > 0;
+              const postId = notification.postId || notification.feedId || '';
+              
+              // Only render if we have a valid postId
+              if (!postId) {
+                console.warn('[NotificationsContent] Comment notification missing postId/feedId:', notification.id);
+                return null;
+              }
               
               if (hasImage) {
                 return (
@@ -667,6 +1284,7 @@ export default function NotificationsContent() {
                     commentText={notification.commentText || ''}
                     replyTo={notification.actorUsername || ''}
                     imageUri={getFeedImageUrl(notification.feedImageUrl)}
+                    postId={postId}
                   />
                 );
               } else {
@@ -679,9 +1297,70 @@ export default function NotificationsContent() {
                     mainText={`${actorName} commented on your post`}
                     commentText={notification.commentText || ''}
                     replyTo={notification.actorUsername || ''}
+                    postId={postId}
                   />
                 );
               }
+            case 'REPLY':
+              // Reply notification - someone replied to your comment
+              // This notification is sent to User2 (the comment author) when User1 replies to their comment
+              // Flow: User2 posts a comment -> User1 replies to User2's comment -> User2 gets this notification
+              const replyPostId = notification.postId || notification.feedId || '';
+              const replyHasImage = notification.feedImageUrl && notification.feedImageUrl.trim().length > 0;
+              // originalCommentText = User2's original comment that was replied to
+              const originalCommentText = notification.originalCommentText || 'your comment';
+              // replyText = User1's reply message (the actual reply text)
+              const replyText = notification.commentText || '';
+              
+              // Build the main notification message
+              // Format: "{User1 name} replied to your comment: {comment message}"
+              // The backend already generates this in notification.message, but we can also construct it here as fallback
+              const notificationMessage = notification.message || 
+                (replyText 
+                  ? `${actorName} replied to your comment: ${replyText.length > 50 ? replyText.substring(0, 50) + '...' : replyText}`
+                  : `${actorName} replied to your comment`);
+              
+              // Log reply notification details for debugging
+              console.log('[NotificationsContent] REPLY notification:', {
+                id: notification.id,
+                postId: replyPostId,
+                actorName: actorName,
+                actorUserId: notification.actorUserId,
+                receiverUserId: notification.recipientUserId,
+                notificationMessage: notificationMessage,
+                originalCommentText: originalCommentText,
+                replyText: replyText,
+                hasImage: replyHasImage,
+                notificationData: {
+                  message: notification.message,
+                  commentText: notification.commentText,
+                  originalCommentText: notification.originalCommentText,
+                }
+              });
+              
+              // Only render if we have a valid postId
+              if (!replyPostId) {
+                console.warn('[NotificationsContent] Reply notification missing postId/feedId:', notification.id);
+                return null;
+              }
+              
+              // Ensure we have reply text - if not, log warning
+              if (!replyText || replyText.trim().length === 0) {
+                console.warn('[NotificationsContent] Reply notification missing reply text:', notification.id);
+              }
+              
+              return (
+                <ReplyNotification
+                  key={notification.id}
+                  avatar={avatarUrl}
+                  timestamp={timestamp}
+                  projectInfo={username}
+                  mainText={notificationMessage}
+                  originalCommentText={originalCommentText}
+                  replyText={replyText}
+                  imageUri={replyHasImage ? getFeedImageUrl(notification.feedImageUrl) : undefined}
+                />
+              );
             case 'FOLLOW':
               return (
                 <PropertyUpdateNotification
@@ -832,41 +1511,21 @@ const styles = StyleSheet.create({
   replyInput: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    minHeight: 40,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 24,
+    marginTop: 12,
+    borderWidth: 1,
+    minHeight: 48,
   },
-  replyInputLeft: {
+  replyTextInput: {
     flex: 1,
-  },
-  replyPlaceholder: {
-    fontSize: 14,
-    fontWeight: '400',
-  },
-  replyIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  replyIcon: {
-    width: 18,
-    height: 18,
-  },
-  keyboardShortcutContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  keyboardIcon: {
-    width: 16,
-    height: 16,
-  },
-  keyboardShortcut: {
-    fontSize: 12,
-    fontWeight: '500',
-    fontFamily: 'monospace',
+    fontSize: 15,
+    padding: 0,
+    marginRight: 12,
+    paddingVertical: 2,
+    lineHeight: 20,
+    maxHeight: 100,
   },
   actionButtons: {
     flexDirection: 'row',

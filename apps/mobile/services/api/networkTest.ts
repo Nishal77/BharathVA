@@ -21,13 +21,18 @@ export const testBasicConnectivity = async (): Promise<NetworkTestResult> => {
     console.log('🔍 Testing basic network connectivity...');
     
     // Test with a simple public API first
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
     const response = await fetch('https://httpbin.org/get', {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
       },
-      signal: AbortSignal.timeout(10000),
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
     
     const responseTime = Date.now() - startTime;
     
@@ -70,14 +75,19 @@ export const testBackendConnectivity = async (): Promise<NetworkTestResult> => {
     console.log('🔍 Testing backend connectivity...');
     console.log(`📍 Backend URL: ${API_CONFIG.BASE_URL}`);
     
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+    
     const response = await fetch(`${API_CONFIG.BASE_URL}/register/health`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
       },
-      signal: AbortSignal.timeout(API_CONFIG.TIMEOUT),
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
     
     const responseTime = Date.now() - startTime;
     const rawResponse = await response.text();
@@ -143,6 +153,9 @@ export const testRegistrationEndpoint = async (): Promise<NetworkTestResult> => 
     console.log('🔍 Testing registration endpoint...');
     
     const testEmail = 'test@example.com';
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+    
     const response = await fetch(`${API_CONFIG.BASE_URL}/register/email`, {
       method: 'POST',
       headers: {
@@ -150,8 +163,10 @@ export const testRegistrationEndpoint = async (): Promise<NetworkTestResult> => 
         'Accept': 'application/json',
       },
       body: JSON.stringify({ email: testEmail }),
-      signal: AbortSignal.timeout(API_CONFIG.TIMEOUT),
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
     
     const responseTime = Date.now() - startTime;
     const rawResponse = await response.text();

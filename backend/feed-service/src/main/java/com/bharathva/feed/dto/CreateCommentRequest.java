@@ -12,6 +12,8 @@ public class CreateCommentRequest {
     @Size(max = 1000, message = "Comment cannot exceed 1000 characters")
     private String text;
     
+    private Integer replyToCommentIndex; // Optional: index of the comment being replied to (null for top-level comments)
+    
     // Constructors
     public CreateCommentRequest() {}
     
@@ -26,6 +28,14 @@ public class CreateCommentRequest {
     
     public void setText(String text) {
         this.text = text;
+    }
+    
+    public Integer getReplyToCommentIndex() {
+        return replyToCommentIndex;
+    }
+    
+    public void setReplyToCommentIndex(Integer replyToCommentIndex) {
+        this.replyToCommentIndex = replyToCommentIndex;
     }
     
     @Override

@@ -2,6 +2,8 @@
 import { API_CONFIG, ENDPOINTS } from './config';
 import * as SecureStore from 'expo-secure-store';
 import { deviceInfoService } from './deviceInfoService';
+import { clearAuthCaches, clearFeedCaches } from '../../utils/cacheManager';
+import { clearUserProfileCache } from './feedService';
 
 // API Response type
 export interface ApiResponse<T> {
@@ -60,9 +62,22 @@ export const tokenManager = {
 
   async saveTokens(accessToken: string, refreshToken: string): Promise<void> {
     try {
+      // CRITICAL: Only save access token to SecureStore
+      // Refresh token is always fetched from database (user_sessions table) in real-time
+      // This ensures we always use the latest refresh token from the database
       await SecureStore.setItemAsync(TOKEN_KEYS.ACCESS_TOKEN, accessToken);
-      await SecureStore.setItemAsync(TOKEN_KEYS.REFRESH_TOKEN, refreshToken);
+      
+      // CRITICAL: Verify access token was saved by reading it back
+      // This ensures SecureStore write is fully complete before returning
+      const savedAccessToken = await SecureStore.getItemAsync(TOKEN_KEYS.ACCESS_TOKEN);
+      
+      if (savedAccessToken !== accessToken) {
+        throw new ApiError('Token verification failed - access token not saved correctly');
+      }
     } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
       throw new ApiError('Failed to save authentication tokens');
     }
   },
@@ -77,8 +92,128 @@ export const tokenManager = {
 
   async getRefreshToken(): Promise<string | null> {
     try {
-      return await SecureStore.getItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
+      const accessToken = await this.getAccessToken();
+      if (!accessToken) {
+        return null;
+      }
+      
+      // CRITICAL: Extract user ID from current access token
+      // This ensures we verify the refresh token belongs to the correct user
+      let currentUserId: string | null = null;
+      try {
+        const parts = accessToken.split('.');
+        if (parts.length === 3) {
+          const base64Url = parts[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split('')
+              .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+              .join('')
+          );
+          const payload = JSON.parse(jsonPayload);
+          currentUserId = payload.userId || payload.sub || null;
+        }
+      } catch (error) {
+        if (API_CONFIG.ENABLE_LOGGING) {
+          console.warn('⚠️ [TokenManager] Could not extract user ID from token:', error);
+        }
+      }
+      
+      try {
+        const url = `${API_CONFIG.BASE_URL}${ENDPOINTS.AUTH.GET_CURRENT_REFRESH_TOKEN}`;
+        
+        if (API_CONFIG.ENABLE_LOGGING) {
+          console.log(`🔄 [TokenManager] Fetching refresh token from database: ${url}`, {
+            currentUserId: currentUserId || 'unknown'
+          });
+        }
+        
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          if (API_CONFIG.ENABLE_LOGGING) {
+            console.error(`❌ [TokenManager] Failed to fetch refresh token: ${response.status} ${errorText}`);
+          }
+          
+          // If token is expired (401), don't fall back to SecureStore
+          // The refresh token in SecureStore might belong to a different user
+          if (response.status === 401) {
+            if (API_CONFIG.ENABLE_LOGGING) {
+              console.warn('⚠️ [TokenManager] Access token expired, cannot verify refresh token ownership. Clearing SecureStore refresh token.');
+            }
+            // Clear potentially stale refresh token
+            await SecureStore.deleteItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
+            return null;
+          }
+          
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.data?.refreshToken) {
+          const refreshToken = data.data.refreshToken;
+          
+          // CRITICAL: Verify refresh token belongs to current user
+          // Backend endpoint uses access token to find the correct session
+          // So if we got here, the refresh token is correct for this user
+          if (API_CONFIG.ENABLE_LOGGING) {
+            console.log('✅ [TokenManager] Refresh token fetched from database successfully', {
+              refreshTokenPrefix: refreshToken.substring(0, 20) + '...',
+              currentUserId: currentUserId || 'unknown',
+              source: 'database'
+            });
+          }
+          
+          // Update SecureStore with the correct refresh token
+          await SecureStore.setItemAsync(TOKEN_KEYS.REFRESH_TOKEN, refreshToken);
+          
+          return refreshToken;
+        } else {
+          if (API_CONFIG.ENABLE_LOGGING) {
+            console.error('❌ [TokenManager] Invalid response structure:', data);
+          }
+          throw new Error('Invalid response structure from refresh token endpoint');
+        }
+      } catch (error: any) {
+        if (API_CONFIG.ENABLE_LOGGING) {
+          console.error('❌ [TokenManager] Failed to fetch refresh token from database', error);
+        }
+        
+        // CRITICAL: Only use SecureStore fallback if we have a valid access token
+        // If access token is expired, SecureStore refresh token might be for wrong user
+        if (currentUserId) {
+          const fallbackToken = await SecureStore.getItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
+          if (fallbackToken) {
+            if (API_CONFIG.ENABLE_LOGGING) {
+              console.warn('⚠️ [TokenManager] Using cached refresh token from SecureStore as fallback', {
+                currentUserId,
+                warning: 'Cannot verify token ownership - use with caution'
+              });
+            }
+            return fallbackToken;
+          }
+        } else {
+          if (API_CONFIG.ENABLE_LOGGING) {
+            console.warn('⚠️ [TokenManager] Cannot use SecureStore fallback - access token expired or invalid');
+          }
+        }
+        
+        return null;
+      }
     } catch (error) {
+      if (API_CONFIG.ENABLE_LOGGING) {
+        console.error('❌ [TokenManager] Error in getRefreshToken:', error);
+      }
       return null;
     }
   },
@@ -90,6 +225,74 @@ export const tokenManager = {
       await SecureStore.deleteItemAsync(TOKEN_KEYS.USER_DATA);
     } catch (error) {
       // Silent fail for clearing tokens
+    }
+  },
+
+  /**
+   * Completely clear SecureStore - removes all auth-related data
+   * Use this when you need to force a clean login state
+   */
+  async clearSecureStore(): Promise<void> {
+    try {
+      const keys = [
+        TOKEN_KEYS.ACCESS_TOKEN,
+        TOKEN_KEYS.REFRESH_TOKEN,
+        TOKEN_KEYS.USER_DATA,
+        'userId',
+        'username',
+        'email',
+      ];
+      
+      for (const key of keys) {
+        try {
+          await SecureStore.deleteItemAsync(key);
+        } catch (error) {
+          // Continue even if one key fails
+        }
+      }
+      
+      if (API_CONFIG.ENABLE_LOGGING) {
+        console.log('🧹 SecureStore cleared completely');
+      }
+    } catch (error) {
+      if (API_CONFIG.ENABLE_LOGGING) {
+        console.error('Error clearing SecureStore:', error);
+      }
+    }
+  },
+
+  /**
+   * Extract user ID from JWT token
+   * This is the source of truth for the current authenticated user
+   */
+  async getUserIdFromToken(): Promise<string | null> {
+    try {
+      const accessToken = await this.getAccessToken();
+      if (!accessToken) {
+        return null;
+      }
+      
+      // Decode JWT to get user ID
+      const parts = accessToken.split('.');
+      if (parts.length !== 3) {
+        return null;
+      }
+      
+      const base64Url = parts[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(
+        atob(base64)
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+      const payload = JSON.parse(jsonPayload);
+      return payload.userId || payload.sub || null;
+    } catch (error) {
+      if (API_CONFIG.ENABLE_LOGGING) {
+        console.error('Error extracting user ID from token:', error);
+      }
+      return null;
     }
   },
 
@@ -427,6 +630,22 @@ export const authService = {
    * Login with email and password
    */
   login: async (email: string, password: string): Promise<LoginResponse> => {
+    // CRITICAL: Clear all caches before login to prevent stale data
+    // This ensures we start with a clean slate and fetch fresh user data
+    try {
+      await clearAuthCaches();
+      await clearFeedCaches();
+      clearUserProfileCache();
+      if (API_CONFIG.ENABLE_LOGGING) {
+        console.log('✅ [AuthService] Caches cleared before login');
+      }
+    } catch (error) {
+      // Log but don't fail login if cache clearing fails
+      if (API_CONFIG.ENABLE_LOGGING) {
+        console.warn('⚠️ [AuthService] Some caches may not have been cleared:', error);
+      }
+    }
+    
     const { deviceInfo, ipAddress } = await deviceInfoService.getFullDeviceInfo();
     
     const response = await apiCall<LoginResponse>(
@@ -445,20 +664,46 @@ export const authService = {
     }
 
 
+    // CRITICAL: Delete old tokens before saving new ones
+    // This prevents stale tokens from causing authentication issues
+    await SecureStore.deleteItemAsync(TOKEN_KEYS.ACCESS_TOKEN);
+    await SecureStore.deleteItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
+    
+    // Save both access token and refresh token to SecureStore
     await tokenManager.saveTokens(response.data.accessToken, response.data.refreshToken);
     
-    await tokenManager.saveUserData({
+    // Also save refresh token to SecureStore explicitly
+    // This ensures we have the latest refresh token cached locally
+    try {
+      await SecureStore.setItemAsync(TOKEN_KEYS.REFRESH_TOKEN, response.data.refreshToken);
+    } catch (error) {
+      console.error('Failed to save refresh token to SecureStore', error);
+      throw error;
+    }
+    
+    // CRITICAL: Save user data immediately after login
+    // This ensures SecureStore userData matches the token's user ID
+    const userData = {
       userId: response.data.userId,
       email: response.data.email,
       username: response.data.username,
       fullName: response.data.fullName,
+    };
+    
+    await tokenManager.saveUserData(userData);
+    
+    console.log('✅ [AuthService] User data saved after login', {
+      userId: userData.userId,
+      email: userData.email,
+      username: userData.username
     });
     
     return response.data;
   },
 
   /**
-   * Refresh access token using refresh token
+   * Refresh access token using refresh token from database
+   * Always fetches the latest refresh token from user_sessions table before using it
    */
   refreshAccessToken: async (): Promise<boolean> => {
     // If already refreshing, return the existing promise
@@ -470,11 +715,50 @@ export const authService = {
     tokenManager.refreshPromise = (async (): Promise<boolean> => {
       try {
         tokenManager.isRefreshing = true;
+        
+        // CRITICAL: Get current user ID from the ACCESS TOKEN (source of truth)
+        // Don't trust SecureStore userData - it might be stale
+        // Extract user ID from the current access token before refresh
+        const currentAccessToken = await tokenManager.getAccessToken();
+        let expectedUserId: string | null = null;
+        
+        if (currentAccessToken) {
+          // Extract user ID from current token
+          try {
+            const parts = currentAccessToken.split('.');
+            if (parts.length === 3) {
+              const base64Url = parts[1];
+              const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+              const jsonPayload = decodeURIComponent(
+                atob(base64)
+                  .split('')
+                  .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                  .join('')
+              );
+              const payload = JSON.parse(jsonPayload);
+              expectedUserId = payload.userId || payload.sub || null;
+            }
+          } catch (error) {
+            console.warn('⚠️ [AuthService] Could not extract user ID from current token:', error);
+          }
+        }
+        
+        // CRITICAL: Always fetch refresh token from database (user_sessions table)
+        // This ensures we use the latest refresh token, not a stale cached one
         const refreshToken = await tokenManager.getRefreshToken();
         
         if (!refreshToken) {
+          console.error('❌ [AuthService] No refresh token available from database or SecureStore');
+          await tokenManager.clearTokens();
           return false;
         }
+        
+        console.log('✅ [AuthService] Refresh token retrieved for refresh', {
+          tokenPrefix: refreshToken.substring(0, 20) + '...',
+          tokenLength: refreshToken.length,
+          source: 'database',
+          expectedUserId: expectedUserId || 'unknown (token expired or invalid)'
+        });
         
         // Use internal API call to prevent infinite loops
         const response = await internalApiCall<LoginResponse>(
@@ -484,30 +768,126 @@ export const authService = {
         );
         
         if (!response.success) {
+          console.error('❌ [AuthService] Token refresh failed', response);
           await tokenManager.clearTokens();
           return false;
         }
 
-        // Ensure tokens are properly saved
-        if (response.data?.accessToken && response.data?.refreshToken) {
-          await tokenManager.saveTokens(response.data.accessToken, response.data.refreshToken);
+        // CRITICAL: Ensure tokens are properly saved
+        // The API returns both 'accessToken' and 'token' fields - use 'accessToken' as primary
+        const newAccessToken = response.data?.accessToken || response.data?.token;
+        const newRefreshToken = response.data?.refreshToken;
+        const newUserId = response.data?.userId;
+        
+        // CRITICAL: Verify user ID matches (prevents token mix-up from different users)
+        // Only check if we had a valid expectedUserId (token wasn't expired)
+        if (expectedUserId && newUserId && expectedUserId !== newUserId) {
+          console.error('❌ [AuthService] CRITICAL: User ID mismatch after token refresh!', {
+            expectedUserId,
+            newUserId,
+            message: 'Refresh token belongs to a different user. Clearing all tokens and forcing re-login.'
+          });
+          // Clear everything - this is a security issue
+          await tokenManager.clearSecureStore();
+          return false;
+        }
+        
+        // If expectedUserId is null (token expired), trust the new token's user ID
+        // But log it for debugging
+        if (!expectedUserId && newUserId) {
+          console.log('ℹ️ [AuthService] Token was expired, accepting new user ID from refresh:', newUserId);
+        }
+        
+        if (newAccessToken && newRefreshToken) {
+          // Get old token before saving new one for comparison
+          const oldAccessToken = await tokenManager.getAccessToken();
+          const tokensAreDifferent = oldAccessToken !== newAccessToken;
+          const responseTokensMatch = response.data?.accessToken === response.data?.token;
           
-          // Update user data with refreshed information
-          if (response.data.email && response.data.username && response.data.fullName) {
-            await tokenManager.saveUserData({
+          console.log('🔄 [AuthService] Token refresh response received', {
+            hasAccessToken: !!response.data?.accessToken,
+            hasToken: !!response.data?.token,
+            responseTokensMatch,
+            tokensAreDifferent,
+            userIdMatch: expectedUserId === newUserId,
+            oldTokenPrefix: oldAccessToken ? oldAccessToken.substring(0, 30) + '...' : 'null',
+            newTokenPrefix: newAccessToken.substring(0, 30) + '...',
+            oldTokenLength: oldAccessToken?.length || 0,
+            newTokenLength: newAccessToken.length,
+            oldTokenLast10: oldAccessToken ? oldAccessToken.substring(oldAccessToken.length - 10) : 'null',
+            newTokenLast10: newAccessToken.substring(newAccessToken.length - 10),
+            hasNewRefreshToken: !!newRefreshToken,
+            newRefreshTokenPrefix: newRefreshToken ? newRefreshToken.substring(0, 20) + '...' : 'null'
+          });
+          
+          if (!tokensAreDifferent && oldAccessToken) {
+            console.error('❌ [AuthService] CRITICAL: Old and new tokens are identical! Token refresh did not produce a new token.');
+            return false;
+          }
+          
+          // CRITICAL: Delete old tokens before saving new ones
+          // This prevents stale tokens from causing authentication issues
+          await SecureStore.deleteItemAsync(TOKEN_KEYS.ACCESS_TOKEN);
+          await SecureStore.deleteItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
+          
+          // CRITICAL: Save both access token and refresh token to SecureStore
+          // Access token is used for API calls, refresh token is used as fallback
+          // The refresh token is also stored in database, but we cache it locally for offline support
+          await SecureStore.setItemAsync(TOKEN_KEYS.ACCESS_TOKEN, newAccessToken);
+          await SecureStore.setItemAsync(TOKEN_KEYS.REFRESH_TOKEN, newRefreshToken);
+          
+          // CRITICAL: Verify tokens were actually saved before returning
+          const savedAccessToken = await tokenManager.getAccessToken();
+          const savedRefreshToken = await SecureStore.getItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
+          
+          if (savedAccessToken !== newAccessToken) {
+            console.error('❌ [AuthService] CRITICAL: Access token save verification failed! Saved token does not match new token.');
+            return false;
+          }
+          
+          if (savedRefreshToken !== newRefreshToken) {
+            console.error('❌ [AuthService] CRITICAL: Refresh token save verification failed! Saved token does not match new token.');
+            return false;
+          }
+          
+          console.log('✅ [AuthService] Tokens saved and verified successfully', {
+            savedAccessTokenPrefix: savedAccessToken.substring(0, 30) + '...',
+            savedAccessTokenLength: savedAccessToken.length,
+            savedAccessTokenLast10: savedAccessToken.substring(savedAccessToken.length - 10),
+            savedRefreshTokenPrefix: savedRefreshToken ? savedRefreshToken.substring(0, 20) + '...' : 'null',
+            savedRefreshTokenLength: savedRefreshToken?.length || 0,
+            userId: newUserId
+          });
+          
+          // CRITICAL: Update user data with refreshed information
+          // This ensures SecureStore userData matches the token's user ID
+          if (response.data.userId && response.data.email && response.data.username && response.data.fullName) {
+            const updatedUserData = {
               userId: response.data.userId,
               email: response.data.email,
               username: response.data.username,
               fullName: response.data.fullName,
+            };
+            
+            await tokenManager.saveUserData(updatedUserData);
+            
+            console.log('✅ [AuthService] User data updated after token refresh', {
+              userId: updatedUserData.userId,
+              email: updatedUserData.email,
+              username: updatedUserData.username
             });
+          } else {
+            console.warn('⚠️ [AuthService] Missing user data in refresh response, userData not updated');
           }
           
           return true;
         } else {
+          console.error('❌ [AuthService] Invalid response data from token refresh');
           await tokenManager.clearTokens();
           return false;
         }
       } catch (error) {
+        console.error('❌ [AuthService] Token refresh error', error);
         await tokenManager.clearTokens();
         return false;
       } finally {
@@ -536,7 +916,24 @@ export const authService = {
     } catch (error) {
       // Silent error handling for logout
     } finally {
-      await tokenManager.clearTokens();
+      // CRITICAL: Clear all caches on logout to prevent stale data
+      // This ensures the next login starts with a clean slate
+      try {
+        await clearAuthCaches();
+        await clearFeedCaches();
+        clearUserProfileCache();
+        if (API_CONFIG.ENABLE_LOGGING) {
+          console.log('✅ [AuthService] All caches cleared on logout');
+        }
+      } catch (cacheError) {
+        // Log but don't fail logout if cache clearing fails
+        if (API_CONFIG.ENABLE_LOGGING) {
+          console.warn('⚠️ [AuthService] Some caches may not have been cleared:', cacheError);
+        }
+      }
+      
+      // Also use clearSecureStore as fallback
+      await tokenManager.clearSecureStore();
     }
   },
 

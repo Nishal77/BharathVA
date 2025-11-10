@@ -14,6 +14,7 @@ public class CommentResponse {
     private String userId;
     private String text;
     private LocalDateTime createdAt;
+    private Integer replyToCommentIndex; // Index of the comment being replied to (null for top-level comments)
     
     // Constructors
     public CommentResponse() {}
@@ -22,6 +23,7 @@ public class CommentResponse {
         this.userId = comment.getUserId();
         this.text = comment.getText();
         this.createdAt = comment.getCreatedAt();
+        this.replyToCommentIndex = comment.getReplyToCommentIndex();
     }
     
     // Getters and Setters
@@ -55,12 +57,23 @@ public class CommentResponse {
         this.createdAt = createdAt;
     }
     
+    @JsonProperty("replyToCommentIndex")
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public Integer getReplyToCommentIndex() {
+        return replyToCommentIndex;
+    }
+    
+    public void setReplyToCommentIndex(Integer replyToCommentIndex) {
+        this.replyToCommentIndex = replyToCommentIndex;
+    }
+    
     @Override
     public String toString() {
         return "CommentResponse{" +
                 "userId='" + userId + '\'' +
                 ", text='" + text + '\'' +
                 ", createdAt=" + createdAt +
+                ", replyToCommentIndex=" + replyToCommentIndex +
                 '}';
     }
 }

@@ -155,4 +155,44 @@ public class SessionController {
             ));
         }
     }
+
+    @GetMapping("/current-refresh-token")
+    public ResponseEntity<ApiResponse<Map<String, String>>> getCurrentRefreshToken(
+            @RequestHeader("Authorization") String authHeader) {
+        try {
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(
+                        false,
+                        "Invalid or missing authorization header",
+                        null,
+                        LocalDateTime.now()
+                ));
+            }
+
+            String token = authHeader.substring(7);
+            String refreshToken = sessionManagementService.getCurrentSessionRefreshToken(token);
+            
+            return ResponseEntity.ok(new ApiResponse<>(
+                    true,
+                    "Current refresh token retrieved successfully",
+                    Map.of("refreshToken", refreshToken),
+                    LocalDateTime.now()
+            ));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(
+                    false,
+                    e.getMessage(),
+                    null,
+                    LocalDateTime.now()
+            ));
+        } catch (Exception e) {
+            log.error("Failed to get current refresh token: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
+                    false,
+                    "An unexpected error occurred",
+                    null,
+                    LocalDateTime.now()
+            ));
+        }
+    }
 }

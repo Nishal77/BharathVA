@@ -91,5 +91,33 @@ public class SessionManagementService {
             throw new RuntimeException("Failed to logout other sessions: " + e.getMessage());
         }
     }
+
+    public String getCurrentSessionRefreshToken(String accessToken) {
+        try {
+            UUID userId = jwtService.extractUserId(accessToken);
+            log.debug("Fetching refresh token for user: {}", userId);
+            
+            // CRITICAL: Get the most recent active session for this user
+            // Order by last_used_at DESC to get the most recent session first
+            List<UserSession> sessions = userSessionRepository.findActiveSessionsByUserId(userId, LocalDateTime.now());
+            
+            if (sessions.isEmpty()) {
+                log.warn("No active session found for user: {}", userId);
+                throw new RuntimeException("No active session found for user: " + userId);
+            }
+            
+            // Get the most recently used session (first in list due to ORDER BY last_used_at DESC)
+            UserSession currentSession = sessions.get(0);
+            
+            log.debug("Found active session for user: {}, session ID: {}, refresh token: {}...", 
+                userId, currentSession.getId(), 
+                currentSession.getRefreshToken() != null ? currentSession.getRefreshToken().substring(0, 20) : "null");
+            
+            return currentSession.getRefreshToken();
+        } catch (Exception e) {
+            log.error("Failed to get current session refresh token: {}", e.getMessage());
+            throw new RuntimeException("Failed to get current session refresh token: " + e.getMessage());
+        }
+    }
 }
 

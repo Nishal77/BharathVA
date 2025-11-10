@@ -96,7 +96,7 @@ export default function Details({ email, onBack, onComplete }: DetailsProps) {
     <View className="flex-1" style={{ backgroundColor: bgColor }}>
       {/* Bottom Image - 30% Height */}
       <Image
-        source={require('../../../assets/images/indmil.jpg')}
+        source={require('../../assets/images/indmil.jpg')}
         style={{
           position: 'absolute',
           bottom: 0,
@@ -153,7 +153,7 @@ export default function Details({ email, onBack, onComplete }: DetailsProps) {
               className="p-2"
             >
               <Image
-                source={require('../../../assets/logo/arrow.png')}
+                source={require('../../assets/logo/arrow.png')}
                 style={{ width: 20, height: 20 }}
                 contentFit="contain"
               />

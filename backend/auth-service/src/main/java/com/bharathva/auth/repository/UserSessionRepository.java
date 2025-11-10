@@ -36,7 +36,9 @@ public interface UserSessionRepository extends JpaRepository<UserSession, UUID> 
     long countActiveSessionsByUserId(UUID userId, LocalDateTime now);
 
     // Find all active sessions for a user
-    @Query("SELECT s FROM UserSession s WHERE s.user.id = :userId AND s.expiresAt > :now ORDER BY s.createdAt DESC")
+    // CRITICAL: Order by last_used_at DESC to get the most recently used session first
+    // This ensures we get the correct session when multiple sessions exist
+    @Query("SELECT s FROM UserSession s WHERE s.user.id = :userId AND s.expiresAt > :now ORDER BY s.lastUsedAt DESC, s.createdAt DESC")
     List<UserSession> findActiveSessionsByUserId(UUID userId, LocalDateTime now);
 
     // Delete expired sessions (cleanup job)
