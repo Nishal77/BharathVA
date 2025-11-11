@@ -27,6 +27,7 @@ config.resolver.alias = {
   'nativewind': path.resolve(workspaceRoot, 'node_modules/nativewind'),
   '@expo/vector-icons': path.resolve(workspaceRoot, 'node_modules/@expo/vector-icons'),
   'lucide-react-native': path.resolve(workspaceRoot, 'node_modules/lucide-react-native'),
+  '@react-native-community/datetimepicker': path.resolve(workspaceRoot, 'node_modules/@react-native-community/datetimepicker'),
 };
 
 // Ensure proper module resolution

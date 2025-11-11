@@ -155,7 +155,7 @@ export default function TodaysNew({ onNewsPress }: TodaysNewProps) {
           letterSpacing: -0.5,
           lineHeight: 32
         }}>
-          Today's News
+         Suggested Connections
         </Text>
         <Text style={{
           fontSize: 14,

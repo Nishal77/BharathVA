@@ -1,201 +1,174 @@
 /**
- * Twitter-like time ago utility functions
- * Provides precise time formatting similar to Twitter's time display
+ * Bulletproof real-time timestamp utility
+ * Converts any date to relative time (e.g., "2 mins ago", "1 hour ago")
  */
-
-export interface TimeAgoOptions {
-  showSeconds?: boolean;
-  maxDays?: number;
-  showYear?: boolean;
-}
 
 /**
- * Formats a date string into Twitter-like time ago format
- * Examples: "1s", "30s", "1m", "5m", "1h", "2h", "1d", "2d", "1w", "1mo", "1y"
+ * Get relative time string from a date (bulletproof implementation)
+ * @param dateString - ISO date string or Date object
+ * @returns Formatted relative time string (e.g., "2 mins ago")
  */
-export function formatTimeAgo(dateString: string, options: TimeAgoOptions = {}): string {
-  const {
-    showSeconds = true,
-    maxDays = 7,
-    showYear = true
-  } = options;
+export function getRelativeTime(dateString: string | Date | null | undefined): string {
+  if (!dateString) {
+    return 'Just now';
+  }
 
-  const date = new Date(dateString);
+  try {
+    const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+    
+    // Validate date
+    if (isNaN(date.getTime())) {
+      return 'Just now';
+    }
+
   const now = new Date();
-  const diffInMs = now.getTime() - date.getTime();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
   
-  // Handle future dates
-  if (diffInMs < 0) {
-    return 'now';
+    // Future dates (clock skew)
+    if (diffInSeconds < 0) {
+      return 'Just now';
   }
 
-  const diffInSeconds = Math.floor(diffInMs / 1000);
-  const diffInMinutes = Math.floor(diffInSeconds / 60);
-  const diffInHours = Math.floor(diffInMinutes / 60);
-  const diffInDays = Math.floor(diffInHours / 24);
-  const diffInWeeks = Math.floor(diffInDays / 7);
-  const diffInMonths = Math.floor(diffInDays / 30);
-  const diffInYears = Math.floor(diffInDays / 365);
+    // Less than 1 minute
+    if (diffInSeconds < 60) {
+      return 'Just now';
+    }
 
-  // Seconds (0-59 seconds)
-  if (showSeconds && diffInSeconds < 60) {
-    return diffInSeconds <= 0 ? 'now' : `${diffInSeconds}s`;
-  }
-
-  // Minutes (1-59 minutes)
-  if (diffInMinutes < 60) {
-    return `${diffInMinutes}m`;
+    // Minutes (1-59 mins)
+    if (diffInSeconds < 3600) {
+      const minutes = Math.floor(diffInSeconds / 60);
+      return `${minutes} ${minutes === 1 ? 'min' : 'mins'} ago`;
   }
 
   // Hours (1-23 hours)
-  if (diffInHours < 24) {
-    return `${diffInHours}h`;
+    if (diffInSeconds < 86400) {
+      const hours = Math.floor(diffInSeconds / 3600);
+      return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
   }
 
   // Days (1-6 days)
-  if (diffInDays < 7) {
-    return `${diffInDays}d`;
+    if (diffInSeconds < 604800) {
+      const days = Math.floor(diffInSeconds / 86400);
+      return `${days} ${days === 1 ? 'day' : 'days'} ago`;
   }
 
   // Weeks (1-3 weeks)
-  if (diffInWeeks < 4) {
-    return `${diffInWeeks}w`;
+    if (diffInSeconds < 2592000) {
+      const weeks = Math.floor(diffInSeconds / 604800);
+      return `${weeks} ${weeks === 1 ? 'week' : 'weeks'} ago`;
   }
 
   // Months (1-11 months)
-  if (diffInMonths < 12) {
-    return `${diffInMonths}mo`;
+    if (diffInSeconds < 31536000) {
+      const months = Math.floor(diffInSeconds / 2592000);
+      return `${months} ${months === 1 ? 'month' : 'months'} ago`;
   }
 
   // Years (1+ years)
-  if (showYear) {
-    return `${diffInYears}y`;
+    const years = Math.floor(diffInSeconds / 31536000);
+    return `${years} ${years === 1 ? 'year' : 'years'} ago`;
+    
+  } catch (error) {
+    console.error('Error calculating relative time:', error);
+    return 'Just now';
   }
-
-  // Fallback to days if year display is disabled
-  return `${diffInDays}d`;
 }
 
 /**
- * Formats time ago with more detailed information for longer periods
- * Used for posts older than a week
+ * Format date to readable string
+ * @param dateString - ISO date string or Date object
+ * @returns Formatted date string
  */
-export function formatDetailedTimeAgo(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffInMs = now.getTime() - date.getTime();
-  
-  if (diffInMs < 0) {
+export function formatDate(dateString: string | Date | null | undefined): string {
+  if (!dateString) {
+    return 'Unknown date';
+  }
+
+  try {
+    const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+    
+    if (isNaN(date.getTime())) {
+      return 'Unknown date';
+    }
+
+    return date.toLocaleDateString('en-IN', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Unknown date';
+  }
+}
+
+/**
+ * Check if a date is today
+ */
+export function isToday(dateString: string | Date | null | undefined): boolean {
+  if (!dateString) {
+    return false;
+  }
+
+  try {
+    const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+    const now = new Date();
+    
+    return date.getDate() === now.getDate() &&
+           date.getMonth() === now.getMonth() &&
+           date.getFullYear() === now.getFullYear();
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * Get short relative time (e.g., "2m", "1h", "3d")
+ */
+export function getShortRelativeTime(dateString: string | Date | null | undefined): string {
+  if (!dateString) {
     return 'now';
   }
 
-  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
-  const diffInWeeks = Math.floor(diffInDays / 7);
-  const diffInMonths = Math.floor(diffInDays / 30);
-  const diffInYears = Math.floor(diffInDays / 365);
-
-  // For posts older than a year, show the actual date
-  if (diffInYears >= 1) {
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: diffInYears >= 2 ? 'numeric' : undefined
-    });
+  try {
+    const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+    
+    if (isNaN(date.getTime())) {
+      return 'now';
   }
 
-  // For posts older than a month, show month and day
-  if (diffInMonths >= 1) {
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric'
-    });
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffInSeconds < 0 || diffInSeconds < 60) {
+      return 'now';
   }
 
-  // For posts older than a week, show week count
-  if (diffInWeeks >= 1) {
-    return `${diffInWeeks}w`;
+    if (diffInSeconds < 3600) {
+      return `${Math.floor(diffInSeconds / 60)}m`;
   }
 
-  // For posts older than a day, show day count
-  return `${diffInDays}d`;
+    if (diffInSeconds < 86400) {
+      return `${Math.floor(diffInSeconds / 3600)}h`;
+  }
+
+    if (diffInSeconds < 604800) {
+      return `${Math.floor(diffInSeconds / 86400)}d`;
+  }
+
+    if (diffInSeconds < 2592000) {
+      return `${Math.floor(diffInSeconds / 604800)}w`;
 }
 
-/**
- * Gets a more human-readable time format for accessibility
- * Used for screen readers and accessibility features
- */
-export function getAccessibleTimeAgo(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffInMs = now.getTime() - date.getTime();
-  
-  if (diffInMs < 0) {
-    return 'just now';
-  }
-
-  const diffInSeconds = Math.floor(diffInMs / 1000);
-  const diffInMinutes = Math.floor(diffInSeconds / 60);
-  const diffInHours = Math.floor(diffInMinutes / 60);
-  const diffInDays = Math.floor(diffInHours / 24);
-  const diffInWeeks = Math.floor(diffInDays / 7);
-  const diffInMonths = Math.floor(diffInDays / 30);
-  const diffInYears = Math.floor(diffInDays / 365);
-
-  if (diffInSeconds < 60) {
-    return diffInSeconds <= 0 ? 'just now' : `${diffInSeconds} second${diffInSeconds === 1 ? '' : 's'} ago`;
-  }
-
-  if (diffInMinutes < 60) {
-    return `${diffInMinutes} minute${diffInMinutes === 1 ? '' : 's'} ago`;
-  }
-
-  if (diffInHours < 24) {
-    return `${diffInHours} hour${diffInHours === 1 ? '' : 's'} ago`;
-  }
-
-  if (diffInDays < 7) {
-    return `${diffInDays} day${diffInDays === 1 ? '' : 's'} ago`;
-  }
-
-  if (diffInWeeks < 4) {
-    return `${diffInWeeks} week${diffInWeeks === 1 ? '' : 's'} ago`;
-  }
-
-  if (diffInMonths < 12) {
-    return `${diffInMonths} month${diffInMonths === 1 ? '' : 's'} ago`;
-  }
-
-  return `${diffInYears} year${diffInYears === 1 ? '' : 's'} ago`;
+    if (diffInSeconds < 31536000) {
+      return `${Math.floor(diffInSeconds / 2592000)}mo`;
 }
 
-/**
- * Checks if a post is recent (within the last hour)
- * Used for real-time updates and live indicators
- */
-export function isRecentPost(dateString: string, thresholdMinutes: number = 60): boolean {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffInMs = now.getTime() - date.getTime();
-  const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
-  
-  return diffInMinutes <= thresholdMinutes;
-}
-
-/**
- * Gets the appropriate time format based on post age
- * Automatically switches between compact and detailed formats
- */
-export function getSmartTimeFormat(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffInMs = now.getTime() - date.getTime();
-  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
-
-  // Use compact format for recent posts (within a week)
-  if (diffInDays < 7) {
-    return formatTimeAgo(dateString);
+    return `${Math.floor(diffInSeconds / 31536000)}y`;
+    
+  } catch (error) {
+    return 'now';
   }
-
-  // Use detailed format for older posts
-  return formatDetailedTimeAgo(dateString);
 }

@@ -144,17 +144,35 @@ export const tokenManager = {
             console.error(`❌ [TokenManager] Failed to fetch refresh token: ${response.status} ${errorText}`);
           }
           
-          // If token is expired (401), don't fall back to SecureStore
-          // The refresh token in SecureStore might belong to a different user
-          if (response.status === 401) {
+          // Handle authentication/authorization failures (401 Unauthorized, 403 Forbidden)
+          // Both indicate the access token is invalid, expired, or insufficient permissions
+          // 403 can occur when Spring Security rejects the token before reaching the controller
+          if (response.status === 401 || response.status === 403) {
             if (API_CONFIG.ENABLE_LOGGING) {
-              console.warn('⚠️ [TokenManager] Access token expired, cannot verify refresh token ownership. Clearing SecureStore refresh token.');
+              console.warn(`⚠️ [TokenManager] Access token ${response.status === 401 ? 'expired' : 'forbidden'} (${response.status}), cannot verify refresh token ownership. Attempting SecureStore fallback.`);
             }
-            // Clear potentially stale refresh token
+            
+            // Try SecureStore fallback if we have a valid user ID from token
+            // This handles cases where the token is expired but we still know the user
+            if (currentUserId) {
+              const fallbackToken = await SecureStore.getItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
+              if (fallbackToken) {
+                if (API_CONFIG.ENABLE_LOGGING) {
+                  console.warn('⚠️ [TokenManager] Using cached refresh token from SecureStore as fallback', {
+                    currentUserId,
+                    warning: 'Cannot verify token ownership - use with caution'
+                  });
+                }
+                return fallbackToken;
+              }
+            }
+            
+            // If no fallback available, clear potentially stale refresh token
             await SecureStore.deleteItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
             return null;
           }
           
+          // For other errors (500, etc.), throw to be caught by outer catch
           throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
         
@@ -768,8 +786,24 @@ export const authService = {
         );
         
         if (!response.success) {
-          console.error('❌ [AuthService] Token refresh failed', response);
-          await tokenManager.clearTokens();
+          const errorMessage = response.error?.message || response.message || 'Unknown error';
+          const errorCode = response.error?.code || 'UNKNOWN_ERROR';
+          
+          console.error('❌ [AuthService] Token refresh failed', {
+            error: errorMessage,
+            code: errorCode,
+            response: response
+          });
+          
+          // If refresh token is invalid/expired, clear all tokens
+          if (errorCode === 'HTTP_401' || errorMessage.includes('expired') || errorMessage.includes('invalid')) {
+            console.warn('⚠️ [AuthService] Refresh token is invalid or expired, clearing all tokens');
+            await tokenManager.clearTokens();
+          } else {
+            // For other errors, still clear tokens to force re-authentication
+            await tokenManager.clearTokens();
+          }
+          
           return false;
         }
 

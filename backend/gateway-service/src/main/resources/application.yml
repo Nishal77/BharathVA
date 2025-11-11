@@ -49,6 +49,14 @@ spring:
           filters:
             - RewritePath=/ws/(?<path>.*), /ws/$\{path}
         
+        # News AI Service routes
+        - id: news-ai-service
+          uri: ${NEWS_AI_SERVICE_URI:lb://NEWS-AI-SERVICE}
+          predicates:
+            - Path=/api/news/**
+          filters:
+            - StripPrefix=0
+        
         # Health check for Gateway itself
         - id: gateway-health
           uri: http://localhost:8080

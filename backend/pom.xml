@@ -26,6 +26,7 @@
         <module>gateway-service</module>
         <module>auth-service</module>
         <module>feed-service</module>
+        <module>news-ai-service</module>
     </modules>
 
     <properties>

@@ -7,6 +7,7 @@ interface ApiConfig {
   baseUrl: string;
   gatewayUrl: string;
   feedServiceUrl: string; // Direct feed-service URL for WebSocket
+  newsServiceUrl: string; // News AI service URL
   websocketUrl: string; // WebSocket URL (can be direct to feed-service or through gateway)
   timeout: number;
   enableLogging: boolean;
@@ -18,6 +19,7 @@ const environments: Record<Environment, ApiConfig> = {
     baseUrl: 'http://192.168.0.121:8080/api/auth', // Gateway service for auth API calls
     gatewayUrl: 'http://192.168.0.121:8080', // Gateway service for all API calls
     feedServiceUrl: 'http://192.168.0.121:8082', // Direct feed-service URL
+    newsServiceUrl: 'http://192.168.0.121:8084', // News AI service URL
     // Connect directly to feed-service for WebSocket (more reliable than through gateway)
     websocketUrl: 'http://192.168.0.121:8082/ws', // Direct connection to feed-service WebSocket
     timeout: 30000,
@@ -27,6 +29,7 @@ const environments: Record<Environment, ApiConfig> = {
     baseUrl: 'https://staging-api.bharathva.com/auth',
     gatewayUrl: 'https://staging-api.bharathva.com',
     feedServiceUrl: 'https://staging-api.bharathva.com',
+    newsServiceUrl: 'https://staging-api.bharathva.com',
     websocketUrl: 'https://staging-api.bharathva.com/ws', // Through gateway in staging
     timeout: 30000,
     enableLogging: true,
@@ -35,6 +38,7 @@ const environments: Record<Environment, ApiConfig> = {
     baseUrl: 'https://api.bharathva.com/auth',
     gatewayUrl: 'https://api.bharathva.com',
     feedServiceUrl: 'https://api.bharathva.com',
+    newsServiceUrl: 'https://api.bharathva.com',
     websocketUrl: 'https://api.bharathva.com/ws', // Through gateway in production
     timeout: 30000,
     enableLogging: false,
@@ -86,6 +90,11 @@ export const getWebSocketURL = (): string => {
 // Helper function to get feed service URL
 export const getFeedServiceURL = (): string => {
   return getApiConfig().feedServiceUrl;
+};
+
+// Helper function to get news service URL
+export const getNewsServiceURL = (): string => {
+  return getApiConfig().newsServiceUrl;
 };
 
 // Export current environment for debugging

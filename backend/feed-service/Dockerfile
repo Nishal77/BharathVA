@@ -8,7 +8,7 @@ WORKDIR /build
 COPY pom.xml ./pom-original.xml
 
 # Create a temporary parent POM with only shared and feed-service modules
-RUN sed 's/<module>discovery-service<\/module>//g; s/<module>config-service<\/module>//g; s/<module>gateway-service<\/module>//g; s/<module>auth-service<\/module>//g' pom-original.xml > pom.xml
+RUN sed 's/<module>discovery-service<\/module>//g; s/<module>config-service<\/module>//g; s/<module>gateway-service<\/module>//g; s/<module>auth-service<\/module>//g; s/<module>news-ai-service<\/module>//g' pom-original.xml > pom.xml
 
 # Copy shared module
 COPY shared/pom.xml ./shared/

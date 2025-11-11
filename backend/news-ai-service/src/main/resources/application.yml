@@ -1,0 +1,81 @@
+spring:
+  application:
+    name: news-ai-service
+
+  autoconfigure:
+    exclude: []
+
+  datasource:
+    url: ${NEON_DB_URL}
+    username: ${NEON_DB_USER}
+    password: ${NEON_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: UTC
+
+server:
+  port: ${SERVER_PORT:8084}
+  address: 0.0.0.0
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://discovery-service:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+    healthcheck:
+      enabled: true
+  instance:
+    prefer-ip-address: ${EUREKA_INSTANCE_PREFERIPADDRESS:true}
+    instance-id: ${EUREKA_INSTANCE_INSTANCEID:news-ai-service:8084}
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:news-ai-service}
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    health-check-url-path: /actuator/health
+    status-page-url-path: /actuator/info
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health,info,metrics}
+  endpoint:
+    health:
+      show-details: ${MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS:always}
+      probes:
+        enabled: true
+  health:
+    db:
+      enabled: false
+    defaults:
+      enabled: true
+    diskspace:
+      enabled: true
+    ping:
+      enabled: true
+
+logging:
+  level:
+    com.bharathva.newsai: ${LOGGING_LEVEL_COM_BHARATHVA_NEWSAI:INFO}
+    root: ${LOGGING_LEVEL_ROOT:INFO}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+gemini:
+  api-key: ${GEMINI_API_KEY}
+
+rss:
+  feeds: ${RSS_FEEDS:https://www.indiatoday.in/rss/1206578,https://indianexpress.com/feed/}
+
+scheduler:
+  interval-minutes: ${FETCH_INTERVAL_MINUTES:15}
