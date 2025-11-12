@@ -4,6 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import { deviceInfoService } from './deviceInfoService';
 import { clearAuthCaches, clearFeedCaches } from '../../utils/cacheManager';
 import { clearUserProfileCache } from './feedService';
+import { checkBackendConnectivityCached } from '../../utils/networkConnectivity';
 
 // API Response type
 export interface ApiResponse<T> {
@@ -120,6 +121,7 @@ export const tokenManager = {
         }
       }
       
+      // Try to fetch from database with timeout protection
       try {
         const url = `${API_CONFIG.BASE_URL}${ENDPOINTS.AUTH.GET_CURRENT_REFRESH_TOKEN}`;
         
@@ -129,101 +131,109 @@ export const tokenManager = {
           });
         }
         
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-          },
-        });
+        // Add timeout controller for fetch request (5 seconds max)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
         
-        if (!response.ok) {
-          const errorText = await response.text();
-          if (API_CONFIG.ENABLE_LOGGING) {
-            console.error(`❌ [TokenManager] Failed to fetch refresh token: ${response.status} ${errorText}`);
-          }
+        try {
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+            },
+            signal: controller.signal,
+          });
           
-          // Handle authentication/authorization failures (401 Unauthorized, 403 Forbidden)
-          // Both indicate the access token is invalid, expired, or insufficient permissions
-          // 403 can occur when Spring Security rejects the token before reaching the controller
-          if (response.status === 401 || response.status === 403) {
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+            const errorText = await response.text();
             if (API_CONFIG.ENABLE_LOGGING) {
-              console.warn(`⚠️ [TokenManager] Access token ${response.status === 401 ? 'expired' : 'forbidden'} (${response.status}), cannot verify refresh token ownership. Attempting SecureStore fallback.`);
+              console.error(`❌ [TokenManager] Failed to fetch refresh token: ${response.status} ${errorText}`);
             }
             
-            // Try SecureStore fallback if we have a valid user ID from token
-            // This handles cases where the token is expired but we still know the user
-            if (currentUserId) {
+            // Handle authentication/authorization failures (401 Unauthorized, 403 Forbidden)
+            if (response.status === 401 || response.status === 403) {
+              if (API_CONFIG.ENABLE_LOGGING) {
+                console.warn(`⚠️ [TokenManager] Access token ${response.status === 401 ? 'expired' : 'forbidden'} (${response.status}), using SecureStore fallback`);
+              }
+              
+              // Use SecureStore fallback for expired tokens
               const fallbackToken = await SecureStore.getItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
               if (fallbackToken) {
                 if (API_CONFIG.ENABLE_LOGGING) {
-                  console.warn('⚠️ [TokenManager] Using cached refresh token from SecureStore as fallback', {
-                    currentUserId,
-                    warning: 'Cannot verify token ownership - use with caution'
+                  console.warn('⚠️ [TokenManager] Using cached refresh token from SecureStore', {
+                    currentUserId: currentUserId || 'unknown',
                   });
                 }
                 return fallbackToken;
               }
+              
+              return null;
             }
             
-            // If no fallback available, clear potentially stale refresh token
-            await SecureStore.deleteItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
-            return null;
+            // For other errors, use fallback
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
           }
           
-          // For other errors (500, etc.), throw to be caught by outer catch
-          throw new Error(`HTTP ${response.status}: ${errorText}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.success && data.data?.refreshToken) {
-          const refreshToken = data.data.refreshToken;
+          const data = await response.json();
           
-          // CRITICAL: Verify refresh token belongs to current user
-          // Backend endpoint uses access token to find the correct session
-          // So if we got here, the refresh token is correct for this user
-          if (API_CONFIG.ENABLE_LOGGING) {
-            console.log('✅ [TokenManager] Refresh token fetched from database successfully', {
-              refreshTokenPrefix: refreshToken.substring(0, 20) + '...',
-              currentUserId: currentUserId || 'unknown',
-              source: 'database'
-            });
-          }
-          
-          // Update SecureStore with the correct refresh token
-          await SecureStore.setItemAsync(TOKEN_KEYS.REFRESH_TOKEN, refreshToken);
-          
-          return refreshToken;
-        } else {
-          if (API_CONFIG.ENABLE_LOGGING) {
-            console.error('❌ [TokenManager] Invalid response structure:', data);
-          }
-          throw new Error('Invalid response structure from refresh token endpoint');
-        }
-      } catch (error: any) {
-        if (API_CONFIG.ENABLE_LOGGING) {
-          console.error('❌ [TokenManager] Failed to fetch refresh token from database', error);
-        }
-        
-        // CRITICAL: Only use SecureStore fallback if we have a valid access token
-        // If access token is expired, SecureStore refresh token might be for wrong user
-        if (currentUserId) {
-          const fallbackToken = await SecureStore.getItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
-          if (fallbackToken) {
+          if (data.success && data.data?.refreshToken) {
+            const refreshToken = data.data.refreshToken;
+            
             if (API_CONFIG.ENABLE_LOGGING) {
-              console.warn('⚠️ [TokenManager] Using cached refresh token from SecureStore as fallback', {
-                currentUserId,
-                warning: 'Cannot verify token ownership - use with caution'
+              console.log('✅ [TokenManager] Refresh token fetched from database successfully', {
+                refreshTokenPrefix: refreshToken.substring(0, 20) + '...',
+                currentUserId: currentUserId || 'unknown',
+                source: 'database'
               });
             }
-            return fallbackToken;
+            
+            // Update SecureStore with the correct refresh token
+            await SecureStore.setItemAsync(TOKEN_KEYS.REFRESH_TOKEN, refreshToken);
+            
+            return refreshToken;
+          } else {
+            if (API_CONFIG.ENABLE_LOGGING) {
+              console.error('❌ [TokenManager] Invalid response structure:', data);
+            }
+            throw new Error('Invalid response structure');
           }
-        } else {
+        } catch (fetchError: any) {
+          clearTimeout(timeoutId);
+          
+          // Handle timeout or network errors
+          if (fetchError.name === 'AbortError') {
+            if (API_CONFIG.ENABLE_LOGGING) {
+              console.warn('⚠️ [TokenManager] Fetch timeout - backend not responding, using SecureStore fallback');
+            }
+          } else {
+            if (API_CONFIG.ENABLE_LOGGING) {
+              console.error('❌ [TokenManager] Fetch error:', fetchError.message);
+            }
+          }
+          
+          // Fall through to SecureStore fallback
+          throw fetchError;
+        }
+      } catch (error: any) {
+        // CRITICAL: Use SecureStore fallback when backend is unreachable
+        // This allows the app to continue working with cached tokens
+        const fallbackToken = await SecureStore.getItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
+        if (fallbackToken) {
           if (API_CONFIG.ENABLE_LOGGING) {
-            console.warn('⚠️ [TokenManager] Cannot use SecureStore fallback - access token expired or invalid');
+            console.warn('⚠️ [TokenManager] Using cached refresh token from SecureStore as fallback', {
+              currentUserId: currentUserId || 'unknown',
+              reason: error.message || 'Backend unreachable'
+            });
           }
+          return fallbackToken;
+        }
+        
+        if (API_CONFIG.ENABLE_LOGGING) {
+          console.warn('⚠️ [TokenManager] No fallback token available in SecureStore');
         }
         
         return null;
@@ -733,6 +743,21 @@ export const authService = {
     tokenManager.refreshPromise = (async (): Promise<boolean> => {
       try {
         tokenManager.isRefreshing = true;
+        
+        // CRITICAL: Check backend connectivity first
+        // Skip refresh if backend is unreachable to prevent hanging
+        const connectivityCheck = await checkBackendConnectivityCached();
+        if (!connectivityCheck.isConnected) {
+          console.warn('⚠️ [AuthService] Backend unreachable, skipping token refresh', {
+            error: connectivityCheck.error,
+            message: 'Will retry when backend becomes available'
+          });
+          return false;
+        }
+        
+        console.log('✅ [AuthService] Backend is reachable', {
+          latency: connectivityCheck.latency ? `${connectivityCheck.latency}ms` : 'unknown'
+        });
         
         // CRITICAL: Get current user ID from the ACCESS TOKEN (source of truth)
         // Don't trust SecureStore userData - it might be stale

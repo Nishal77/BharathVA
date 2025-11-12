@@ -157,6 +157,24 @@ public class News {
     public void setPublishedAt(LocalDateTime publishedAt) {
         this.pubDate = publishedAt;
     }
+    
+    /**
+     * Get published date formatted in IST for display.
+     * Example: "12 Jan 2025, 03:30 PM IST"
+     */
+    @JsonProperty("publishedAtIst")
+    public String getPublishedAtIst() {
+        return com.bharathva.newsai.util.DateTimeUtil.formatAsIst(pubDate);
+    }
+    
+    /**
+     * Get published date as relative time (e.g., "5 hours ago").
+     * This is for news card display.
+     */
+    @JsonProperty("publishedAtRelative")
+    public String getPublishedAtRelative() {
+        return com.bharathva.newsai.util.DateTimeUtil.formatRelativeTime(pubDate);
+    }
 
     public LocalDateTime getCreatedAt() {
         return createdAt;

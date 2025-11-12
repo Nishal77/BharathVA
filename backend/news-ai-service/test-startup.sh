@@ -156,3 +156,4 @@ echo "2. If Eureka registration failed, check discovery-service logs"
 echo "3. If gateway routing failed, verify service is registered in Eureka"
 echo ""
 
+

@@ -14,19 +14,19 @@ public class SchedulerService {
     private static final Logger log = LoggerFactory.getLogger(SchedulerService.class);
 
     private final RssFetchService rssFetchService;
-    private final SummarizerService summarizerService;
+    private final IntelligentSummarizerService intelligentSummarizerService;
     private final CleanupService cleanupService;
     private final com.bharathva.newsai.service.TopNewsService topNewsService;
 
     public SchedulerService(RssFetchService rssFetchService, 
-                           SummarizerService summarizerService, 
+                           IntelligentSummarizerService intelligentSummarizerService, 
                            CleanupService cleanupService,
                            com.bharathva.newsai.service.TopNewsService topNewsService) {
         this.rssFetchService = rssFetchService;
-        this.summarizerService = summarizerService;
+        this.intelligentSummarizerService = intelligentSummarizerService;
         this.cleanupService = cleanupService;
         this.topNewsService = topNewsService;
-        log.info("SchedulerService initialized - News will auto-refresh every 15 minutes");
+        log.info("SchedulerService initialized - News will auto-refresh every 10-15 minutes");
     }
 
     @Scheduled(fixedRateString = "${scheduler.interval-minutes:15}000", initialDelay = 60000)
@@ -40,9 +40,9 @@ public class SchedulerService {
             topNewsService.fetchAndStoreTop10News();
             log.info("✓ News fetch and store completed");
             
-            // Step 2: Auto-summarize ALL news articles using AI
+            // Step 2: Auto-summarize ALL news articles using OpenRouter AI
             try {
-                summarizerService.autoSummarizeAllNews();
+                intelligentSummarizerService.autoSummarizeAllNews();
                 log.info("✓ Auto-summarization completed");
             } catch (Exception e) {
                 log.warn("⚠ Summarization failed (non-critical): {}", e.getMessage());

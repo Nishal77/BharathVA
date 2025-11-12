@@ -55,14 +55,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, segments, isLoading, router]);
 
   const checkAuthStatus = async () => {
+    // Add timeout to prevent hanging on auth check
+    const authCheckTimeout = setTimeout(() => {
+      console.warn('⚠️ [AuthContext] Auth check timeout - forcing logout');
+      setUser(null);
+      setIsLoading(false);
+    }, 10000); // 10 second timeout for entire auth check
+
     try {
       const accessToken = await tokenManager.getAccessToken();
       const refreshToken = await tokenManager.getRefreshToken();
       const userData = await tokenManager.getUserData();
 
       if (!accessToken || !refreshToken || !userData) {
+        console.log('ℹ️ [AuthContext] No auth tokens or user data found - user not logged in');
         setUser(null);
         setIsLoading(false);
+        clearTimeout(authCheckTimeout);
         return;
       }
 
@@ -85,18 +94,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await tokenManager.clearSecureStore();
         setUser(null);
         setIsLoading(false);
+        clearTimeout(authCheckTimeout);
         return;
       }
 
-      const isValid = await authService.validateToken();
+      // Validate token with timeout
+      const validatePromise = authService.validateToken();
+      const validateTimeout = new Promise<boolean>((resolve) => 
+        setTimeout(() => {
+          console.warn('⚠️ [AuthContext] Token validation timeout - backend unreachable');
+          resolve(false);
+        }, 5000)
+      );
+      
+      const isValid = await Promise.race([validatePromise, validateTimeout]);
 
       if (isValid) {
+        console.log('✅ [AuthContext] Token validated successfully');
         setUser(userData);
+        clearTimeout(authCheckTimeout);
       } else {
+        console.log('ℹ️ [AuthContext] Token validation failed - attempting refresh');
         try {
-          const refreshed = await authService.refreshAccessToken();
+          // Refresh token with timeout
+          const refreshPromise = authService.refreshAccessToken();
+          const refreshTimeout = new Promise<boolean>((resolve) => 
+            setTimeout(() => {
+              console.warn('⚠️ [AuthContext] Token refresh timeout - backend unreachable');
+              resolve(false);
+            }, 8000)
+          );
+          
+          const refreshed = await Promise.race([refreshPromise, refreshTimeout]);
 
           if (refreshed) {
+            console.log('✅ [AuthContext] Token refreshed successfully');
             // CRITICAL: Get fresh userData after refresh
             // Token refresh updates userData to match the new token
             const newUserData = await tokenManager.getUserData();
@@ -116,6 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUser(null);
             }
           } else {
+            console.log('ℹ️ [AuthContext] Token refresh failed - clearing auth state');
             // Clear all caches when refresh fails
             try {
               await clearAuthCaches();
@@ -127,6 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             await tokenManager.clearSecureStore();
             setUser(null);
           }
+          clearTimeout(authCheckTimeout);
         } catch (refreshError) {
           console.error('❌ [AuthContext] Token refresh error:', refreshError);
           // Clear all caches on refresh error
@@ -139,6 +173,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           await tokenManager.clearSecureStore();
           setUser(null);
+          clearTimeout(authCheckTimeout);
         }
       }
     } catch (error) {
@@ -153,6 +188,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       await tokenManager.clearSecureStore();
       setUser(null);
+      clearTimeout(authCheckTimeout);
     } finally {
       setIsLoading(false);
     }

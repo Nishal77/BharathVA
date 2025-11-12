@@ -71,8 +71,11 @@ logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
 
-gemini:
-  api-key: ${GEMINI_API_KEY}
+openrouter:
+  api-key: ${OPENROUTER_API_KEY}
+  primary-model: ${PRIMARY_MODEL:google/gemini-2.0-flash-exp:free}
+  secondary-model: ${SECONDARY_MODEL:moonshotai/kimi-k2-0711:free}
+  tertiary-model: ${TERTIARY_MODEL:mistralai/mistral-small-24b-instruct-2501:free}
 
 rss:
   feeds: ${RSS_FEEDS:https://www.indiatoday.in/rss/1206578,https://indianexpress.com/feed/}

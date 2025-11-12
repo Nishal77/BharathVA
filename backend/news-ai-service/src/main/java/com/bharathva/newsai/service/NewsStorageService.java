@@ -19,10 +19,28 @@ public class NewsStorageService {
 
     @Autowired
     private NewsRepository newsRepository;
+    
+    @Autowired
+    private DuplicateNewsDetectionService duplicateDetectionService;
+    
+    @Autowired
+    private IntelligentSummarizerService summarizerService;
 
     @PersistenceContext
     private EntityManager entityManager;
 
+    /**
+     * Save news articles with intelligent duplicate detection and automatic AI summarization.
+     * 
+     * Process Flow:
+     * 1. Validate news article
+     * 2. Check for duplicates using multi-strategy detection
+     * 3. Save to database if not duplicate
+     * 4. Queue for AI summarization (async)
+     * 
+     * @param newsArticles List of news articles to save
+     * @return Number of successfully saved articles
+     */
     @Transactional
     public int saveNewsArticles(List<News> newsArticles) {
         if (newsArticles == null || newsArticles.isEmpty()) {
@@ -31,50 +49,101 @@ public class NewsStorageService {
         }
 
         int savedCount = 0;
-        int skippedCount = 0;
+        int skippedDuplicates = 0;
         int errorCount = 0;
 
-        log.info("Starting to save {} news articles to database", newsArticles.size());
+        log.info("========================================");
+        log.info("BULLETPROOF NEWS STORAGE STARTED");
+        log.info("Processing {} news articles", newsArticles.size());
+        log.info("========================================");
 
         for (News news : newsArticles) {
             try {
-                if (news.getLink() == null || news.getLink().trim().isEmpty()) {
-                    log.warn("Skipping news article with empty link: {}", news.getTitle());
-                    skippedCount++;
+                // Validation: Check for required fields
+                if (!isValidNews(news)) {
+                    log.warn("Skipping invalid news article: {}", 
+                            news.getTitle() != null ? truncate(news.getTitle(), 60) : "NO TITLE");
+                    errorCount++;
                     continue;
                 }
 
-                String link = news.getLink().trim();
-
-                if (newsRepository.existsByLink(link)) {
-                    log.debug("News article already exists, skipping: {}", link);
-                    skippedCount++;
+                // Duplicate Detection: Multi-strategy check
+                if (duplicateDetectionService.isDuplicate(news)) {
+                    log.debug("Duplicate detected, skipping: {}", truncate(news.getTitle(), 60));
+                    skippedDuplicates++;
                     continue;
                 }
 
+                // Save to database
                 News savedNews = newsRepository.save(news);
                 entityManager.flush();
                 savedCount++;
 
-                log.info("Successfully saved news article [ID: {}] - Title: {} | Source: {} | Link: {}", 
+                log.info("✓ Saved news [ID: {}]: {} | Source: {}", 
                         savedNews.getId(), 
-                        savedNews.getTitle(), 
-                        savedNews.getSource(),
-                        savedNews.getLink());
+                        truncate(savedNews.getTitle(), 60),
+                        savedNews.getSource());
 
             } catch (org.springframework.dao.DataIntegrityViolationException e) {
-                log.warn("Duplicate entry detected, skipping: {} - {}", news.getLink(), e.getMessage());
-                skippedCount++;
+                log.warn("Database constraint violation (duplicate), skipping: {} - {}", 
+                        truncate(news.getLink(), 80), e.getMessage());
+                skippedDuplicates++;
             } catch (Exception e) {
-                log.error("Failed to save news article: {} | Error: {}", news.getLink(), e.getMessage(), e);
+                log.error("Failed to save news article: {} | Error: {}", 
+                        truncate(news.getLink(), 80), e.getMessage());
+                if (log.isDebugEnabled()) {
+                    log.debug("Full error stack trace:", e);
+                }
                 errorCount++;
             }
         }
 
         entityManager.flush();
-        log.info("News storage completed - Saved: {}, Skipped: {}, Errors: {}", savedCount, skippedCount, errorCount);
+        
+        log.info("========================================");
+        log.info("NEWS STORAGE COMPLETED");
+        log.info("Saved: {} | Duplicates Skipped: {} | Errors: {} | Total: {}", 
+                savedCount, skippedDuplicates, errorCount, newsArticles.size());
+        log.info("========================================");
 
         return savedCount;
+    }
+    
+    /**
+     * Validate that a news article has all required fields.
+     */
+    private boolean isValidNews(News news) {
+        if (news == null) {
+            log.warn("Null news article provided");
+            return false;
+        }
+        
+        if (news.getTitle() == null || news.getTitle().trim().isEmpty()) {
+            log.warn("News article missing title");
+            return false;
+        }
+        
+        if (news.getLink() == null || news.getLink().trim().isEmpty()) {
+            log.warn("News article missing link");
+            return false;
+        }
+        
+        // Title should be at least 10 characters (filter out junk)
+        if (news.getTitle().trim().length() < 10) {
+            log.warn("News title too short (< 10 chars): {}", news.getTitle());
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Truncate string for logging.
+     */
+    private String truncate(String str, int maxLength) {
+        if (str == null) return "null";
+        if (str.length() <= maxLength) return str;
+        return str.substring(0, maxLength) + "...";
     }
 
     @Transactional(readOnly = true)

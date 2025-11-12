@@ -151,7 +151,7 @@ public class NewsController {
     }
 
     @Autowired
-    private com.bharathva.newsai.service.SummarizerService summarizerService;
+    private com.bharathva.newsai.service.IntelligentSummarizerService intelligentSummarizerService;
 
     @GetMapping("/{id}/summary")
     public ResponseEntity<?> getNewsWithSummary(@PathVariable Long id) {
@@ -165,7 +165,7 @@ public class NewsController {
             }
             
             // Get summary (uses cached or generates new one)
-            String summary = summarizerService.getSummaryForNews(news);
+            String summary = intelligentSummarizerService.getSummaryForNews(news);
             
             Map<String, Object> response = new HashMap<>();
             response.put("id", news.getId());
@@ -177,6 +177,8 @@ public class NewsController {
             response.put("source", news.getSource());
             response.put("link", news.getLink());
             response.put("publishedAt", news.getPubDate());
+            response.put("publishedAtIst", com.bharathva.newsai.util.DateTimeUtil.formatAsIst(news.getPubDate()));
+            response.put("publishedAtRelative", com.bharathva.newsai.util.DateTimeUtil.formatRelativeTime(news.getPubDate()));
             response.put("createdAt", news.getCreatedAt());
             
             log.info("✓ Returned news summary for ID: {} ({} chars)", 
@@ -225,7 +227,7 @@ public class NewsController {
             // Run auto-summarization in a separate thread to avoid blocking
             new Thread(() -> {
                 try {
-                    summarizerService.autoSummarizeAllNews();
+                    intelligentSummarizerService.autoSummarizeAllNews();
                 } catch (Exception e) {
                     log.error("Error in background summarization: {}", e.getMessage(), e);
                 }
@@ -280,7 +282,7 @@ public class NewsController {
             testNews.setDescription("India's economy shows strong growth in Q1 2024 with GDP expanding by 7.2%. The manufacturing sector leads with 8.5% growth, while services sector grows at 6.8%. Experts attribute this to increased foreign investment and domestic consumption.");
             
             // Try to generate a summary
-            String summary = summarizerService.getSummaryForNews(testNews);
+            String summary = intelligentSummarizerService.getSummaryForNews(testNews);
             
             Map<String, Object> response = new HashMap<>();
             response.put("status", "success");

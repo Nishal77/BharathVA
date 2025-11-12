@@ -155,7 +155,10 @@ services:
       - NEON_DB_USER=neondb_owner
       - NEON_DB_PASSWORD=npg_8n5zEhHNUAIc
       - RSS_FEEDS=https://www.indiatoday.in/rss/1206578,https://indianexpress.com/feed/,https://feeds.feedburner.com/ndtvnews-top-stories,https://timesofindia.indiatimes.com/rssfeedstopstories.cms
-      - GEMINI_API_KEY=AIzaSyCVcwCYANhdmxn-U6LfP_Fl40A93XkD8TM
+      - OPENROUTER_API_KEY=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
+      - PRIMARY_MODEL=google/gemini-2.0-flash-exp:free
+      - SECONDARY_MODEL=moonshotai/kimi-k2-0711:free
+      - TERTIARY_MODEL=mistralai/mistral-small-24b-instruct-2501:free
       - FETCH_INTERVAL_MINUTES=15
       - SERVER_PORT=8084
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service:8761/eureka/
