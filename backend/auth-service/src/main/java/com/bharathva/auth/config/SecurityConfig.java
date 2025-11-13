@@ -41,6 +41,7 @@ public class SecurityConfig {
                 .requestMatchers("/auth/user/**").authenticated()
                 .requestMatchers("/auth/profile").authenticated()
                 .requestMatchers("/auth/sessions/**").authenticated()
+                .requestMatchers("/auth/follow/**").authenticated()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

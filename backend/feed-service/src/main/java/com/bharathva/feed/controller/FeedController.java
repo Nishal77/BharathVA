@@ -802,6 +802,52 @@ public class FeedController {
         }
     }
     
+    // Admin endpoint to sync post counts from MongoDB to NeonDB
+    @PostMapping("/admin/sync-post-counts")
+    public ResponseEntity<Map<String, Object>> syncPostCounts() {
+        log.info("Admin endpoint called to sync post counts from MongoDB to NeonDB");
+        
+        try {
+            Map<String, Object> result = feedService.syncPostCountsToNeonDB();
+            Boolean success = (Boolean) result.get("success");
+            
+            if (Boolean.TRUE.equals(success)) {
+                return ResponseEntity.ok(result);
+            } else {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
+            }
+        } catch (Exception e) {
+            log.error("Error syncing post counts: {}", e.getMessage(), e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+    
+    // Admin endpoint to sync post count for a specific user
+    @PostMapping("/admin/sync-user-post-count/{userId}")
+    public ResponseEntity<Map<String, Object>> syncUserPostCount(@PathVariable String userId) {
+        log.info("Admin endpoint called to sync post count for user: {}", userId);
+        
+        try {
+            Map<String, Object> result = feedService.getPostCountSyncService().syncUserPostCount(userId);
+            Boolean success = (Boolean) result.get("success");
+            
+            if (Boolean.TRUE.equals(success)) {
+                return ResponseEntity.ok(result);
+            } else {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
+            }
+        } catch (Exception e) {
+            log.error("Error syncing user post count: {}", e.getMessage(), e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+    
     // Helper method to extract user ID from JWT token
     private String getUserIdFromAuthentication(Authentication authentication) {
         if (authentication != null && authentication.getPrincipal() instanceof Jwt) {

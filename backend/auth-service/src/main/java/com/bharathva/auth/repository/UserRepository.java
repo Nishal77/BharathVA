@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -28,4 +29,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
            "ELSE 4 END, " +
            "u.username ASC")
     Page<User> searchUsers(@Param("query") String query, Pageable pageable);
+    
+    @Query(value = "SELECT * FROM users ORDER BY RANDOM() LIMIT :limit", nativeQuery = true)
+    List<User> findRandomUsers(@Param("limit") int limit);
 }

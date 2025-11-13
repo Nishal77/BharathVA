@@ -35,6 +35,9 @@ export const ENDPOINTS = {
     USER_UPDATE_BIO: '/user/me/bio',
     USER_UPDATE_PROFILE_IMAGE: '/user/me/profile-image',
     USER_UPDATE_PROFILE: '/user/me/profile',
+    FOLLOW_USER: '/follow',
+    UNFOLLOW_USER: '/follow',
+    FOLLOW_STATUS: '/follow',
   },
 };
 

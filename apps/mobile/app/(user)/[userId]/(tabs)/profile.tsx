@@ -1,11 +1,11 @@
-import { useRouter } from 'expo-router';
-import React, { useState, useRef } from 'react';
+import { useRouter, useFocusEffect } from 'expo-router';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ScrollView, Text, View, useColorScheme, RefreshControl, Animated } from 'react-native';
 import { Svg, Line } from 'react-native-svg';
 import ProfileHeader from '../profile/ProfileHeader';
 import ProfileBio from '../profile/components/ProfileBio';
 import ProfileInfo from '../profile/components/ProfileInfo';
-import ProfileStats from '../profile/components/ProfileStats';
+import ProfileStats, { ProfileStatsRef } from '../profile/components/ProfileStats';
 import ProfileTabs from '../profile/components/ProfileTabs';
 import ProfileUsername from '../profile/components/ProfileUsername';
 import PrivacySecurity from '../profile/components/settings/PrivacySecurity';
@@ -17,8 +17,11 @@ export default function ProfileTab() {
   const isDark = colorScheme === 'dark';
   const [activeTab, setActiveTab] = useState('Feed');
   const [refreshing, setRefreshing] = useState(false);
+  const [autoRefreshing, setAutoRefreshing] = useState(false);
   const [showPrivacySettings, setShowPrivacySettings] = useState(false);
   const spinValue = useRef(new Animated.Value(0)).current;
+  const profileStatsRef = useRef<ProfileStatsRef>(null);
+  const autoRefreshCheckInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   
   const bgColor = isDark ? '#000000' : '#FFFFFF';
 
@@ -43,6 +46,40 @@ export default function ProfileTab() {
     handlePrivacyPress();
   };
 
+  // Monitor auto-refresh state from ProfileStats
+  useEffect(() => {
+    autoRefreshCheckInterval.current = setInterval(() => {
+      if (profileStatsRef.current) {
+        const isAutoRefreshing = profileStatsRef.current.isAutoRefreshing();
+        setAutoRefreshing(isAutoRefreshing);
+      }
+    }, 100);
+
+    return () => {
+      if (autoRefreshCheckInterval.current) {
+        clearInterval(autoRefreshCheckInterval.current);
+      }
+    };
+  }, []);
+
+  // Silent background refresh when profile tab is focused
+  useFocusEffect(
+    useCallback(() => {
+      // Refresh stats silently in the background when tab is focused
+      // User won't feel it - happens seamlessly without any loading indicators
+      if (profileStatsRef.current) {
+        // Small delay to ensure component is ready
+        const timeoutId = setTimeout(() => {
+          profileStatsRef.current?.silentRefresh().catch((error) => {
+            console.warn('Background refresh failed:', error);
+          });
+        }, 200);
+        
+        return () => clearTimeout(timeoutId);
+      }
+    }, [])
+  );
+
   const onRefresh = async () => {
     setRefreshing(true);
     
@@ -55,12 +92,21 @@ export default function ProfileTab() {
       })
     ).start();
 
-    // Simulate refresh delay
-    setTimeout(() => {
+    try {
+      // Refresh ProfileStats
+      if (profileStatsRef.current) {
+        await profileStatsRef.current.refresh();
+      }
+      
+      // Add a small delay for smooth UX
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } catch (error) {
+      console.error('Error refreshing profile:', error);
+    } finally {
       setRefreshing(false);
       spinValue.stopAnimation();
       spinValue.setValue(0);
-    }, 2000);
+    }
   };
 
   const spin = spinValue.interpolate({
@@ -248,6 +294,16 @@ export default function ProfileTab() {
         onMenuPress={handleMenuPress}
         onPrivacyPress={handlePrivacyPress}
       />
+      {/* Auto-refresh loading indicator below header (only for auto-refresh, not manual pull) */}
+      {autoRefreshing && !refreshing && (
+        <View 
+          style={{ 
+            height: 2, 
+            backgroundColor: isDark ? 'rgba(59, 130, 246, 0.6)' : 'rgba(59, 130, 246, 0.8)',
+            width: '100%'
+          }}
+        />
+      )}
       <ScrollView 
         className="flex-1" 
         style={{ backgroundColor: bgColor }}
@@ -257,9 +313,8 @@ export default function ProfileTab() {
         <ProfileInfo />
         <ProfileUsername />
         <ProfileBio />
-        <ProfileStats />
+        <ProfileStats ref={profileStatsRef} />
         <ProfileTabs onTabChange={handleTabChange} />
-        {refreshing && <CustomLoader />}
         {renderTabContent()}
       </ScrollView>
     </View>

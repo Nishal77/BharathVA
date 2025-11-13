@@ -13,7 +13,7 @@ export default function ExploreLayout() {
       }}
     >
       <Stack.Screen name="ForYou" options={{ headerShown: false, header: () => null }} />
-      <Stack.Screen name="TodaysNew" options={{ headerShown: false, header: () => null }} />
+      <Stack.Screen name="SuggestedProfiles" options={{ headerShown: false, header: () => null }} />
       <Stack.Screen 
         name="UserProfileView" 
         options={{ 

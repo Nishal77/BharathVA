@@ -3,7 +3,7 @@ import { View, ScrollView, Dimensions, Text, Image, Pressable, StyleSheet, useCo
 import { Ionicons } from "@expo/vector-icons";
 import { useFonts } from 'expo-font';
 import { useTabStyles } from '../../../../hooks/useTabStyles';
-import TodaysNew from './TodaysNew';
+import SuggestedProfiles from './SuggestedProfiles';
 import { newsService, NewsItem } from '../../../../services/api/newsService';
 import NewsDetailScreen from '../../../../components/NewsDetailScreen';
 import { getRelativeTime } from '../../../../utils/timeUtils';
@@ -368,8 +368,8 @@ export default function ForYou({ onVideoPress }: ForYouProps) {
         </View>
       )}
 
-      {/* Today's News Section */}
-      <TodaysNew />
+      {/* Suggested Profiles Section */}
+      <SuggestedProfiles />
 
       {/* News Detail Modal */}
       <Modal

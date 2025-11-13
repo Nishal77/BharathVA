@@ -25,13 +25,13 @@ spring:
           predicates:
             - Path=/eureka/**
         
-        # Auth Service routes
+        # Auth Service routes - must be before feed-service to avoid conflicts
         - id: auth-service
           uri: lb://AUTH-SERVICE
           predicates:
             - Path=/api/auth/**
           filters:
-            - RewritePath=/api/auth/(?<path>.*), /auth/$\{path}
+            - RewritePath=/api/auth/(?<segment>.*), /auth/$\{segment}
         
         # Feed Service routes - must be before any static resource handlers
         - id: feed-service

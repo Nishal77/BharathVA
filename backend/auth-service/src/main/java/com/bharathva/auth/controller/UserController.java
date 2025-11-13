@@ -1,7 +1,9 @@
 package com.bharathva.auth.controller;
 
 import com.bharathva.auth.entity.User;
+import com.bharathva.auth.entity.UserStats;
 import com.bharathva.auth.repository.UserRepository;
+import com.bharathva.auth.service.FollowService;
 import com.bharathva.auth.util.JwtUtils;
 import com.bharathva.shared.dto.ApiResponse;
 import org.slf4j.Logger;
@@ -36,6 +38,9 @@ public class UserController {
 
     @Autowired
     private CloudinaryService cloudinaryService;
+    
+    @Autowired
+    private FollowService followService;
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getCurrentUser() {
@@ -510,6 +515,79 @@ public class UserController {
         }
     }
 
+    /**
+     * Get suggested/random users from database
+     * CRITICAL: This endpoint must be placed BEFORE the /{userId} path variable endpoint
+     * to ensure Spring Boot matches /suggested before trying to match it as a UUID
+     * 
+     * @param limit - Number of users to fetch (1-10, defaults to 4)
+     * @return List of suggested user profiles
+     */
+    @GetMapping("/suggested")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getSuggestedUsers(
+            @RequestParam(value = "limit", defaultValue = "4", required = false) int limit) {
+        try {
+            if (limit < 1 || limit > 10) {
+                limit = 4;
+            }
+            
+            UUID currentUserId;
+            try {
+                currentUserId = JwtUtils.getCurrentUserId();
+            } catch (RuntimeException e) {
+                log.debug("No authenticated user, returning random users");
+                currentUserId = null;
+            }
+            
+            List<User> randomUsers = userRepository.findRandomUsers(limit);
+            
+            final UUID finalCurrentUserId = currentUserId;
+            List<Map<String, Object>> userList = randomUsers.stream()
+                .filter(user -> finalCurrentUserId == null || !user.getId().equals(finalCurrentUserId))
+                .limit(limit)
+                .map(user -> {
+                    Map<String, Object> userData = new HashMap<>();
+                    userData.put("id", user.getId().toString());
+                    userData.put("username", user.getUsername());
+                    userData.put("fullName", user.getFullName());
+                    userData.put("profileImageUrl", user.getProfileImageUrl());
+                    userData.put("bio", user.getBio());
+                    userData.put("isEmailVerified", user.getIsEmailVerified());
+                    
+                    UserStats userStats = followService.getUserStats(user.getId());
+                    if (userStats != null) {
+                        userData.put("followersCount", userStats.getFollowersCount());
+                        userData.put("followingCount", userStats.getFollowingCount());
+                        userData.put("postsCount", userStats.getPostsCount());
+                    } else {
+                        userData.put("followersCount", 0);
+                        userData.put("followingCount", 0);
+                        userData.put("postsCount", 0);
+                    }
+                    
+                    return userData;
+                })
+                .collect(java.util.stream.Collectors.toList());
+            
+            log.info("Suggested users fetched successfully: {} users", userList.size());
+            
+            return ResponseEntity.ok(new ApiResponse<>(
+                    true,
+                    "Suggested users retrieved successfully",
+                    userList,
+                    LocalDateTime.now()
+            ));
+        } catch (Exception e) {
+            log.error("Failed to fetch suggested users: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
+                    false,
+                    "An unexpected error occurred while fetching suggested users",
+                    null,
+                    LocalDateTime.now()
+            ));
+        }
+    }
+
     @GetMapping("/{userId:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getUserById(@PathVariable UUID userId) {
         try {
@@ -534,6 +612,25 @@ public class UserController {
             userData.put("profileImageUrl", user.getProfileImageUrl());
             userData.put("bio", user.getBio());
             userData.put("gender", user.getGender());
+            
+            UserStats userStats = followService.getUserStats(userId);
+            if (userStats != null) {
+                userData.put("followersCount", userStats.getFollowersCount());
+                userData.put("followingCount", userStats.getFollowingCount());
+                userData.put("postsCount", userStats.getPostsCount());
+            } else {
+                userData.put("followersCount", 0);
+                userData.put("followingCount", 0);
+                userData.put("postsCount", 0);
+            }
+            
+            try {
+                UUID currentUserId = JwtUtils.getCurrentUserId();
+                boolean isFollowing = followService.isFollowing(currentUserId, userId);
+                userData.put("isFollowing", isFollowing);
+            } catch (Exception e) {
+                userData.put("isFollowing", false);
+            }
             
             log.info("Retrieved user profile for userId: {}, profileImageUrl: {}", userId, user.getProfileImageUrl());
             
@@ -601,11 +698,7 @@ public class UserController {
         }
     }
 
-    /**
-     * Batch fetch usernames for multiple user IDs
-     * This is optimized for fetching usernames for "liked by" sections
-     * User IDs should be validated against MongoDB before calling this endpoint
-     */
+
     @PostMapping("/batch/usernames")
     public ResponseEntity<ApiResponse<Map<String, String>>> getUsernamesBatch(@RequestBody Map<String, Object> request) {
         try {

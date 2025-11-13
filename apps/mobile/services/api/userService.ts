@@ -5,6 +5,8 @@
 
 import { getGatewayURL, getTimeout, isLoggingEnabled } from './environment';
 import * as SecureStore from 'expo-secure-store';
+import { apiCall } from './authService';
+import { API_CONFIG } from './config';
 
 // Types
 export interface UserProfile {
@@ -32,21 +34,15 @@ export interface ApiResponse<T> {
   timestamp: string;
 }
 
-// Configuration
-const API_CONFIG = {
-  timeout: getTimeout(),
-  enableLogging: isLoggingEnabled(),
-};
-
 // Utility functions
 const log = (message: string, data?: any) => {
-  if (API_CONFIG.enableLogging) {
+  if (API_CONFIG.ENABLE_LOGGING) {
     console.log(`[UserService] ${message}`, data || '');
   }
 };
 
 const logError = (message: string, error?: any) => {
-  if (API_CONFIG.enableLogging) {
+  if (API_CONFIG.ENABLE_LOGGING) {
     console.error(`[UserService] ${message}`, error || '');
   }
 };
@@ -79,7 +75,7 @@ const apiRequest = async <T>(
   
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.timeout);
+    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
     
     const response = await fetch(fullUrl, {
       ...options,
@@ -152,7 +148,7 @@ const apiRequest = async <T>(
   }
 };
 
-// Get user profile by ID - Try multiple endpoints
+// Get user profile by ID - Use correct endpoint with proper auth error handling
 export const getUserProfileById = async (userId: string): Promise<ApiResponse<UserProfile>> => {
   try {
     // Get authentication token first
@@ -201,33 +197,18 @@ export const getUserProfileById = async (userId: string): Promise<ApiResponse<Us
       userIdMatch: tokenUserId === userId
     });
     
-    // Try different possible endpoints for user profile
-    // Put the working endpoint first to reduce 404s
-    const possibleEndpoints = [
-      `/api/auth/user/${userId}`,  // This is the working endpoint
-      `/api/user/${userId}`,
-      `/api/users/${userId}`,
-      `/api/profile/${userId}`,
-      `/api/user/profile/${userId}`
-    ];
+    // Use the correct endpoint - BASE_URL already includes /api/auth, so endpoint should be /user/{userId}
+    // Gateway rewrites /api/auth/user/{userId} to /auth/user/{userId} which matches backend @RequestMapping("/auth/user")
+    const endpoint = `/user/${userId}`;
     
-    let allEndpointsReturned404 = true;
-    let lastError: any = null;
-    
-    for (const endpoint of possibleEndpoints) {
-      try {
-        log(`🔍 Trying endpoint: ${endpoint}`);
-        const response = await apiRequest<UserProfile>(endpoint, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        });
+    try {
+      log(`🔍 Fetching from endpoint: ${endpoint} (full URL: ${API_CONFIG.BASE_URL}${endpoint})`);
+      // Use apiCall from authService for centralized token refresh handling
+      const response = await apiCall<UserProfile>(endpoint, 'GET', undefined, true);
         
-        // CRITICAL: Check for USER_NOT_FOUND error (user deleted from NeonDB)
-        if (!response.success && response.error?.code === 'USER_NOT_FOUND') {
-          log(`ℹ️  User ${userId} not found in NeonDB (likely deleted)`);
+      // Handle user not found (404)
+      if (!response.success && response.error?.code === 'HTTP_404') {
+        log(`ℹ️  User ${userId} not found (404)`);
           return {
             success: false,
             error: {
@@ -238,29 +219,14 @@ export const getUserProfileById = async (userId: string): Promise<ApiResponse<Us
           };
         }
         
-        // CRITICAL: Check if this is the primary endpoint (/api/auth/user/{userId}) returning 404
-        // If the primary endpoint returns 404, it means user doesn't exist (not endpoint discovery)
-        if (!response.success && response.error?.code === 'HTTP_404') {
-          if (endpoint === `/api/auth/user/${userId}`) {
-            // Primary endpoint returned 404 - user doesn't exist
-            log(`ℹ️  User ${userId} not found in NeonDB (404 from primary endpoint - user deleted)`);
-            return {
-              success: false,
-              error: {
-                code: 'USER_NOT_FOUND',
-                message: 'User profile not found - user may have been deleted',
-              },
-              timestamp: new Date().toISOString(),
-            };
-          } else {
-            // Other endpoints returning 404 is expected (endpoint discovery)
-            log(`ℹ️  Endpoint ${endpoint} not found (404) - trying next...`);
-            lastError = response.error;
+      // Handle other errors (auth errors should be handled by apiCall with token refresh)
+      if (!response.success) {
+        logError(`❌ Failed to fetch user profile: ${response.error?.message}`, response.error);
+        return response;
           }
-        } else if (response.success && response.data) {
-          // Success - user found
-          allEndpointsReturned404 = false;
-          
+      
+      // Success case
+      if (response.success && response.data) {
           // Backend returns ApiResponse<T> where T is Map<String, Object>
           // Structure: { success: true, message: "...", data: { id: "...", profileImageUrl: "...", ... }, timestamp: "..." }
           // So response.data is the entire ApiResponse object, and response.data.data is the actual user data Map
@@ -339,44 +305,31 @@ export const getUserProfileById = async (userId: string): Promise<ApiResponse<Us
             data: userProfile,
             timestamp: new Date().toISOString(),
           };
-        } else {
-          // Other errors (not 404)
-          allEndpointsReturned404 = false;
-          lastError = response.error;
-          log(`⚠️  Endpoint ${endpoint} failed: ${response.error?.message} - trying next...`);
-        }
-      } catch (error) {
-        allEndpointsReturned404 = false;
-        lastError = error;
-        log(`⚠️  Endpoint ${endpoint} failed with exception: ${error instanceof Error ? error.message : 'Unknown error'} - trying next...`);
-        continue;
       }
-    }
-    
-    // If all endpoints returned 404, user doesn't exist (deleted)
-    if (allEndpointsReturned404) {
-      log(`ℹ️  User ${userId} not found in NeonDB (all endpoints returned 404 - user deleted)`);
+      
+      // If we get here, response.success is true but no data
+      logError(`❌ User profile response missing data`, response);
       return {
         success: false,
         error: {
-          code: 'USER_NOT_FOUND',
-          message: 'User profile not found - user may have been deleted',
+          code: 'INVALID_RESPONSE',
+          message: 'User profile response missing data',
         },
         timestamp: new Date().toISOString(),
       };
-    }
     
-    // If we get here, endpoints failed for other reasons (not all 404s)
-    logError('❌ All user profile endpoints failed', { userId, lastError });
+    } catch (error) {
+      logError(`❌ Exception while fetching user profile: ${error instanceof Error ? error.message : 'Unknown error'}`, error);
     return {
       success: false,
       error: {
         code: 'UNEXPECTED_ERROR',
-        message: 'Failed to fetch user profile from all endpoints',
-        details: lastError,
+          message: 'An unexpected error occurred while fetching user profile',
+          details: error,
       },
       timestamp: new Date().toISOString(),
     };
+    }
     
   } catch (error) {
     logError('❌ Unexpected error in getUserProfileById', error);
@@ -487,15 +440,9 @@ export const getUsernamesBatch = async (userIds: string[]): Promise<ApiResponse<
       };
     }
     
-    // Make API request
-    const response = await apiRequest<Record<string, string>>('/api/auth/user/batch/usernames', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ userIds }),
-    });
+    // Make API request - use apiCall for centralized token refresh handling
+    // BASE_URL already includes /api/auth, so endpoint should be /user/batch/usernames
+    const response = await apiCall<Record<string, string>>('/user/batch/usernames', 'POST', { userIds }, true);
     
     // Handle nested ApiResponse structure
     // Backend returns: { success: true, data: { userId: username }, message: "...", timestamp: "..." }
@@ -553,9 +500,173 @@ export const getUsernamesBatch = async (userIds: string[]): Promise<ApiResponse<
   }
 };
 
+/**
+ * Validates and normalizes profile image URL
+ * Ensures HTTPS for Cloudinary URLs and validates URL format
+ */
+const normalizeProfileImageUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  
+  const trimmedUrl = String(url).trim();
+  if (!trimmedUrl) return null;
+  
+  if (trimmedUrl.startsWith('http://res.cloudinary.com')) {
+    return trimmedUrl.replace('http://', 'https://');
+  }
+  
+  if (trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
+    return trimmedUrl.replace('http://', 'https://');
+  }
+  
+  if (trimmedUrl.startsWith('https://') || trimmedUrl.startsWith('http://')) {
+    return trimmedUrl;
+  }
+  
+  return null;
+};
+
+/**
+ * Maps raw API user data to UserProfile interface
+ * Handles various field name variations and provides safe defaults
+ */
+const mapUserDataToProfile = (userData: any): UserProfile => {
+  const profileImageUrl = normalizeProfileImageUrl(
+    userData.profileImageUrl || 
+    userData.profile_image_url || 
+    userData.profilePicture || 
+    userData.profile_picture
+  );
+  
+  return {
+    id: userData.id || userData.userId || '',
+    fullName: userData.fullName || userData.full_name || '',
+    username: userData.username || '',
+    email: userData.email || undefined,
+    profilePicture: profileImageUrl,
+    profileImageUrl: profileImageUrl,
+    bio: userData.bio || undefined,
+    verified: userData.verified || userData.isEmailVerified || false,
+    followersCount: userData.followersCount || userData.followers_count || 0,
+    followingCount: userData.followingCount || userData.following_count || 0,
+    postsCount: userData.postsCount || userData.posts_count || 0,
+  };
+};
+
+/**
+ * Extracts user list from API response
+ * Handles different response structures (direct array or nested data array)
+ */
+const extractUserListFromResponse = (responseData: any): UserProfile[] => {
+  if (!responseData) return [];
+  
+  if (Array.isArray(responseData)) {
+    return responseData.map(mapUserDataToProfile);
+  }
+  
+  if (responseData.data && Array.isArray(responseData.data)) {
+    return responseData.data.map(mapUserDataToProfile);
+  }
+  
+  return [];
+};
+
+/**
+ * Get suggested/random users from database
+ * Fetches random users excluding the current authenticated user
+ * 
+ * Gateway routing: /api/auth/user/suggested -> /auth/user/suggested
+ * Backend controller: @RequestMapping("/auth/user") + @GetMapping("/suggested")
+ * 
+ * @param limit - Number of users to fetch (1-10, defaults to 4)
+ * @returns Promise resolving to API response with UserProfile array
+ */
+export const getSuggestedUsers = async (limit: number = 4): Promise<ApiResponse<UserProfile[]>> => {
+  try {
+    const normalizedLimit = Math.max(1, Math.min(10, Math.floor(limit) || 4));
+    log('Fetching suggested users', { limit: normalizedLimit });
+    
+    // Endpoint path: /user/suggested
+    // Full URL: BASE_URL (/api/auth) + /user/suggested = /api/auth/user/suggested
+    // Gateway rewrites: /api/auth/user/suggested -> /auth/user/suggested
+    // Backend matches: @RequestMapping("/auth/user") + @GetMapping("/suggested") = /auth/user/suggested
+    const endpoint = `/user/suggested?limit=${normalizedLimit}`;
+    
+    log(`🔍 [getSuggestedUsers] Endpoint: ${endpoint}, Full URL: ${API_CONFIG.BASE_URL}${endpoint}`);
+    
+    try {
+      const response = await apiCall<UserProfile[]>(endpoint, 'GET', undefined, true);
+      
+      if (!response.success) {
+        logError('Failed to fetch suggested users', response.error);
+        return {
+          success: false,
+          error: response.error || {
+            code: 'API_ERROR',
+            message: 'Failed to fetch suggested users',
+          },
+          timestamp: new Date().toISOString(),
+        };
+      }
+      
+      const userList = extractUserListFromResponse(response.data);
+      
+      if (userList.length === 0) {
+        log('No suggested users found in response');
+        return {
+          success: true,
+          data: [],
+          timestamp: new Date().toISOString(),
+        };
+      }
+      
+      log('✅ Suggested users fetched successfully', { count: userList.length });
+      
+      return {
+        success: true,
+        data: userList,
+        timestamp: new Date().toISOString(),
+      };
+      
+    } catch (error: any) {
+      logError('Exception while fetching suggested users', error);
+      
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'An unexpected error occurred while fetching suggested users';
+      
+      return {
+        success: false,
+        error: {
+          code: 'UNEXPECTED_ERROR',
+          message: errorMessage,
+          details: error,
+        },
+        timestamp: new Date().toISOString(),
+      };
+    }
+    
+  } catch (error: any) {
+    logError('Unexpected error in getSuggestedUsers', error);
+    
+    const errorMessage = error instanceof Error 
+      ? error.message 
+      : 'An unexpected error occurred while fetching suggested users';
+    
+    return {
+      success: false,
+      error: {
+        code: 'UNEXPECTED_ERROR',
+        message: errorMessage,
+        details: error,
+      },
+      timestamp: new Date().toISOString(),
+    };
+  }
+};
+
 // Export configuration for debugging
 export const getUserServiceConfig = () => ({
   baseUrl: getGatewayURL(),
-  timeout: API_CONFIG.timeout,
-  enableLogging: API_CONFIG.enableLogging,
+  timeout: API_CONFIG.TIMEOUT,
+  enableLogging: API_CONFIG.ENABLE_LOGGING,
 });

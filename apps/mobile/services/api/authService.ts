@@ -55,11 +55,45 @@ export class ApiError extends Error {
   }
 }
 
+// Request queue for token refresh coordination
+interface QueuedRequest {
+  resolve: (value: any) => void;
+  reject: (error: any) => void;
+  timestamp: number;
+}
+
 // Token Management Functions
 export const tokenManager = {
   // Prevent infinite refresh loops
   isRefreshing: false,
   refreshPromise: null as Promise<boolean> | null,
+  // Request queue to hold pending requests during token refresh
+  requestQueue: [] as QueuedRequest[],
+  
+  // Add request to queue and wait for token refresh
+  async waitForRefresh<T>(): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      this.requestQueue.push({
+        resolve: resolve as (value: any) => void,
+        reject,
+        timestamp: Date.now(),
+      });
+    });
+  },
+  
+  // Resolve all queued requests after successful refresh
+  resolveQueuedRequests(success: boolean): void {
+    const queue = [...this.requestQueue];
+    this.requestQueue = [];
+    
+    queue.forEach((request) => {
+      if (success) {
+        request.resolve(true);
+      } else {
+        request.reject(new ApiError('Token refresh failed'));
+      }
+    });
+  },
 
   async saveTokens(accessToken: string, refreshToken: string): Promise<void> {
     try {
@@ -454,7 +488,7 @@ export async function internalApiCall<T>(
   }
 }
 
-// Generic API call function with automatic token refresh
+// Generic API call function with automatic token refresh and request queue
 export async function apiCall<T>(
   endpoint: string,
   method: 'GET' | 'POST' = 'GET',
@@ -463,20 +497,67 @@ export async function apiCall<T>(
   extraHeaders?: Record<string, string>,
   retryCount: number = 0
 ): Promise<ApiResponse<T>> {
+  // If token refresh is in progress and this is an authenticated request, wait for it
+  if (includeAuth && tokenManager.isRefreshing && tokenManager.refreshPromise) {
+    if (API_CONFIG.ENABLE_LOGGING) {
+      console.log('⏳ [apiCall] Token refresh in progress, waiting...', { endpoint });
+    }
+    try {
+      await tokenManager.refreshPromise;
+      // After refresh completes, retry the request
+      return apiCall<T>(endpoint, method, body, includeAuth, extraHeaders, retryCount);
+    } catch (error) {
+      // Refresh failed, continue to handle error below
+    }
+  }
+  
   try {
     // First attempt
     return await internalApiCall<T>(endpoint, method, body, includeAuth, extraHeaders);
   } catch (error: any) {
-    // Handle 401 with token refresh only once per call
-    if (error instanceof ApiError && error.statusCode === 401 && includeAuth && retryCount === 0) {
+    // Handle 401 (Unauthorized) and 403 (Forbidden) with token refresh
+    // 403 can occur when token is expired but server returns Forbidden instead of Unauthorized
+    const isAuthError = error instanceof ApiError && 
+                       (error.statusCode === 401 || error.statusCode === 403) && 
+                       includeAuth && 
+                       retryCount === 0;
+    
+    if (isAuthError) {
+      if (API_CONFIG.ENABLE_LOGGING) {
+        console.log(`🔄 [apiCall] Auth error (${error.statusCode}), attempting token refresh...`, { endpoint });
+      }
+      
+      // If refresh is already in progress, wait for it
+      if (tokenManager.isRefreshing && tokenManager.refreshPromise) {
+        if (API_CONFIG.ENABLE_LOGGING) {
+          console.log('⏳ [apiCall] Token refresh already in progress, waiting...', { endpoint });
+        }
+        try {
+          await tokenManager.refreshPromise;
+          // Retry the call with refreshed token
+          return apiCall<T>(endpoint, method, body, includeAuth, extraHeaders, retryCount + 1);
+        } catch (refreshError) {
+          // Refresh failed, re-throw original error
+          throw error;
+        }
+      }
+      
+      // Trigger token refresh
       const refreshed = await authService.refreshAccessToken();
       if (refreshed) {
+        // Small delay to ensure token is fully saved and available
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         // Retry the call with refreshed token
         return apiCall<T>(endpoint, method, body, includeAuth, extraHeaders, retryCount + 1);
+      } else {
+        // Refresh failed, clear tokens and re-throw error
+        await tokenManager.clearTokens();
+        throw error;
       }
     }
     
-    // Re-throw the error if not a 401 or if retry failed
+    // Re-throw the error if not an auth error or if retry failed
     throw error;
   }
 }
@@ -736,6 +817,9 @@ export const authService = {
   refreshAccessToken: async (): Promise<boolean> => {
     // If already refreshing, return the existing promise
     if (tokenManager.isRefreshing && tokenManager.refreshPromise) {
+      if (API_CONFIG.ENABLE_LOGGING) {
+        console.log('⏳ [AuthService] Token refresh already in progress, waiting...');
+      }
       return await tokenManager.refreshPromise;
     }
 
@@ -743,6 +827,10 @@ export const authService = {
     tokenManager.refreshPromise = (async (): Promise<boolean> => {
       try {
         tokenManager.isRefreshing = true;
+        
+        if (API_CONFIG.ENABLE_LOGGING) {
+          console.log('🔄 [AuthService] Starting token refresh...');
+        }
         
         // CRITICAL: Check backend connectivity first
         // Skip refresh if backend is unreachable to prevent hanging
@@ -939,19 +1027,32 @@ export const authService = {
             console.warn('⚠️ [AuthService] Missing user data in refresh response, userData not updated');
           }
           
+          // Resolve all queued requests
+          tokenManager.resolveQueuedRequests(true);
+          
+          if (API_CONFIG.ENABLE_LOGGING) {
+            console.log('✅ [AuthService] Token refresh completed successfully');
+          }
+          
           return true;
         } else {
           console.error('❌ [AuthService] Invalid response data from token refresh');
           await tokenManager.clearTokens();
+          tokenManager.resolveQueuedRequests(false);
           return false;
         }
       } catch (error) {
         console.error('❌ [AuthService] Token refresh error', error);
         await tokenManager.clearTokens();
+        tokenManager.resolveQueuedRequests(false);
         return false;
       } finally {
         tokenManager.isRefreshing = false;
         tokenManager.refreshPromise = null;
+        
+        if (API_CONFIG.ENABLE_LOGGING) {
+          console.log('🔄 [AuthService] Token refresh process completed');
+        }
       }
     })();
 

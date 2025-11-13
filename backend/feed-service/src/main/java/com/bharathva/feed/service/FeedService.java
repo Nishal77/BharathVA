@@ -19,7 +19,6 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
-import com.mongodb.client.result.UpdateResult;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +50,12 @@ public class FeedService {
     @Autowired
     private NotificationService notificationService;
     
+    @Autowired
+    private PostCountSyncService postCountSyncService;
+    
+    @Autowired
+    private RealTimePostCountSyncService realTimePostCountSyncService;
+    
     // Create a new feed message
     @Transactional
     @CacheEvict(value = "feedCache", allEntries = true)
@@ -74,6 +79,29 @@ public class FeedService {
         feed.setCreatedAt(LocalDateTime.now());
         
         Feed savedFeed = feedRepository.save(feed);
+        log.info("Feed {} saved to MongoDB successfully for user: {}", savedFeed.getId(), savedFeed.getUserId());
+        
+        // CRITICAL: Sync post count in real-time using dedicated service
+        // This ensures MongoDB and NeonDB are always in sync
+        String userId = savedFeed.getUserId();
+        
+        // Sync synchronously first to ensure immediate consistency
+        boolean syncSuccess = realTimePostCountSyncService.syncUserPostCount(userId);
+        
+        if (!syncSuccess) {
+            log.warn("⚠️ Initial post count sync failed, but feed was created successfully.");
+            log.warn("   ChangeStream will attempt to sync automatically.");
+            
+            // Also trigger async sync as backup
+            realTimePostCountSyncService.syncUserPostCountAsync(userId)
+                .thenAccept(success -> {
+                    if (success) {
+                        log.info("✅ Backup async sync completed successfully for user: {}", userId);
+                    } else {
+                        log.warn("⚠️ Backup async sync failed for user: {}", userId);
+                    }
+                });
+        }
         
         // Notify WebSocket clients about the new feed
         try {
@@ -300,6 +328,16 @@ public class FeedService {
         return count;
     }
     
+    // Sync post counts from MongoDB to NeonDB for all users
+    public Map<String, Object> syncPostCountsToNeonDB() {
+        return postCountSyncService.syncAllPostCounts();
+    }
+    
+    // Get PostCountSyncService for admin endpoints
+    public PostCountSyncService getPostCountSyncService() {
+        return postCountSyncService;
+    }
+    
     // Delete feed
     @Transactional
     @CacheEvict(value = "feedCache", allEntries = true)
@@ -321,14 +359,39 @@ public class FeedService {
         }
         
         Feed feed = feedOptional.get();
+        String feedOwnerId = feed.getUserId();
         
         // Check if user owns the feed
-        if (!feed.getUserId().equals(userId)) {
-            log.warn("User {} attempted to delete feed {} owned by {}", userId, feedId, feed.getUserId());
+        if (!feedOwnerId.equals(userId)) {
+            log.warn("User {} attempted to delete feed {} owned by {}", userId, feedId, feedOwnerId);
             throw new RuntimeException("User " + userId + " is not authorized to delete feed " + feedId);
         }
         
+        // Store the userId before deletion for post count update
+        log.info("Preparing to delete feed {} owned by user {}", feedId, feedOwnerId);
+        
+        // Delete feed from MongoDB
         feedRepository.delete(feed);
+        log.info("Feed {} deleted from MongoDB successfully", feedId);
+        
+        // CRITICAL: Sync post count in real-time using dedicated service
+        // This ensures MongoDB and NeonDB are always in sync
+        boolean syncSuccess = realTimePostCountSyncService.syncUserPostCount(feedOwnerId);
+        
+        if (!syncSuccess) {
+            log.warn("⚠️ Initial post count sync failed, but feed was deleted successfully.");
+            log.warn("   ChangeStream will attempt to sync automatically.");
+            
+            // Also trigger async sync as backup
+            realTimePostCountSyncService.syncUserPostCountAsync(feedOwnerId)
+                .thenAccept(success -> {
+                    if (success) {
+                        log.info("✅ Backup async sync completed successfully for user: {}", feedOwnerId);
+                    } else {
+                        log.warn("⚠️ Backup async sync failed for user: {}", feedOwnerId);
+                    }
+                });
+        }
         
         // Notify WebSocket clients about the feed deletion
         try {

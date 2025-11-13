@@ -9,11 +9,15 @@ import {
   useColorScheme,
   ActivityIndicator,
   Dimensions,
+  RefreshControl,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTabStyles } from '../../../../hooks/useTabStyles';
 import { getUserProfileById, UserProfile } from '../../../../services/api/userService';
+import { followUser, unfollowUser, getFollowStatus } from '../../../../services/api/followService';
+import { tokenManager } from '../../../../services/api/authService';
+import webSocketService, { NotificationEvent } from '../../../../services/api/websocketService';
 import Svg, { Circle, Path, Line } from 'react-native-svg';
 import ProfileTabs from './components/ProfileTabs';
 
@@ -73,17 +77,21 @@ export default function UserProfileView({ userId: propUserId }: UserProfileViewP
   const [isFollowing, setIsFollowing] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [activeTab, setActiveTab] = useState('Feed');
+  const [isFollowLoading, setIsFollowLoading] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isOwnProfile, setIsOwnProfile] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   
   const fetchingRef = useRef(false);
   const lastFetchedUserIdRef = useRef<string>('');
 
-  const fetchProfile = useCallback(async (targetUserId: string) => {
-    if (fetchingRef.current) {
+  const fetchProfile = useCallback(async (targetUserId: string, isRefresh: boolean = false) => {
+    if (fetchingRef.current && !isRefresh) {
       console.log('Skipping fetch - already fetching:', targetUserId);
       return;
     }
     
-    if (lastFetchedUserIdRef.current === targetUserId) {
+    if (lastFetchedUserIdRef.current === targetUserId && !isRefresh) {
       console.log('Skipping fetch - already fetched this userId:', targetUserId);
       return;
     }
@@ -91,29 +99,69 @@ export default function UserProfileView({ userId: propUserId }: UserProfileViewP
     fetchingRef.current = true;
     
     try {
-      setLoading(true);
+      if (!isRefresh) {
+        setLoading(true);
+      }
       setError(null);
-      console.log('Fetching profile for userId:', targetUserId);
+      console.log('Fetching profile for userId:', targetUserId, isRefresh ? '(refresh)' : '(initial)');
       const response = await getUserProfileById(targetUserId);
       if (response.success && response.data) {
         setProfile(response.data);
         lastFetchedUserIdRef.current = targetUserId;
         console.log('Profile fetched successfully:', response.data.username);
+        
+        try {
+          const followStatusResponse = await getFollowStatus(targetUserId);
+          if (followStatusResponse.success && followStatusResponse.data) {
+            setIsFollowing(followStatusResponse.data.isFollowing);
+          } else {
+            setIsFollowing((response.data as any).isFollowing || false);
+          }
+        } catch (followError) {
+          console.warn('Failed to fetch follow status, using profile data:', followError);
+          setIsFollowing((response.data as any).isFollowing || false);
+        }
       } else {
         setError(response.error?.message || 'Failed to load profile');
         console.error('Failed to fetch profile:', response.error);
-        lastFetchedUserIdRef.current = '';
+        if (!isRefresh) {
+          lastFetchedUserIdRef.current = '';
+        }
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred while loading the profile';
       setError(errorMessage);
       console.error('Error fetching profile:', err);
-      lastFetchedUserIdRef.current = '';
+      if (!isRefresh) {
+        lastFetchedUserIdRef.current = '';
+      }
     } finally {
-      setLoading(false);
+      if (!isRefresh) {
+        setLoading(false);
+      }
       fetchingRef.current = false;
     }
   }, []);
+
+  useEffect(() => {
+    const getCurrentUserId = async () => {
+      try {
+        const userIdFromToken = await tokenManager.getUserIdFromToken();
+        setCurrentUserId(userIdFromToken);
+        if (userIdFromToken && userId && userIdFromToken === userId) {
+          setIsOwnProfile(true);
+        } else {
+          setIsOwnProfile(false);
+        }
+      } catch (error) {
+        console.warn('Failed to get current user ID:', error);
+        setCurrentUserId(null);
+        setIsOwnProfile(false);
+      }
+    };
+    
+    getCurrentUserId();
+  }, [userId]);
 
   useEffect(() => {
     console.log('UserProfileView effect - userId:', userId, 'propUserId:', propUserId, 'profileUserId:', params.profileUserId);
@@ -134,29 +182,287 @@ export default function UserProfileView({ userId: propUserId }: UserProfileViewP
       setProfile(null);
     }
     
-    fetchProfile(userId);
+    fetchProfile(userId, false);
     
     return () => {
       fetchingRef.current = false;
     };
   }, [userId, fetchProfile]);
 
+  const onRefresh = useCallback(async () => {
+    if (!userId || refreshing || fetchingRef.current) {
+      return;
+    }
+    
+    console.log('Pull-to-refresh triggered for userId:', userId);
+    setRefreshing(true);
+    
+    try {
+      // Reset the last fetched userId to force a fresh fetch
+      lastFetchedUserIdRef.current = '';
+      
+      // Fetch fresh profile data
+      await fetchProfile(userId, true);
+      
+      // Also refresh follow status
+      try {
+        const followStatusResponse = await getFollowStatus(userId);
+        if (followStatusResponse.success && followStatusResponse.data) {
+          setIsFollowing(followStatusResponse.data.isFollowing);
+        }
+      } catch (followError) {
+        console.warn('Failed to refresh follow status during pull-to-refresh:', followError);
+      }
+      
+      console.log('Pull-to-refresh completed successfully');
+    } catch (error) {
+      console.error('Error refreshing profile during pull-to-refresh:', error);
+      setError('Failed to refresh profile. Please try again.');
+    } finally {
+      // Ensure refreshing state is cleared
+      setRefreshing(false);
+    }
+  }, [userId, fetchProfile, refreshing]);
+
+  // Auto-refresh when screen comes into focus (when visiting profile)
+  useFocusEffect(
+    useCallback(() => {
+      if (userId && !fetchingRef.current) {
+        console.log('UserProfileView focused - refreshing profile for userId:', userId);
+        // Small delay to ensure smooth transition
+        const timeoutId = setTimeout(async () => {
+          await fetchProfile(userId, true);
+        }, 100);
+        
+        return () => clearTimeout(timeoutId);
+      }
+    }, [userId, fetchProfile])
+  );
+
+  useEffect(() => {
+    if (!isOwnProfile || !userId) return;
+
+    const handleFollowNotification = (event: NotificationEvent) => {
+      if (event.notificationType === 'FOLLOW' && event.recipientUserId === userId && profile) {
+        console.log('📥 Real-time follow notification received, updating follower count');
+        
+        setProfile((prevProfile) => {
+          if (!prevProfile) return prevProfile;
+          
+          const currentCount = prevProfile.followersCount || 0;
+          const newCount = Math.max(0, currentCount + 1);
+          
+          console.log(`🔄 Updating follower count: ${currentCount} → ${newCount}`);
+          
+          return {
+            ...prevProfile,
+            followersCount: newCount,
+          };
+        });
+        
+        setTimeout(async () => {
+          try {
+            const refreshResponse = await getUserProfileById(userId);
+            if (refreshResponse.success && refreshResponse.data) {
+              setProfile(refreshResponse.data);
+            }
+          } catch (error) {
+            console.warn('Failed to refresh profile after follow notification:', error);
+          }
+        }, 1000);
+      }
+    };
+
+    const handleUnfollowNotification = (event: NotificationEvent) => {
+      if (event.notificationType === 'UNFOLLOW' && event.recipientUserId === userId && profile) {
+        console.log('📥 Real-time unfollow notification received, updating follower count');
+        
+        setProfile((prevProfile) => {
+          if (!prevProfile) return prevProfile;
+          
+          const currentCount = prevProfile.followersCount || 0;
+          const newCount = Math.max(0, currentCount - 1);
+          
+          console.log(`🔄 Updating follower count: ${currentCount} → ${newCount}`);
+          
+          return {
+            ...prevProfile,
+            followersCount: newCount,
+          };
+        });
+        
+        setTimeout(async () => {
+          try {
+            const refreshResponse = await getUserProfileById(userId);
+            if (refreshResponse.success && refreshResponse.data) {
+              setProfile(refreshResponse.data);
+            }
+          } catch (error) {
+            console.warn('Failed to refresh profile after unfollow notification:', error);
+          }
+        }, 1000);
+      }
+    };
+
+    webSocketService.connect({
+      onNotificationCreated: handleFollowNotification,
+    });
+
+    const refreshInterval = setInterval(async () => {
+      if (isOwnProfile && userId && !fetchingRef.current) {
+        try {
+          const refreshResponse = await getUserProfileById(userId);
+          if (refreshResponse.success && refreshResponse.data) {
+            setProfile((prevProfile) => {
+              if (!prevProfile) return refreshResponse.data!;
+              
+              return {
+                ...prevProfile,
+                followersCount: refreshResponse.data!.followersCount,
+                followingCount: refreshResponse.data!.followingCount,
+                postsCount: refreshResponse.data!.postsCount,
+              };
+            });
+          }
+        } catch (error) {
+          console.warn('Periodic profile refresh failed:', error);
+        }
+      }
+    }, 5000);
+
+    return () => {
+      clearInterval(refreshInterval);
+    };
+  }, [isOwnProfile, userId, profile]);
+
   const handleBack = () => {
     router.back();
   };
 
-  const handleConnectPress = () => {
+  const handleConnectPress = async () => {
+    if (!userId || !profile) return;
+    
+    if (isOwnProfile) {
+      console.warn('Cannot follow yourself - skipping follow action');
+      return;
+    }
+    
     if (isFollowing) {
       setShowDropdown(!showDropdown);
     } else {
-      setIsFollowing(true);
-      setShowDropdown(false);
+      setIsFollowLoading(true);
+      
+      const previousFollowersCount = profile.followersCount || 0;
+      
+      try {
+        const response = await followUser(userId);
+        if (response.success && response.data) {
+          setIsFollowing(true);
+          setShowDropdown(false);
+          
+          if (response.data && profile) {
+            const updatedProfile = { ...profile };
+            
+            if (response.data.followingFollowersCount !== undefined) {
+              updatedProfile.followersCount = response.data.followingFollowersCount;
+            }
+            
+            setProfile(updatedProfile);
+            
+            setTimeout(async () => {
+              try {
+                const refreshResponse = await getUserProfileById(userId);
+                if (refreshResponse.success && refreshResponse.data) {
+                  setProfile(refreshResponse.data);
+                  
+                  const followStatusResponse = await getFollowStatus(userId);
+                  if (followStatusResponse.success && followStatusResponse.data) {
+                    setIsFollowing(followStatusResponse.data.isFollowing);
+                  }
+                }
+              } catch (refreshError) {
+                console.warn('Failed to refresh profile after follow:', refreshError);
+              }
+            }, 300);
+          }
+        } else {
+          if (response.error?.message === 'Cannot follow yourself') {
+            console.warn('Attempted to follow yourself - this should not happen');
+            setIsOwnProfile(true);
+          } else {
+            console.error('Failed to follow user:', response.error);
+            setProfile({
+              ...profile,
+              followersCount: previousFollowersCount,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Error following user:', err);
+        setProfile({
+          ...profile,
+          followersCount: previousFollowersCount,
+        });
+      } finally {
+        setIsFollowLoading(false);
+      }
     }
   };
 
-  const handleUnfollow = () => {
-    setIsFollowing(false);
-    setShowDropdown(false);
+  const handleUnfollow = async () => {
+    if (!userId || !profile) return;
+    
+    setIsFollowLoading(true);
+    
+    const previousFollowersCount = profile.followersCount || 0;
+    
+    try {
+      const response = await unfollowUser(userId);
+      if (response.success && response.data) {
+        setIsFollowing(false);
+        setShowDropdown(false);
+        
+        if (response.data && profile) {
+          const updatedProfile = { ...profile };
+          
+          if (response.data.followingFollowersCount !== undefined) {
+            updatedProfile.followersCount = response.data.followingFollowersCount;
+          }
+          
+          setProfile(updatedProfile);
+          
+          setTimeout(async () => {
+            try {
+              const refreshResponse = await getUserProfileById(userId);
+              if (refreshResponse.success && refreshResponse.data) {
+                setProfile(refreshResponse.data);
+                
+                const followStatusResponse = await getFollowStatus(userId);
+                if (followStatusResponse.success && followStatusResponse.data) {
+                  setIsFollowing(followStatusResponse.data.isFollowing);
+                }
+              }
+            } catch (refreshError) {
+              console.warn('Failed to refresh profile after unfollow:', refreshError);
+            }
+          }, 300);
+        }
+      } else {
+        console.error('Failed to unfollow user:', response.error);
+        setProfile({
+          ...profile,
+          followersCount: previousFollowersCount,
+        });
+      }
+    } catch (err) {
+      console.error('Error unfollowing user:', err);
+      setProfile({
+        ...profile,
+        followersCount: previousFollowersCount,
+      });
+    } finally {
+      setIsFollowLoading(false);
+    }
   };
 
   const formatNumber = (num?: number): string => {
@@ -206,7 +512,7 @@ export default function UserProfileView({ userId: propUserId }: UserProfileViewP
 
   const displayUsername = profile?.username ? `@${profile.username}` : profile?.fullName || 'Loading...';
 
-  if (loading) {
+  if (loading && !profile) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
@@ -222,8 +528,8 @@ export default function UserProfileView({ userId: propUserId }: UserProfileViewP
             <SettingsIcon color={colors.text} size={18} />
           </Pressable>
         </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.text} />
+        <View style={styles.refreshLoaderContainer}>
+          <ActivityIndicator size="small" color={isDark ? '#FFFFFF' : '#000000'} />
         </View>
       </View>
     );
@@ -277,11 +583,33 @@ export default function UserProfileView({ userId: propUserId }: UserProfileViewP
           <SettingsIcon color={colors.text} size={18} />
         </Pressable>
       </View>
+      
+      {(loading || refreshing) && (
+        <View style={[
+          styles.refreshLoaderContainer, 
+          { 
+            backgroundColor: colors.background,
+          }
+        ]}>
+          <ActivityIndicator size="small" color={isDark ? '#FFFFFF' : '#000000'} />
+        </View>
+      )}
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={false}
+            onRefresh={onRefresh}
+            tintColor="transparent"
+            colors={[]}
+            progressBackgroundColor="transparent"
+          />
+        }
+        scrollEnabled={true}
+        bounces={true}
       >
         <View style={styles.profileSection}>
           <View style={styles.profileHeader}>
@@ -317,38 +645,46 @@ export default function UserProfileView({ userId: propUserId }: UserProfileViewP
           </View>
 
             <View style={styles.actionButtonsContainer}>
-              <View style={styles.connectButtonWrapper}>
-            <Pressable
-                  onPress={handleConnectPress}
-              style={[
-                    styles.connectButton,
-                {
-                      backgroundColor: isFollowing ? colors.connectedButtonBg : colors.buttonBg,
-                },
-              ]}
-            >
-              <Text
+              {!isOwnProfile && (
+                <View style={styles.connectButtonWrapper}>
+                  <Pressable
+                    onPress={handleConnectPress}
+                    disabled={isFollowLoading}
                     style={[
-                      styles.connectButtonText,
+                      styles.connectButton,
                       {
-                        color: isFollowing ? colors.connectedButtonText : colors.buttonText,
+                        backgroundColor: isFollowing ? colors.connectedButtonBg : colors.buttonBg,
+                        opacity: isFollowLoading ? 0.6 : 1,
                       },
                     ]}
                   >
-                    {isFollowing ? 'Connected' : 'Connect'}
-                  </Text>
-                </Pressable>
-                {showDropdown && (
-                  <View style={[styles.dropdown, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                    <Pressable
-                      onPress={handleUnfollow}
-                      style={styles.dropdownItem}
-                    >
-                      <Text style={[styles.dropdownText, { color: colors.text }]}>Unfollow</Text>
-                    </Pressable>
-                  </View>
-                )}
-              </View>
+                    {isFollowLoading ? (
+                      <ActivityIndicator size="small" color={isFollowing ? colors.connectedButtonText : colors.buttonText} />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.connectButtonText,
+                          {
+                            color: isFollowing ? colors.connectedButtonText : colors.buttonText,
+                          },
+                        ]}
+                      >
+                        {isFollowing ? 'Connected' : 'Connect'}
+                      </Text>
+                    )}
+                  </Pressable>
+                  {showDropdown && (
+                    <View style={[styles.dropdown, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                      <Pressable
+                        onPress={handleUnfollow}
+                        style={styles.dropdownItem}
+                      >
+                        <Text style={[styles.dropdownText, { color: colors.text }]}>Unfollow</Text>
+                      </Pressable>
+                    </View>
+                  )}
+                </View>
+              )}
               <Pressable
                 style={[
                   styles.sendButton,
@@ -708,6 +1044,13 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     paddingHorizontal: 32,
     letterSpacing: -0.2,
+  },
+  refreshLoaderContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
 });
 

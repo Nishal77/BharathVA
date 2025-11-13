@@ -1,6 +1,5 @@
 package com.bharathva.feed.service;
 
-import com.bharathva.feed.dto.FeedEvent;
 import com.mongodb.client.ChangeStreamIterable;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
@@ -32,6 +31,9 @@ public class ChangeStreamService implements CommandLineRunner {
     
     @Autowired
     private WebSocketService webSocketService;
+    
+    @Autowired
+    private PostCountSyncService postCountSyncService;
     
     @Value("${spring.data.mongodb.database:bharathva_feed}")
     private String databaseName;
@@ -144,7 +146,21 @@ public class ChangeStreamService implements CommandLineRunner {
                 String message = fullDocument.getString("message");
                 
                 log.info("➕ Feed created: {} by user: {}", feedId, userId);
+                
+                // Notify WebSocket clients
                 webSocketService.notifyFeedCreated(userId, feedId, message);
+                
+                // CRITICAL: Sync post count to NeonDB in real-time
+                if (userId != null && !userId.trim().isEmpty()) {
+                    log.info("🔄 [ChangeStream] Syncing post count for user: {} after INSERT", userId);
+                    try {
+                        postCountSyncService.syncUserPostCount(userId);
+                        log.info("✅ [ChangeStream] Post count synced successfully for user: {}", userId);
+                    } catch (Exception syncError) {
+                        log.error("❌ [ChangeStream] Failed to sync post count for user: {} - {}", 
+                            userId, syncError.getMessage());
+                    }
+                }
             }
         } catch (Exception e) {
             log.error("❌ Error handling insert event: {}", e.getMessage(), e);
@@ -179,9 +195,20 @@ public class ChangeStreamService implements CommandLineRunner {
             
             if (userId != null) {
                 webSocketService.notifyFeedDeleted(userId, feedId);
+                
+                // CRITICAL: Sync post count to NeonDB in real-time
+                log.info("🔄 [ChangeStream] Syncing post count for user: {} after DELETE", userId);
+                try {
+                    postCountSyncService.syncUserPostCount(userId);
+                    log.info("✅ [ChangeStream] Post count synced successfully for user: {}", userId);
+                } catch (Exception syncError) {
+                    log.error("❌ [ChangeStream] Failed to sync post count for user: {} - {}", 
+                        userId, syncError.getMessage());
+                }
             } else {
                 // If we can't determine the user, send to all clients
                 webSocketService.notifyFeedDeleted("unknown", feedId);
+                log.warn("⚠️ [ChangeStream] Could not determine userId for deleted feed: {}", feedId);
             }
             
         } catch (Exception e) {
