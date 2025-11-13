@@ -39,7 +39,27 @@ public class NewsController {
     @GetMapping("/latest")
     public ResponseEntity<List<News>> getTop10News() {
         try {
-            List<News> news = repo.findTop10News();
+            // First try: Return news that are ready for display (after 20-minute delay)
+            List<News> news = repo.findTop10ReadyForDisplay();
+            
+            // Fallback 1: If no ready-for-display news, return top 10 with summaries
+            if (news.isEmpty()) {
+                log.debug("No ready-for-display news found, trying top 10 with summaries");
+                news = repo.findAll().stream()
+                        .filter(n -> n.getImageUrl() != null && !n.getImageUrl().trim().isEmpty())
+                        .filter(n -> n.getSummary() != null && n.getSummary().length() >= 600)
+                        .sorted((a, b) -> b.getPubDate().compareTo(a.getPubDate()))
+                        .limit(10)
+                        .collect(java.util.stream.Collectors.toList());
+            }
+            
+            // Fallback 2: If still empty, return any top 10 news (for initial population)
+            if (news.isEmpty()) {
+                log.debug("No news with summaries found, returning top 10 by date");
+                news = repo.findTop10News();
+            }
+            
+            log.info("Returning {} news articles for /latest endpoint", news.size());
             return ResponseEntity.ok(news);
         } catch (Exception e) {
             log.error("Error fetching latest news: {}", e.getMessage(), e);
@@ -60,7 +80,37 @@ public class NewsController {
             }
             
             Pageable pageable = PageRequest.of(page, size);
-            Page<News> newsPage = repo.findTrendingNews(pageable);
+            
+            // Try ready-for-display news first
+            Page<News> newsPage = repo.findReadyForDisplayNews(java.time.LocalDateTime.now(), pageable);
+            
+            // Fallback: If no ready-for-display news, return trending with summaries
+            if (newsPage.getContent().isEmpty()) {
+                log.debug("No ready-for-display news found, using trending with summaries");
+                List<News> newsWithSummaries = repo.findAll().stream()
+                        .filter(n -> n.getImageUrl() != null && !n.getImageUrl().trim().isEmpty())
+                        .filter(n -> n.getSummary() != null && n.getSummary().length() >= 600)
+                        .sorted((a, b) -> b.getPubDate().compareTo(a.getPubDate()))
+                        .collect(java.util.stream.Collectors.toList());
+                
+                int start = page * size;
+                int end = Math.min(start + size, newsWithSummaries.size());
+                List<News> pageContent = start < newsWithSummaries.size() 
+                    ? newsWithSummaries.subList(start, end) 
+                    : new java.util.ArrayList<>();
+                
+                newsPage = new org.springframework.data.domain.PageImpl<>(
+                    pageContent, 
+                    pageable, 
+                    newsWithSummaries.size()
+                );
+            }
+            
+            // Final fallback: Return any trending news if still empty
+            if (newsPage.getContent().isEmpty()) {
+                log.debug("No news with summaries found, using all trending news");
+                newsPage = repo.findTrendingNews(pageable);
+            }
             
             NewsResponse response = new NewsResponse(
                     newsPage.getContent(),
@@ -181,12 +231,12 @@ public class NewsController {
             response.put("publishedAtRelative", com.bharathva.newsai.util.DateTimeUtil.formatRelativeTime(news.getPubDate()));
             response.put("createdAt", news.getCreatedAt());
             
-            log.info("✓ Returned news summary for ID: {} ({} chars)", 
+            log.info("Returned news summary for ID: {} ({} chars)", 
                     id, summary != null ? summary.length() : 0);
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            log.error("✗ Error fetching news with summary for ID {}: {}", id, e.getMessage(), e);
+            log.error("Error fetching news with summary for ID {}: {}", id, e.getMessage(), e);
             return ResponseEntity.internalServerError().body(Map.of(
                 "error", "Failed to generate summary",
                 "message", e.getMessage()
@@ -242,6 +292,76 @@ public class NewsController {
             log.error("Error triggering summarization: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError().body(java.util.Map.of(
                 "error", "Failed to trigger summarization: " + e.getMessage()
+            ));
+        }
+    }
+
+    @Autowired
+    private com.bharathva.newsai.service.TrendingNewsService trendingNewsService;
+    
+    @Autowired
+    private com.bharathva.newsai.service.SchedulerService schedulerService;
+
+    @PostMapping("/trigger-refresh-cycle")
+    public ResponseEntity<?> triggerCompleteRefreshCycle() {
+        try {
+            log.info("========================================");
+            log.info("MANUAL REFRESH CYCLE TRIGGERED");
+            log.info("========================================");
+            
+            // Run in background thread to avoid blocking
+            new Thread(() -> {
+                try {
+                    schedulerService.refreshNewsJob();
+                } catch (Exception e) {
+                    log.error("Error in background refresh cycle: {}", e.getMessage(), e);
+                }
+            }).start();
+            
+            return ResponseEntity.ok(java.util.Map.of(
+                "message", "Complete refresh cycle started in background",
+                "status", "processing",
+                "timestamp", java.time.LocalDateTime.now().toString()
+            ));
+        } catch (Exception e) {
+            log.error("Error triggering refresh cycle: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body(java.util.Map.of(
+                "error", "Failed to trigger refresh cycle: " + e.getMessage()
+            ));
+        }
+    }
+
+    @PostMapping("/make-news-available")
+    public ResponseEntity<?> makeExistingNewsAvailable() {
+        try {
+            log.info("Making existing top 10 news available for frontend display");
+            
+            // Get top 10 news
+            List<News> topNews = repo.findTop10News();
+            
+            // Set ready_for_display to NOW() for immediate display
+            LocalDateTime now = LocalDateTime.now();
+            int updated = 0;
+            for (News news : topNews) {
+                if (news.getReadyForDisplay() == null) {
+                    news.setReadyForDisplay(now);
+                    repo.save(news);
+                    updated++;
+                }
+            }
+            
+            log.info("Updated {} news articles to be ready for display", updated);
+            
+            return ResponseEntity.ok(java.util.Map.of(
+                "message", "News made available for frontend display",
+                "updated", updated,
+                "total", topNews.size(),
+                "timestamp", now.toString()
+            ));
+        } catch (Exception e) {
+            log.error("Error making news available: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError().body(java.util.Map.of(
+                "error", "Failed to make news available: " + e.getMessage()
             ));
         }
     }

@@ -150,26 +150,8 @@ services:
       - 8.8.8.8
       - 8.8.4.4
       - 1.1.1.1
-    environment:
-      - NEON_DB_URL=jdbc:postgresql://ep-dark-voice-a1xp0hk8-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
-      - NEON_DB_USER=neondb_owner
-      - NEON_DB_PASSWORD=npg_8n5zEhHNUAIc
-      - RSS_FEEDS=https://www.indiatoday.in/rss/1206578,https://indianexpress.com/feed/,https://feeds.feedburner.com/ndtvnews-top-stories,https://timesofindia.indiatimes.com/rssfeedstopstories.cms
-      - OPENROUTER_API_KEY=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
-      - PRIMARY_MODEL=google/gemini-2.0-flash-exp:free
-      - SECONDARY_MODEL=moonshotai/kimi-k2-0711:free
-      - TERTIARY_MODEL=mistralai/mistral-small-24b-instruct-2501:free
-      - FETCH_INTERVAL_MINUTES=15
-      - SERVER_PORT=8084
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://discovery-service:8761/eureka/
-      - EUREKA_INSTANCE_PREFERIPADDRESS=true
-      - EUREKA_INSTANCE_INSTANCEID=news-ai-service:8084
-      - EUREKA_INSTANCE_HOSTNAME=news-ai-service
-      - JPA_DDL_AUTO=update
-      - LOGGING_LEVEL_COM_BHARATHVA_NEWSAI=INFO
-      - LOGGING_LEVEL_ROOT=INFO
-      - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,metrics
-      - MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS=always
+    env_file:
+      - ./news-ai-service/.env.local
     depends_on:
       discovery-service:
         condition: service_healthy

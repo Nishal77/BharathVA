@@ -35,9 +35,13 @@ public class IntelligentSummarizerService {
 
     private static final Logger log = LoggerFactory.getLogger(IntelligentSummarizerService.class);
     
-    private static final int MIN_SUMMARY_LENGTH = 700;
-    private static final int MAX_SUMMARY_LENGTH = 1500;
-    private static final int RATE_LIMIT_DELAY_MS = 1500;
+    private static final int MIN_SUMMARY_LENGTH = 600;
+    private static final int MAX_SUMMARY_LENGTH = 1200;
+    private static final int RATE_LIMIT_DELAY_MS = 2000;
+    
+    private volatile int primaryModelFailures = 0;
+    private volatile int secondaryModelFailures = 0;
+    private volatile long lastModelSwitchTime = 0;
     
     @Value("${openrouter.primary-model}")
     private String primaryModel;
@@ -68,38 +72,46 @@ public class IntelligentSummarizerService {
     }
     
     /**
-     * Automatically summarize all news articles that don't have summaries.
-     * Called by the scheduler after fetching new news (every 10-15 minutes).
+     * Summarize only the top 10 trending news articles.
+     * Called by the scheduler after identifying trending news.
+     * 
+     * @param top10TrendingNews List of top 10 trending news to summarize
      */
     @Transactional
-    public void autoSummarizeAllNews() {
+    public void summarizeTop10TrendingNews(List<News> top10TrendingNews) {
         log.info("========================================");
-        log.info("AUTO-SUMMARIZATION STARTED");
+        log.info("AI SUMMARIZATION: Top 10 Trending News");
         log.info("========================================");
         
-        try {
-            List<News> unsummarizedNews = findUnsummarizedNews();
-            
-            if (unsummarizedNews.isEmpty()) {
-                log.info("✓ All news articles already have summaries");
+        if (top10TrendingNews == null || top10TrendingNews.isEmpty()) {
+            log.warn("No trending news provided for summarization");
                 return;
             }
             
-            log.info("Found {} articles that need summarization", unsummarizedNews.size());
+        log.info("Processing {} trending news articles for AI summarization", top10TrendingNews.size());
             
             int successCount = 0;
             int failureCount = 0;
+        int skippedCount = 0;
             
-            for (News news : unsummarizedNews) {
+        for (News news : top10TrendingNews) {
                 try {
-                    log.info("Processing news [{}]: {}", news.getId(), truncateTitle(news.getTitle()));
+                // Skip if already has valid summary
+                if (hasValidSummary(news)) {
+                    log.debug("Skipping [{}]: Already has valid summary", news.getId());
+                    skippedCount++;
+                    continue;
+                }
+                
+                log.info("Processing [{}]: {}", news.getId(), truncateTitle(news.getTitle()));
                     
                     if (news.getTitle() == null || news.getTitle().trim().isEmpty()) {
-                        log.warn("Skipping news [{}]: No title", news.getId());
+                    log.warn("Skipping [{}]: No title", news.getId());
                         failureCount++;
                         continue;
                     }
                     
+                // Generate summary (600-1200 chars)
                     String summary = generateSummaryWithIntelligentFallback(news);
                     
                     if (isValidSummary(summary)) {
@@ -107,24 +119,24 @@ public class IntelligentSummarizerService {
                         newsRepository.save(news);
                         successCount++;
                         
-                        log.info("✓ Summarized [{}]: {} ({} chars)", 
+                        log.info("Summarized [{}]: {} ({} chars)", 
                                 news.getId(), 
                                 truncateTitle(news.getTitle()), 
                                 summary.length());
                     } else {
                         failureCount++;
-                        log.warn("✗ Invalid summary for [{}]: {} (length: {})", 
+                        log.warn("Invalid summary for [{}]: {} (length: {})", 
                                 news.getId(), 
                                 truncateTitle(news.getTitle()),
                                 summary != null ? summary.length() : 0);
                     }
                     
-                    // Rate limiting: Wait between API calls to respect limits
+                    // Rate limiting: Wait between API calls
                     Thread.sleep(RATE_LIMIT_DELAY_MS);
                     
                 } catch (Exception e) {
                     failureCount++;
-                    log.error("✗ Failed to summarize [{}]: {} - {}", 
+                    log.error("Failed to summarize [{}]: {} - {}", 
                             news.getId(), 
                             truncateTitle(news.getTitle()),
                             e.getMessage());
@@ -135,65 +147,145 @@ public class IntelligentSummarizerService {
             }
             
             log.info("========================================");
-            log.info("AUTO-SUMMARIZATION COMPLETED");
-            log.info("Success: {} | Failed: {} | Total: {}", 
-                    successCount, failureCount, unsummarizedNews.size());
+        log.info("AI SUMMARIZATION COMPLETED");
+        log.info("Success: {} | Failed: {} | Skipped: {} | Total: {}", 
+                successCount, failureCount, skippedCount, top10TrendingNews.size());
             log.info("========================================");
-            
-        } catch (Exception e) {
-            log.error("========================================");
-            log.error("AUTO-SUMMARIZATION FAILED: {}", e.getMessage(), e);
-            log.error("========================================");
+    }
+    
+    /**
+     * Legacy method for backward compatibility.
+     * Summarizes all unsummarized news (not recommended for production).
+     */
+    @Transactional
+    @Deprecated
+    public void autoSummarizeAllNews() {
+        log.warn("autoSummarizeAllNews() is deprecated. Use summarizeTop10TrendingNews() instead.");
+        List<News> unsummarizedNews = findUnsummarizedNews();
+        if (!unsummarizedNews.isEmpty()) {
+            summarizeTop10TrendingNews(unsummarizedNews.stream().limit(10).toList());
         }
     }
     
     /**
-     * Generate summary with intelligent multi-model fallback strategy.
-     * Implements load balancing by randomizing model order to distribute load.
+     * Generate summary with intelligent multi-model fallback and traffic-based switching.
+     * Implements adaptive load balancing based on model performance and traffic patterns.
      */
     private String generateSummaryWithIntelligentFallback(News news) {
         String content = prepareContent(news);
         
-        // Load balancing: Randomize model order occasionally to spread load
-        String[] models = shouldUseLoadBalancing() 
-                ? getShuffledModels() 
-                : getOrderedModels();
+        // Intelligent model selection based on traffic and performance
+        String[] models = selectModelOrder();
         
-        log.debug("Using model order: {}", String.join(" -> ", models));
+        log.debug("Selected model order based on traffic/performance: {}", 
+                String.join(" -> ", models));
         
         for (int i = 0; i < models.length; i++) {
             String model = models[i];
-            String modelLabel = getModelLabel(i);
+            String modelLabel = getModelLabel(model);
             
             try {
-                log.debug("Trying {} model: {}", modelLabel, model);
+                long startTime = System.currentTimeMillis();
+                log.debug("Attempting {} ({})", modelLabel, model);
+                
                 String summary = openRouterService.summarize(content, model);
+                long responseTime = System.currentTimeMillis() - startTime;
                 
                 if (isValidSummary(summary)) {
-                    log.info("✓ Success with {} model: {} ({} chars)", 
-                            modelLabel, model, summary.length());
+                    // Reset failure counter on success
+                    resetModelFailures(model);
+                    
+                    log.info("SUCCESS: {} completed in {}ms - Summary: {} chars", 
+                            modelLabel, responseTime, summary.length());
                     return summary;
                 }
                 
-                log.warn("✗ Invalid summary from {} model: {} (length: {})", 
-                        modelLabel, model, summary != null ? summary.length() : 0);
+                log.warn("Invalid summary from {}: length={}", modelLabel, 
+                        summary != null ? summary.length() : 0);
+                recordModelFailure(model);
                 
             } catch (OpenRouterService.ModelOverloadedException e) {
-                log.warn("⚠ {} model overloaded/rate-limited: {} - Switching to next model", 
-                        modelLabel, model);
+                log.warn("{} OVERLOADED - Rate limit or server busy", modelLabel);
+                recordModelFailure(model);
+                
+                // Add extra delay for rate-limited models
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
                 continue;
                 
             } catch (Exception e) {
-                log.error("✗ {} model failed: {} - {}", modelLabel, model, e.getMessage());
+                log.error("{} FAILED: {}", modelLabel, e.getMessage());
+                recordModelFailure(model);
+                
                 if (i < models.length - 1) {
-                    log.info("→ Falling back to next model");
+                    log.info("Switching to next model in fallback chain");
                 }
                 continue;
             }
         }
         
-        log.error("✗ All models failed for news [{}]", news.getId());
-        throw new RuntimeException("All OpenRouter models failed");
+        log.error("========================================");
+        log.error("ALL MODELS FAILED for news [{}]", news.getId());
+        log.error("Primary failures: {}", primaryModelFailures);
+        log.error("Secondary failures: {}", secondaryModelFailures);
+        log.error("========================================");
+        throw new RuntimeException("All OpenRouter models exhausted");
+    }
+    
+    /**
+     * Select model order based on traffic patterns and recent performance.
+     * Implements intelligent switching to distribute load and avoid overloaded models.
+     */
+    private String[] selectModelOrder() {
+        long currentTime = System.currentTimeMillis();
+        long timeSinceLastSwitch = currentTime - lastModelSwitchTime;
+        
+        // If primary model has many failures and enough time has passed, try secondary first
+        if (primaryModelFailures >= 3 && timeSinceLastSwitch > 60000) {
+            log.info("Traffic-based switching: Primary model under stress, using secondary");
+            lastModelSwitchTime = currentTime;
+            return new String[]{secondaryModel, tertiaryModel, primaryModel};
+        }
+        
+        // If both primary and secondary are failing, start with tertiary
+        if (primaryModelFailures >= 2 && secondaryModelFailures >= 2) {
+            log.info("Adaptive switching: Both primary models stressed, using tertiary");
+            return new String[]{tertiaryModel, secondaryModel, primaryModel};
+        }
+        
+        // Occasional load balancing to prevent single-model exhaustion
+        if (shouldUseLoadBalancing()) {
+            log.debug("Load balancing: Randomizing model order");
+            return getShuffledModels();
+        }
+        
+        // Default order: primary -> secondary -> tertiary
+        return getOrderedModels();
+    }
+    
+    /**
+     * Record model failure for traffic-based switching.
+     */
+    private void recordModelFailure(String model) {
+        if (model.equals(primaryModel)) {
+            primaryModelFailures++;
+        } else if (model.equals(secondaryModel)) {
+            secondaryModelFailures++;
+        }
+    }
+    
+    /**
+     * Reset failure counter on successful summarization.
+     */
+    private void resetModelFailures(String model) {
+        if (model.equals(primaryModel)) {
+            primaryModelFailures = Math.max(0, primaryModelFailures - 1);
+        } else if (model.equals(secondaryModel)) {
+            secondaryModelFailures = Math.max(0, secondaryModelFailures - 1);
+        }
     }
     
     /**
@@ -236,6 +328,13 @@ public class IntelligentSummarizerService {
      * Check if a news article has a valid summary.
      */
     private boolean hasSummary(News news) {
+        return hasValidSummary(news);
+    }
+    
+    /**
+     * Check if a news article has a valid summary (600-1200 chars).
+     */
+    private boolean hasValidSummary(News news) {
         String summary = news.getSummary();
         if (summary == null || summary.trim().isEmpty()) {
             return false;
@@ -247,7 +346,8 @@ public class IntelligentSummarizerService {
         if (trimmed.equals("Summary unavailable") || 
             trimmed.contains("unavailable") ||
             trimmed.toLowerCase().contains("error") ||
-            trimmed.length() < 500) {
+            trimmed.length() < MIN_SUMMARY_LENGTH ||
+            trimmed.length() > MAX_SUMMARY_LENGTH) {
             return false;
         }
         
@@ -259,30 +359,43 @@ public class IntelligentSummarizerService {
      */
     private boolean isValidSummary(String summary) {
         if (summary == null || summary.trim().isEmpty()) {
+            log.debug("Validation failed: Summary is null or empty");
             return false;
         }
         
         String trimmed = summary.trim();
         int length = trimmed.length();
         
-        // Reject error messages
+        // Reject error messages or placeholder text
         if (trimmed.equals("Summary unavailable") || 
-            trimmed.contains("unavailable") ||
-            trimmed.toLowerCase().contains("error")) {
+            trimmed.toLowerCase().contains("unavailable") ||
+            trimmed.toLowerCase().contains("error") ||
+            trimmed.toLowerCase().contains("try again")) {
+            log.debug("Validation failed: Contains error/placeholder text");
             return false;
         }
         
-        // Accept summaries between 500-1500 chars (flexible minimum)
-        if (length < 500) {
-            log.debug("Summary too short: {} chars (minimum: 500)", length);
+        // Validate length (600-1200 chars)
+        if (length < MIN_SUMMARY_LENGTH) {
+            log.debug("Validation failed: Too short ({} chars, minimum: {})", 
+                    length, MIN_SUMMARY_LENGTH);
             return false;
         }
         
         if (length > MAX_SUMMARY_LENGTH) {
-            log.debug("Summary too long: {} chars (maximum: {})", length, MAX_SUMMARY_LENGTH);
+            log.debug("Validation failed: Too long ({} chars, maximum: {})", 
+                    length, MAX_SUMMARY_LENGTH);
             return false;
         }
         
+        // Additional quality checks
+        int wordCount = trimmed.split("\\s+").length;
+        if (wordCount < 80) {
+            log.debug("Validation failed: Too few words ({}, minimum: 80)", wordCount);
+            return false;
+        }
+        
+        log.debug("Validation passed: {} chars, {} words", length, wordCount);
         return true;
     }
     
@@ -318,15 +431,17 @@ public class IntelligentSummarizerService {
     }
     
     /**
-     * Get model label based on position.
+     * Get human-readable model label.
      */
-    private String getModelLabel(int index) {
-        return switch (index) {
-            case 0 -> "PRIMARY";
-            case 1 -> "SECONDARY";
-            case 2 -> "TERTIARY";
-            default -> "UNKNOWN";
-        };
+    private String getModelLabel(String model) {
+        if (model.equals(primaryModel)) {
+            return "PRIMARY: Gemini-2.0-Flash";
+        } else if (model.equals(secondaryModel)) {
+            return "SECONDARY: Kimi-K2";
+        } else if (model.equals(tertiaryModel)) {
+            return "TERTIARY: Mistral-Small";
+        }
+        return "UNKNOWN";
     }
     
     /**
@@ -354,14 +469,14 @@ public class IntelligentSummarizerService {
             if (isValidSummary(summary)) {
                 news.setSummary(summary);
                 newsRepository.save(news);
-                log.info("✓ Generated and saved summary for news [{}]", news.getId());
+                log.info("Generated and saved summary for news [{}]", news.getId());
                 return summary;
             } else {
-                log.warn("✗ Generated invalid summary for news [{}]", news.getId());
+                log.warn("Generated invalid summary for news [{}]", news.getId());
                 return "Summary unavailable. Please try again later.";
             }
         } catch (Exception e) {
-            log.error("✗ Failed to generate summary for news [{}]: {}", 
+            log.error("Failed to generate summary for news [{}]: {}", 
                     news.getId(), e.getMessage());
             return "Summary unavailable. Please try again later.";
         }

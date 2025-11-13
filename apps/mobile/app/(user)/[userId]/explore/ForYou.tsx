@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, ScrollView, Dimensions, Text, Image, Pressable, StyleSheet, useColorScheme, ActivityIndicator, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useFonts } from 'expo-font';
 import { useTabStyles } from '../../../../hooks/useTabStyles';
 import TodaysNew from './TodaysNew';
 import { newsService, NewsItem } from '../../../../services/api/newsService';
@@ -21,6 +22,8 @@ interface CardData {
   authorAvatar: string;
   date: string;
   trendingNumber?: number;
+  sourceAvatars: string[];
+  sourceCount: number;
 }
 
 const formatDate = (dateString: string): string => {
@@ -83,26 +86,70 @@ const transformNewsToCardData = (newsItems: NewsItem[]): CardData[] => {
     category: item.category || item.source || 'News',
     title: item.title,
       author: item.author || item.source || 'BharathVA',
-    authorAvatar: getDefaultAvatar(item.source || item.author),
+    authorAvatar: getSourceLogo(item.source || item.author),
       date: getRelativeTime(item.publishedAt), // Real-time timestamp
-    trendingNumber: index < 5 ? index + 1 : undefined,
+    trendingNumber: index < 10 ? index + 1 : undefined,
+    sourceAvatars: getRandomAvatarUrls(),
+    sourceCount: Math.floor(Math.random() * (50 - 3 + 1)) + 3, // Random number between 3 and 50
     };
   });
 };
 
-const getDefaultAvatar = (source?: string): string => {
-  const avatars = [
-    'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop',
-    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop',
-    'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop',
-    'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop',
-    'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&h=100&fit=crop',
-  ];
-  if (source) {
-    const hash = source.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return avatars[hash % avatars.length];
+const getSourceLogo = (source?: string): string => {
+  if (!source) {
+    return 'https://via.placeholder.com/100/FF6B35/FFFFFF?text=BV';
   }
-  return avatars[0];
+  
+  const sourceLower = source.toLowerCase();
+  
+  // Real news source logos/profile images
+  if (sourceLower.includes('india today') || sourceLower.includes('indiatoday')) {
+    return 'https://akm-img-a-in.tosshub.com/sites/all/themes/itg/logo.png';
+  } else if (sourceLower.includes('indian express') || sourceLower.includes('indianexpress')) {
+    return 'https://indianexpress.com/wp-content/themes/indianexpress/images/indian-express-logo-n.svg';
+  } else if (sourceLower.includes('ndtv')) {
+    return 'https://drop.ndtv.com/homepage/images/ndtvlogo_new.png';
+  } else if (sourceLower.includes('times of india') || sourceLower.includes('toi')) {
+    return 'https://static.toiimg.com/photo/msid-97054851.cms';
+  } else if (sourceLower.includes('hindustan times') || sourceLower.includes('hindustantimes')) {
+    return 'https://www.hindustantimes.com/resizer/2x/ht-logo.png';
+  } else if (sourceLower.includes('the hindu')) {
+    return 'https://www.thehindu.com/static/theme/default/base/img/logo.png';
+  } else if (sourceLower.includes('business standard')) {
+    return 'https://www.business-standard.com/assets/img/bs_logo.png';
+  } else if (sourceLower.includes('mint')) {
+    return 'https://www.livemint.com/lm-img/logo.png';
+  } else if (sourceLower.includes('firstpost')) {
+    return 'https://www.firstpost.com/wp-content/themes/firstpost/images/firstpost-logo.png';
+  } else if (sourceLower.includes('news18')) {
+    return 'https://www.news18.com/images/news18-logo.png';
+  } else {
+    // Default BharathVA logo for unknown sources
+    return 'https://via.placeholder.com/100/FF6B35/FFFFFF?text=BV';
+  }
+};
+
+const getRandomAvatarUrls = (): string[] => {
+  const avatars = [
+    'https://i.pravatar.cc/150?img=1',
+    'https://i.pravatar.cc/150?img=2',
+    'https://i.pravatar.cc/150?img=3',
+    'https://i.pravatar.cc/150?img=4',
+    'https://i.pravatar.cc/150?img=5',
+    'https://i.pravatar.cc/150?img=6',
+    'https://i.pravatar.cc/150?img=7',
+    'https://i.pravatar.cc/150?img=8',
+    'https://i.pravatar.cc/150?img=9',
+    'https://i.pravatar.cc/150?img=10',
+    'https://i.pravatar.cc/150?img=11',
+    'https://i.pravatar.cc/150?img=12',
+    'https://i.pravatar.cc/150?img=13',
+    'https://i.pravatar.cc/150?img=14',
+    'https://i.pravatar.cc/150?img=15',
+  ];
+  
+  const shuffled = [...avatars].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 3);
 };
 
 interface ForYouProps {
@@ -118,6 +165,11 @@ export default function ForYou({ onVideoPress }: ForYouProps) {
   const [error, setError] = useState<string | null>(null);
   const [selectedNewsId, setSelectedNewsId] = useState<number | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
+
+  const [fontsLoaded] = useFonts({
+    'Satoshi-Regular': require('../../../../assets/fonts/Satoshi-Regular.otf'),
+    'Satoshi-Medium': require('../../../../assets/fonts/Satoshi-Medium.otf'),
+  });
 
   useEffect(() => {
     fetchNews();
@@ -138,11 +190,7 @@ export default function ForYou({ onVideoPress }: ForYouProps) {
       
       if (response && response.content && response.content.length > 0) {
         const transformedCards = transformNewsToCardData(response.content.slice(0, 10));
-        transformedCards.forEach((card, index) => {
-          if (!card.authorAvatar || card.authorAvatar === 'https://via.placeholder.com/100?text=Author') {
-            card.authorAvatar = getDefaultAvatar(card.author);
-          }
-        });
+        // Source logos are already set by getSourceLogo function in transformNewsToCardData
         setCards(transformedCards);
       } else {
         setError('No news available');
@@ -194,17 +242,11 @@ export default function ForYou({ onVideoPress }: ForYouProps) {
             console.log('Image load error, fallback already applied:', card.image);
           }}
         />
-        {card.trendingNumber && card.trendingNumber <= 3 && (
-          <View style={styles.trendingBadge}>
-            <Ionicons name="flame" size={16} color="#FFFFFF" />
-            <Text style={styles.trendingBadgeText}>#{card.trendingNumber}</Text>
-          </View>
-        )}
       </View>
 
       {/* Content Section */}
       <View style={[styles.cardContent, { backgroundColor: tabStyles.screen.backgroundColor }]}>
-        {/* Trending and Date Row */}
+        {/* Date Row */}
         <View style={styles.trendingRow}>
           {card.trendingNumber && (
             <View style={styles.trendingContainer}>
@@ -228,22 +270,35 @@ export default function ForYou({ onVideoPress }: ForYouProps) {
           {card.title}
         </Text>
 
-        {/* Author Row */}
+        {/* Source Row - Fixed at Bottom */}
         <View style={styles.authorRow}>
           <View style={styles.authorLeft}>
-            <View style={styles.authorAvatarContainer}>
+            <View style={styles.avatarGroup}>
+              {card.sourceAvatars.map((avatarUrl, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.sourceAvatarContainer,
+                    { marginLeft: index > 0 ? -5 : 0 }
+                  ]}
+                >
               <Image
-                source={{ uri: card.authorAvatar }}
-                style={styles.authorAvatar}
+                    source={{ uri: avatarUrl }}
+                    style={styles.sourceAvatar}
+                onError={() => {
+                      console.log('Avatar failed to load:', avatarUrl);
+                }}
               />
+                </View>
+              ))}
             </View>
             <Text
               style={[
-                styles.authorName,
-                { color: tabStyles.text.active },
+                styles.sourcesText,
+                { color: tabStyles.text.inactive },
               ]}
             >
-              {card.author}
+              {card.sourceCount} sources
             </Text>
           </View>
           <Pressable
@@ -261,11 +316,11 @@ export default function ForYou({ onVideoPress }: ForYouProps) {
     </Pressable>
   );
 
-  if (loading) {
+  if (!fontsLoaded || loading) {
     return (
       <View style={{ flex: 1, backgroundColor: tabStyles.screen.backgroundColor, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color={tabStyles.text.active} />
-        <Text style={{ marginTop: 16, color: tabStyles.text.inactive }}>Loading news...</Text>
+        <Text style={{ marginTop: 16, color: tabStyles.text.inactive, fontFamily: 'Satoshi-Regular' }}>Loading news...</Text>
       </View>
     );
   }
@@ -274,7 +329,7 @@ export default function ForYou({ onVideoPress }: ForYouProps) {
     return (
       <View style={{ flex: 1, backgroundColor: tabStyles.screen.backgroundColor, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
         <Ionicons name="alert-circle-outline" size={48} color={tabStyles.text.inactive} />
-        <Text style={{ marginTop: 16, color: tabStyles.text.inactive, textAlign: 'center' }}>{error}</Text>
+        <Text style={{ marginTop: 16, color: tabStyles.text.inactive, textAlign: 'center', fontFamily: 'Satoshi-Regular' }}>{error}</Text>
         <Pressable
           onPress={fetchNews}
           style={{
@@ -285,7 +340,7 @@ export default function ForYou({ onVideoPress }: ForYouProps) {
             borderRadius: 8,
           }}
         >
-          <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>Retry</Text>
+          <Text style={{ color: '#FFFFFF', fontWeight: '600', fontFamily: 'Satoshi-Regular' }}>Retry</Text>
         </Pressable>
       </View>
     );
@@ -314,11 +369,7 @@ export default function ForYou({ onVideoPress }: ForYouProps) {
       )}
 
       {/* Today's News Section */}
-      <TodaysNew 
-        onNewsPress={(newsItem) => {
-          handleCardPress(newsItem.id.toString());
-        }}
-      />
+      <TodaysNew />
 
       {/* News Detail Modal */}
       <Modal
@@ -363,31 +414,12 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 12,
   },
-  trendingBadge: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 107, 53, 0.95)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  trendingBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
   cardContent: {
     padding: 18,
     minHeight: 140,
+    flex: 1,
+    justifyContent: 'space-between',
+    flexDirection: 'column',
   },
   trendingRow: {
     flexDirection: 'row',
@@ -404,45 +436,63 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#FF6B35',
+    fontFamily: 'Satoshi-Regular',
   },
   dateText: {
     fontSize: 11,
     fontWeight: '400',
+    fontFamily: 'Satoshi-Regular',
   },
   cardTitle: {
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: '600',
     lineHeight: 24,
-    marginBottom: 14,
+    marginBottom: 12,
     letterSpacing: -0.2,
+    flex: 1,
+    fontFamily: 'Satoshi-Medium',
   },
   authorRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 'auto',
+    paddingTop: 8,
   },
   authorLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  authorAvatarContainer: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+  avatarGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginRight: 10,
-    backgroundColor: '#F3F4F6',
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: '#E5E7EB',
   },
-  authorAvatar: {
+  sourceAvatarContainer: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'transparent',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  sourceAvatar: {
     width: '100%',
     height: '100%',
   },
-  authorName: {
-    fontSize: 13,
-    fontWeight: '600',
+  sourcesText: {
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 0.3,
+    lineHeight: 16,
+    fontFamily: 'Satoshi-Regular',
   },
   moreButton: {
     padding: 4,

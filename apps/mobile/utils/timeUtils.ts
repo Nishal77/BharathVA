@@ -172,3 +172,13 @@ export function getShortRelativeTime(dateString: string | Date | null | undefine
     return 'now';
   }
 }
+
+/**
+ * Get smart time format - alias for getRelativeTime for backward compatibility
+ * Provides intelligent time formatting based on post age
+ * @param dateString - ISO date string or Date object
+ * @returns Formatted relative time string (e.g., "2 mins ago")
+ */
+export function getSmartTimeFormat(dateString: string | Date | null | undefined): string {
+  return getRelativeTime(dateString);
+}

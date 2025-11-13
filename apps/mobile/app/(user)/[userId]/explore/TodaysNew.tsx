@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import React, { useState } from 'react';
 import { Pressable, Text, View, Dimensions } from 'react-native';
+import { useFonts } from 'expo-font';
 import { useTabStyles } from '../../../../hooks/useTabStyles';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -65,6 +66,10 @@ export default function TodaysNew({ onProfilePress }: TodaysNewProps) {
   const tabStyles = useTabStyles();
   const [followedProfiles, setFollowedProfiles] = useState<Set<string>>(new Set());
 
+  const [fontsLoaded] = useFonts({
+    'Satoshi-Medium': require('../../../../assets/fonts/Satoshi-Medium.otf'),
+  });
+
   const handleProfilePress = (profile: SuggestedProfile) => {
     onProfilePress?.(profile);
     console.log('Profile pressed:', profile.name);
@@ -92,7 +97,7 @@ export default function TodaysNew({ onProfilePress }: TodaysNewProps) {
       <View className="mb-5 ml-1">
         <Text 
           className="text-[22px] font-normal leading-7 -tracking-[0.3px] mb-1"
-          style={{ color: tabStyles.text.primary }}
+          style={{ color: tabStyles.text.primary, fontFamily: fontsLoaded ? 'Satoshi-Medium' : undefined }}
         >
          Suggested Connections
         </Text>

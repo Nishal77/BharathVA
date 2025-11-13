@@ -1,15 +1,20 @@
 import { useLocalSearchParams } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, useColorScheme, Pressable, ScrollView } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useTabStyles } from '../../../../hooks/useTabStyles';
 import ForYou from '../explore/ForYou';
 import SearchHeader from '../explore/header/SearchHeader';
+import UserSearchSuggestions from '../explore/components/UserSearchSuggestions';
+import { searchUsersDebounced, cancelSearch, UserSearchResult } from '../../../../services/api/userSearchService';
 
 export default function SearchScreen() {
   const { userId } = useLocalSearchParams();
   const [activeTab, setActiveTab] = useState('For You');
   const [searchValue, setSearchValue] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const tabStyles = useTabStyles();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -25,10 +30,46 @@ export default function SearchScreen() {
     console.log('Tab pressed:', tab);
   };
 
-  const handleSearchChange = (text: string) => {
+  const handleSearchChange = useCallback((text: string) => {
     setSearchValue(text);
-    console.log('Search:', text);
-  };
+
+    if (text.trim().length === 0) {
+      setSearchResults([]);
+      setIsSearching(false);
+      cancelSearch();
+      return;
+    }
+
+    setIsSearching(true);
+    searchUsersDebounced(text, (response) => {
+      setIsSearching(false);
+      if (response.success && response.data) {
+        setSearchResults(response.data);
+      } else {
+        setSearchResults([]);
+      }
+    });
+  }, []);
+
+  const handleSearchFocus = useCallback(() => {
+    setIsSearchFocused(true);
+  }, []);
+
+  const handleSearchBlur = useCallback(() => {
+    setIsSearchFocused(false);
+  }, []);
+
+  const handleUserPress = useCallback((user: UserSearchResult) => {
+    console.log('User pressed:', user.username);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      cancelSearch();
+    };
+  }, []);
+
+  const isSearchActive = useMemo(() => searchValue.length > 0, [searchValue]);
 
   const handleVideoPress = () => {
     console.log('Video pressed');
@@ -111,21 +152,44 @@ export default function SearchScreen() {
         tabs={tabs}
         searchValue={searchValue}
         onSearchChange={handleSearchChange}
+        onSearchFocus={handleSearchFocus}
+        onSearchBlur={handleSearchBlur}
         topOffset={88}
       />
 
-      {/* Scrollable Content */}
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ 
-          paddingTop: 176, 
-          paddingBottom: 100,
-          backgroundColor: tabStyles.screen.backgroundColor 
-        }}
-        showsVerticalScrollIndicator={false}
-      >
-        <ForYou onVideoPress={handleVideoPress} />
-      </ScrollView>
+      {/* Scrollable Content - Hidden when search is active */}
+      {!isSearchActive && (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ 
+            paddingTop: 176, 
+            paddingBottom: 100,
+            backgroundColor: tabStyles.screen.backgroundColor 
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          <ForYou onVideoPress={handleVideoPress} />
+        </ScrollView>
+      )}
+
+      {/* Search Results - Show when search is active */}
+      {isSearchActive && (
+        <View style={{ flex: 1, paddingTop: 176 }}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: 100, paddingTop: 8 }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <UserSearchSuggestions
+              users={searchResults}
+              isLoading={isSearching}
+              searchQuery={searchValue}
+              onUserPress={handleUserPress}
+            />
+          </ScrollView>
+        </View>
+      )}
     </View>
   );
 }

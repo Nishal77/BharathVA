@@ -79,7 +79,7 @@ public class NewsStorageService {
                 entityManager.flush();
                 savedCount++;
 
-                log.info("✓ Saved news [ID: {}]: {} | Source: {}", 
+                log.info("Saved news [ID: {}]: {} | Source: {}", 
                         savedNews.getId(), 
                         truncate(savedNews.getTitle(), 60),
                         savedNews.getSource());

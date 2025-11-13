@@ -8,7 +8,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
-import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
@@ -56,7 +55,31 @@ public class OpenRouterService {
                         .maxInMemorySize(10 * 1024 * 1024)) // 10MB buffer
                 .build();
         
-        log.info("OpenRouterService initialized successfully");
+        log.info("========================================");
+        log.info("OpenRouterService initialized");
+        log.info("API Base URL: {}", API_BASE_URL);
+        log.info("========================================");
+    }
+    
+    /**
+     * Validate API key on first use.
+     */
+    private void validateApiKey() {
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            log.error("========================================");
+            log.error("CRITICAL: OpenRouter API key is not configured!");
+            log.error("Set OPENROUTER_API_KEY in .env.local file");
+            log.error("========================================");
+            throw new IllegalStateException("OpenRouter API key is not configured");
+        }
+        
+        if (!apiKey.startsWith("sk-or-v1-")) {
+            log.warn("========================================");
+            log.warn("WARNING: API key format looks incorrect");
+            log.warn("Expected format: sk-or-v1-...");
+            log.warn("Current format: {}", apiKey.substring(0, Math.min(10, apiKey.length())) + "...");
+            log.warn("========================================");
+        }
     }
     
     /**
@@ -75,6 +98,8 @@ public class OpenRouterService {
         if (model == null || model.trim().isEmpty()) {
             throw new IllegalArgumentException("Model cannot be null or empty");
         }
+        
+        validateApiKey();
         
         log.debug("Summarizing text with model: {} (length: {} chars)", model, text.length());
         
@@ -104,6 +129,19 @@ public class OpenRouterService {
             log.error("Rate limit exceeded for model {}: {}", model, e.getMessage());
             throw new ModelOverloadedException("Rate limit exceeded for model: " + model, e);
             
+        } catch (WebClientResponseException.Unauthorized e) {
+            log.error("========================================");
+            log.error("UNAUTHORIZED (401) - OpenRouter API Key Invalid!");
+            log.error("Model: {}", model);
+            log.error("Response: {}", e.getResponseBodyAsString());
+            log.error("========================================");
+            log.error("ACTION REQUIRED:");
+            log.error("1. Verify OPENROUTER_API_KEY in .env.local");
+            log.error("2. Get new API key from https://openrouter.ai");
+            log.error("3. Restart service after updating key");
+            log.error("========================================");
+            throw new SummarizationException("Invalid OpenRouter API key - please update OPENROUTER_API_KEY", e);
+            
         } catch (WebClientResponseException e) {
             if (e.getStatusCode().is5xxServerError()) {
                 log.error("Server error from model {}: {} - {}", 
@@ -123,32 +161,51 @@ public class OpenRouterService {
     }
     
     /**
-     * Build the OpenRouter API request body with optimized parameters.
+     * Build the OpenRouter API request body with optimized parameters for news summarization.
+     * Uses title and description to generate comprehensive, contextual summaries.
      */
     private Map<String, Object> buildRequestBody(String text, String model) {
         String prompt = String.format(
             """
-            You are an expert AI news analyst for BharathVA, India's premier social platform.
+            You are an expert AI news analyst for BharathVA, India's premier social media platform that delivers breaking news with deep context.
             
-            Task: Analyze the provided news article and create a comprehensive, intelligent summary.
+            Task: Create a comprehensive, intelligent summary that readers will find valuable and informative.
             
-            Your summary MUST:
-            1. Be between 700-1500 characters (strict requirement - aim for 1000-1200 characters)
-            2. Provide full context and explain the significance
-            3. Cover Who, What, When, Where, Why, and How
-            4. Include relevant background or historical context if applicable
-            5. Use clear, engaging, journalistic language
-            6. Write in flowing paragraphs (NO bullet points, NO numbered lists)
-            7. Maintain complete objectivity while being engaging
-            8. Be informative and comprehensive
-            9. Make sense even to readers unfamiliar with the topic
+            CRITICAL REQUIREMENTS:
+            - Length: EXACTLY 600-1200 characters (aim for 900 characters)
+            - Style: Professional journalism with engaging narrative flow
+            - Tone: Objective, factual, and authoritative
+            - Structure: 2-3 flowing paragraphs (NO bullet points, NO numbered lists)
             
-            Style: Write like a professional news analyst - comprehensive, contextual, and deeply informative.
+            YOUR SUMMARY MUST INCLUDE:
+            1. WHO: Key people, organizations, or entities involved
+            2. WHAT: The core event or development
+            3. WHEN: Temporal context (dates, timeline)
+            4. WHERE: Geographical location and relevance
+            5. WHY: Underlying reasons, motivations, or causes
+            6. HOW: Methods, processes, or mechanisms involved
+            7. IMPACT: Significance and implications for readers
+            8. CONTEXT: Relevant background or historical perspective
             
-            News Article:
+            WRITING GUIDELINES:
+            - Start strong with the most important information
+            - Use clear, precise language that any reader can understand
+            - Include specific facts, figures, and names mentioned
+            - Explain technical terms or unfamiliar concepts
+            - Connect the story to broader themes when relevant
+            - End with forward-looking implications if applicable
+            
+            AVOID:
+            - Generic statements or filler content
+            - Redundant phrasing or repetition
+            - Speculation or opinion
+            - Bullet points or numbered lists
+            - Incomplete sentences or thoughts
+            
+            News Article Content:
             %s
             
-            Generate a comprehensive 700-1500 character summary NOW:
+            Generate a comprehensive, engaging summary (600-1200 characters) NOW:
             """, 
             text.replace("\"", "'").replace("\\", "")
         );
@@ -156,11 +213,14 @@ public class OpenRouterService {
         return Map.of(
                 "model", model,
                 "messages", List.of(
+                        Map.of("role", "system", "content", "You are a world-class news analyst who creates comprehensive, engaging summaries that readers trust and value. Your summaries are factual, well-structured, and provide complete context."),
                         Map.of("role", "user", "content", prompt)
                 ),
-                "temperature", 0.3,
-                "max_tokens", 600,
-                "top_p", 0.9
+                "temperature", 0.4,
+                "max_tokens", 500,
+                "top_p", 0.95,
+                "frequency_penalty", 0.2,
+                "presence_penalty", 0.1
         );
     }
     

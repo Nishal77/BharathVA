@@ -9,6 +9,8 @@ interface SearchHeaderProps {
   tabs: string[];
   searchValue?: string;
   onSearchChange?: (text: string) => void;
+  onSearchFocus?: () => void;
+  onSearchBlur?: () => void;
   topOffset?: number;
 }
 
@@ -18,6 +20,8 @@ export default function SearchHeader({
   tabs,
   searchValue = '',
   onSearchChange = () => {},
+  onSearchFocus = () => {},
+  onSearchBlur = () => {},
   topOffset = 0
 }: SearchHeaderProps) {
   const tabStyles = useTabStyles();
@@ -57,6 +61,8 @@ export default function SearchHeader({
             <TextInput
               value={searchValue}
               onChangeText={onSearchChange}
+              onFocus={onSearchFocus}
+              onBlur={onSearchBlur}
               placeholder="Search..."
               placeholderTextColor={tabStyles.text.inactive}
               className="flex-1 text-base font-medium"

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { formatTimeAgo, getSmartTimeFormat } from '../utils/timeUtils';
+import { getSmartTimeFormat } from '../utils/timeUtils';
 
 /**
  * Hook that provides real-time updating time ago functionality

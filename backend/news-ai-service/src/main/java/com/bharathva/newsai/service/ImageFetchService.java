@@ -38,34 +38,34 @@ public class ImageFetchService {
         // Strategy 1: RSS Enclosures (fastest)
         String imageUrl = extractFromEnclosures(entry);
         if (isValidImageUrl(imageUrl)) {
-            log.debug("✓ Found image from RSS enclosures");
+            log.debug("Found image from RSS enclosures");
             return imageUrl;
         }
         
         // Strategy 2: Extract from HTML content in RSS
         imageUrl = extractFromHtmlContent(description);
         if (isValidImageUrl(imageUrl)) {
-            log.debug("✓ Found image from RSS HTML content");
+            log.debug("Found image from RSS HTML content");
             return imageUrl;
         }
         
         // Strategy 3: Media content from RSS extensions
         imageUrl = extractFromMediaContent(entry);
         if (isValidImageUrl(imageUrl)) {
-            log.debug("✓ Found image from RSS media content");
+            log.debug("Found image from RSS media content");
             return imageUrl;
         }
         
         // Strategy 4: Open Graph / Meta tags from article page (web scraping)
         imageUrl = scrapeImageFromArticle(articleUrl);
         if (isValidImageUrl(imageUrl)) {
-            log.debug("✓ Found image from web scraping");
+            log.debug("Found image from web scraping");
             return imageUrl;
         }
         
         // Strategy 5: Source-specific fallback (high-quality logos)
         imageUrl = getSourceSpecificFallback(source);
-        log.debug("✓ Using source-specific fallback for: {}", source);
+        log.debug("Using source-specific fallback for: {}", source);
         return imageUrl;
     }
 

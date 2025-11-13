@@ -232,3 +232,4 @@ docker-compose logs --tail=20 ${SERVICE_NAME}
 echo ""
 
 
+

@@ -26,6 +26,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/auth/user")
 @CrossOrigin(origins = "*")
+@org.springframework.core.annotation.Order(1)
 public class UserController {
 
     private static final Logger log = LoggerFactory.getLogger(UserController.class);
@@ -421,7 +422,95 @@ public class UserController {
         }
     }
 
-    @GetMapping("/{userId}")
+    @GetMapping(value = "/search", produces = "application/json")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> searchUsers(
+            @RequestParam(value = "q", required = true) String query,
+            @RequestParam(value = "limit", defaultValue = "10", required = false) int limit) {
+        try {
+            if (query == null || query.trim().isEmpty()) {
+                log.warn("Empty search query received");
+                return ResponseEntity.badRequest().body(new ApiResponse<>(
+                        false,
+                        "Search query cannot be empty",
+                        null,
+                        LocalDateTime.now()
+                ));
+            }
+            
+            String trimmedQuery = query.trim();
+            
+            if (trimmedQuery.length() < 1) {
+                log.warn("Search query too short: length={}", trimmedQuery.length());
+                return ResponseEntity.badRequest().body(new ApiResponse<>(
+                        false,
+                        "Search query must be at least 1 character",
+                        null,
+                        LocalDateTime.now()
+                ));
+            }
+            
+            if (limit < 1 || limit > 50) {
+                log.warn("Invalid limit provided: {}, using default 10", limit);
+                limit = 10;
+            }
+            
+            log.info("Processing user search: query='{}', limit={}", trimmedQuery, limit);
+            
+            org.springframework.data.domain.Pageable pageable = 
+                org.springframework.data.domain.PageRequest.of(0, limit);
+            
+            org.springframework.data.domain.Page<User> usersPage = 
+                userRepository.searchUsers(trimmedQuery, pageable);
+            
+            List<Map<String, Object>> userList = usersPage.getContent().stream()
+                .map(user -> {
+                    Map<String, Object> userData = new HashMap<>();
+                    userData.put("id", user.getId());
+                    userData.put("username", user.getUsername());
+                    userData.put("fullName", user.getFullName());
+                    userData.put("profileImageUrl", user.getProfileImageUrl());
+                    userData.put("bio", user.getBio());
+                    userData.put("isEmailVerified", user.getIsEmailVerified());
+                    return userData;
+                })
+                .collect(java.util.stream.Collectors.toList());
+            
+            log.info("User search completed successfully: query='{}', found={} users", trimmedQuery, userList.size());
+            
+            return ResponseEntity.ok(new ApiResponse<>(
+                    true,
+                    "Users found successfully",
+                    userList,
+                    LocalDateTime.now()
+            ));
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid argument in user search: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(new ApiResponse<>(
+                    false,
+                    "Invalid search parameters: " + e.getMessage(),
+                    null,
+                    LocalDateTime.now()
+            ));
+        } catch (org.springframework.dao.DataAccessException e) {
+            log.error("Database error during user search: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
+                    false,
+                    "Database error occurred while searching users",
+                    null,
+                    LocalDateTime.now()
+            ));
+        } catch (Exception e) {
+            log.error("Unexpected error during user search: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
+                    false,
+                    "An unexpected error occurred while searching users",
+                    null,
+                    LocalDateTime.now()
+            ));
+        }
+    }
+
+    @GetMapping("/{userId:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getUserById(@PathVariable UUID userId) {
         try {
             Optional<User> userOptional = userRepository.findById(userId);

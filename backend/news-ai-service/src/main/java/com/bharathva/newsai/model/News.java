@@ -48,6 +48,9 @@ public class News {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt = LocalDateTime.now();
 
+    @Column(name = "ready_for_display")
+    private LocalDateTime readyForDisplay;
+
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {
@@ -190,6 +193,14 @@ public class News {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public LocalDateTime getReadyForDisplay() {
+        return readyForDisplay;
+    }
+
+    public void setReadyForDisplay(LocalDateTime readyForDisplay) {
+        this.readyForDisplay = readyForDisplay;
     }
 
     @Override

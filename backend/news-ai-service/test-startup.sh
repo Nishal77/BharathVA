@@ -157,3 +157,4 @@ echo "3. If gateway routing failed, verify service is registered in Eureka"
 echo ""
 
 
+
