@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter, useSegments } from 'expo-router';
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, useColorScheme, Pressable, ScrollView } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -7,9 +7,13 @@ import ForYou from '../explore/ForYou';
 import SearchHeader from '../explore/header/SearchHeader';
 import UserSearchSuggestions from '../explore/components/UserSearchSuggestions';
 import { searchUsersDebounced, cancelSearch, UserSearchResult } from '../../../../services/api/userSearchService';
+import { tokenManager } from '../../../../services/api/authService';
 
 export default function SearchScreen() {
-  const { userId } = useLocalSearchParams();
+  const params = useLocalSearchParams<{ userId?: string | string[] }>();
+  const segments = useSegments();
+  const router = useRouter();
+  const [userId, setUserId] = useState<string>('');
   const [activeTab, setActiveTab] = useState('For You');
   const [searchValue, setSearchValue] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -60,8 +64,68 @@ export default function SearchScreen() {
   }, []);
 
   const handleUserPress = useCallback((user: UserSearchResult) => {
-    console.log('User pressed:', user.username);
-  }, []);
+    console.log('User pressed:', user.username, 'id:', user.id, 'currentUserId:', userId);
+    
+    if (!user.id) {
+      console.error('User ID is missing, cannot navigate');
+      return;
+    }
+    
+    if (!userId || userId.trim() === '') {
+      console.error('Current userId is missing, cannot navigate. Params:', params);
+      return;
+    }
+    
+    const targetPath = `/(user)/${userId}/explore/UserProfileView`;
+    const fullPath = `${targetPath}?profileUserId=${encodeURIComponent(user.id)}`;
+    console.log('Navigating to:', targetPath, 'with profileUserId:', user.id);
+    console.log('Full path:', fullPath);
+    
+    try {
+      router.push({
+        pathname: targetPath as any,
+        params: { profileUserId: user.id },
+      } as any);
+    } catch (error) {
+      console.error('Navigation error, trying fallback:', error);
+      router.push(fullPath as any);
+    }
+  }, [userId, router, params]);
+
+  useEffect(() => {
+    const initializeUserId = async () => {
+      const userIdFromParams = typeof params.userId === 'string' ? params.userId : Array.isArray(params.userId) ? params.userId[0] : '';
+      
+      if (userIdFromParams) {
+        setUserId(userIdFromParams);
+        return;
+      }
+      
+      const getUserIdFromSegments = () => {
+        const userSegmentIndex = segments.findIndex(seg => seg === '(user)');
+        if (userSegmentIndex !== -1 && userSegmentIndex + 1 < segments.length) {
+          return segments[userSegmentIndex + 1];
+        }
+        return null;
+      };
+      
+      const userIdFromSegments = getUserIdFromSegments();
+      if (userIdFromSegments) {
+        setUserId(userIdFromSegments);
+        return;
+      }
+      
+      const userIdFromToken = await tokenManager.getUserIdFromToken();
+      if (userIdFromToken) {
+        console.log('Using userId from token:', userIdFromToken);
+        setUserId(userIdFromToken);
+      } else {
+        console.error('Could not determine userId from params, segments, or token');
+      }
+    };
+    
+    initializeUserId();
+  }, [params.userId, segments]);
 
   useEffect(() => {
     return () => {

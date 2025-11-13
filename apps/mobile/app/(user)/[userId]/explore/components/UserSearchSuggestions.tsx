@@ -14,7 +14,7 @@ import {
   ActivityIndicator,
   useColorScheme,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { useTabStyles } from '../../../../../hooks/useTabStyles';
 import { UserSearchResult } from '../../../../../services/api/userSearchService';
@@ -33,15 +33,48 @@ export default function UserSearchSuggestions({
   onUserPress,
 }: UserSearchSuggestionsProps) {
   const router = useRouter();
+  const { userId: currentUserId } = useLocalSearchParams<{ userId: string }>();
   const tabStyles = useTabStyles();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   const handleUserPress = (user: UserSearchResult) => {
+    console.log('handleUserPress called with user:', user.username, 'id:', user.id);
     if (onUserPress) {
+      console.log('Using custom onUserPress handler');
       onUserPress(user);
     } else {
-      router.push(`/(user)/${user.id}/(tabs)/profile`);
+      console.log('Navigating to user profile:', user.id, 'from current user:', currentUserId);
+      if (!currentUserId) {
+        console.error('Current userId is missing, cannot navigate');
+        return;
+      }
+      if (!user.id) {
+        console.error('User ID is missing, cannot navigate');
+        return;
+      }
+      
+      const targetPath = `/(user)/${currentUserId}/explore/UserProfileView`;
+      const fullPath = `${targetPath}?profileUserId=${encodeURIComponent(user.id)}`;
+      console.log('Attempting navigation to:', targetPath);
+      console.log('Full path with query:', fullPath);
+      console.log('Router object:', router);
+      
+      try {
+        router.push({
+          pathname: targetPath as any,
+          params: { profileUserId: user.id },
+        } as any);
+        console.log('Navigation push called successfully');
+      } catch (error) {
+        console.error('Navigation error:', error);
+        try {
+          router.push(fullPath as any);
+          console.log('Fallback navigation (URL string) called');
+        } catch (fallbackError) {
+          console.error('Fallback navigation also failed:', fallbackError);
+        }
+      }
     }
   };
 
@@ -88,72 +121,72 @@ export default function UserSearchSuggestions({
         ]}
       >
         <Pressable
-          onPress={() => handleUserPress(user)}
-          style={({ pressed }) => [
-            styles.userItem,
-            {
-              backgroundColor: isDark ? '#1a1a1a' : '#ffffff',
-              opacity: pressed ? 0.7 : 1,
-            },
-          ]}
-          accessibilityLabel={`View profile of ${user.fullName}`}
-          accessibilityRole="button"
-        >
-          <View style={styles.userItemContent}>
-            <View style={styles.avatarContainer}>
-              {hasValidImage ? (
-                <Image
-                  source={{ uri: profileImageUrl! }}
-                  style={styles.avatar}
-                  onError={(error) => {
-                    console.log('Failed to load profile image:', profileImageUrl, error);
-                  }}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View style={styles.avatar}>
-                  <View style={[
-                    styles.defaultAvatarContainer,
-                    { backgroundColor: isDark ? '#374151' : '#D1D5DB' }
-                  ]}>
-                    <Svg width={48} height={48} viewBox="0 0 24 24">
-                      <Circle cx="12" cy="8" r="4" fill={isDark ? '#6B7280' : '#9CA3AF'} />
-                      <Path
-                        d="M12 12c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
-                        fill={isDark ? '#6B7280' : '#9CA3AF'}
-                      />
-                    </Svg>
-                  </View>
+        onPress={() => handleUserPress(user)}
+        style={({ pressed }) => [
+          styles.userItem,
+          {
+            backgroundColor: isDark ? '#1a1a1a' : '#ffffff',
+            opacity: pressed ? 0.7 : 1,
+          },
+        ]}
+        accessibilityLabel={`View profile of ${user.fullName}`}
+        accessibilityRole="button"
+      >
+        <View style={styles.userItemContent}>
+          <View style={styles.avatarContainer}>
+            {hasValidImage ? (
+              <Image
+                source={{ uri: profileImageUrl! }}
+                style={styles.avatar}
+                onError={(error) => {
+                  console.log('Failed to load profile image:', profileImageUrl, error);
+                }}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.avatar}>
+                <View style={[
+                  styles.defaultAvatarContainer,
+                  { backgroundColor: isDark ? '#374151' : '#D1D5DB' }
+                ]}>
+                  <Svg width={48} height={48} viewBox="0 0 24 24">
+                    <Circle cx="12" cy="8" r="4" fill={isDark ? '#6B7280' : '#9CA3AF'} />
+                    <Path
+                      d="M12 12c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+                      fill={isDark ? '#6B7280' : '#9CA3AF'}
+                    />
+                  </Svg>
                 </View>
-              )}
-            </View>
-
-            <View style={styles.userInfo}>
-              <View style={styles.userNameRow}>
-                <Text
-                  style={[styles.fullName, { color: tabStyles.text.active }]}
-                  numberOfLines={1}
-                >
-                  {user.fullName}
-                </Text>
               </View>
+            )}
+          </View>
+
+          <View style={styles.userInfo}>
+            <View style={styles.userNameRow}>
               <Text
-                style={[styles.username, { color: tabStyles.text.inactive }]}
+                style={[styles.fullName, { color: tabStyles.text.active }]}
                 numberOfLines={1}
               >
-                @{user.username}
+                {user.fullName}
               </Text>
-              {user.bio && (
-                <Text
-                  style={[styles.bio, { color: tabStyles.text.inactive }]}
-                  numberOfLines={1}
-                >
-                  {user.bio}
-                </Text>
-              )}
             </View>
+            <Text
+              style={[styles.username, { color: tabStyles.text.inactive }]}
+              numberOfLines={1}
+            >
+              @{user.username}
+            </Text>
+            {user.bio && (
+              <Text
+                style={[styles.bio, { color: tabStyles.text.inactive }]}
+                numberOfLines={1}
+              >
+                {user.bio}
+              </Text>
+            )}
           </View>
-        </Pressable>
+        </View>
+      </Pressable>
       </View>
     );
   };
