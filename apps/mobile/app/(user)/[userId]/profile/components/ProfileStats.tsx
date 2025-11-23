@@ -186,7 +186,7 @@ const ProfileStats = forwardRef<ProfileStatsRef, ProfileStatsProps>(({
       if (externalPostCount === undefined) {
         try {
           console.log('📊 [ProfileStats] Fetching actual post count from MongoDB...');
-          const response = await getUserFeeds(userIdToFetch, 0, 1000);
+        const response = await getUserFeeds(userIdToFetch, 0, 1000);
           
           // Handle auth errors gracefully
           if (!response.success) {
@@ -213,17 +213,17 @@ const ProfileStats = forwardRef<ProfileStatsRef, ProfileStatsProps>(({
             return;
           }
           
-          if (response.success && response.data) {
-            const feedItems = response.data.content || [];
-            const userFeeds = feedItems.filter(feed => feed.userId === userIdToFetch);
+        if (response.success && response.data) {
+          const feedItems = response.data.content || [];
+          const userFeeds = feedItems.filter(feed => feed.userId === userIdToFetch);
             const mongoDbPostCount = userFeeds.length;
             
             console.log('📊 [ProfileStats] MongoDB post count (source of truth):', mongoDbPostCount);
-            
+          
             // Use MongoDB count as the authoritative source
             setInternalPostCount(mongoDbPostCount);
-            
-            if (onPostCountChange) {
+          
+          if (onPostCountChange) {
               onPostCountChange(mongoDbPostCount);
             }
             
@@ -234,7 +234,7 @@ const ProfileStats = forwardRef<ProfileStatsRef, ProfileStatsProps>(({
                 console.warn(`⚠️ [ProfileStats] Post count mismatch detected! MongoDB: ${mongoDbPostCount}, NeonDB: ${neonDbCount}`);
                 console.warn('   Using MongoDB count as source of truth. NeonDB count will be synced automatically.');
               }
-            }
+          }
           }
         } catch (feedError) {
           // Handle feed fetch errors gracefully

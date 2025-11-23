@@ -36,3 +36,4 @@ public interface UserFollowsRepository extends JpaRepository<UserFollows, UUID> 
     List<UserFollows> findAllByFollowingId(@Param("userId") UUID userId);
 }
 
+

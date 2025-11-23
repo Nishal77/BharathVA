@@ -15,6 +15,7 @@ import {
   View,
   useColorScheme
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 const { height, width } = Dimensions.get('window');
 
@@ -261,13 +262,10 @@ export default function LoginScreen() {
               })}
             >
               <View className="w-6 h-6 mr-3 items-center justify-center">
-                <Image
-                  source={require('../../assets/logo/Apple.png')}
-                  className="w-6 h-6"
-                  resizeMode="contain"
-                  style={{
-                    tintColor: isDark ? 'white' : 'black',
-                  }}
+                <Ionicons 
+                  name="logo-apple" 
+                  size={24} 
+                  color={isDark ? 'white' : 'black'} 
                 />
               </View>
               <Text className={`${isDark ? 'text-white' : 'text-black'} text-base font-semibold`}>

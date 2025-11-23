@@ -108,7 +108,7 @@ export default function VideoIntro({ onSkip }: VideoIntroProps) {
       
       {/* Full Screen Video */}
       <Video
-        source={require('../../assets/Videos/clip1.mp4')}
+        source={require('../../assets/Videos/Clip.mp4')}
         style={{
           width: width,
           height: height,

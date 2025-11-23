@@ -139,7 +139,7 @@ export default function OTPVerification({
     <View className="flex-1" style={{ backgroundColor: bgColor, minHeight: availableHeight }}>
       {/* Header Image - Dynamic scaling based on device dimensions */}
       <Image
-        source={require('../../../../assets/images/beach.jpg')}
+        source={require('../../../../assets/images/incrible.jpg')}
         style={{
           position: 'absolute',
           top: 0,

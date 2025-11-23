@@ -97,7 +97,7 @@ public class FeedService {
                 .thenAccept(success -> {
                     if (success) {
                         log.info("✅ Backup async sync completed successfully for user: {}", userId);
-                    } else {
+                } else {
                         log.warn("⚠️ Backup async sync failed for user: {}", userId);
                     }
                 });
@@ -387,7 +387,7 @@ public class FeedService {
                 .thenAccept(success -> {
                     if (success) {
                         log.info("✅ Backup async sync completed successfully for user: {}", feedOwnerId);
-                    } else {
+                } else {
                         log.warn("⚠️ Backup async sync failed for user: {}", feedOwnerId);
                     }
                 });
