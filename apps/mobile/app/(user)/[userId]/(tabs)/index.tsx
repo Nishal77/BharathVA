@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import HomeHeader from '../home/components/HomeHeader';
 import LocalPulse from '../home/LocalPulse';
+import PublicSafety from '../home/PublicSafety';
 import MessagesScreen from '../../../../components/messages/MessagesScreen';
 import FeedCard from '../../../../components/feed/FeedCard';
 import { useTabStyles } from '../../../../hooks/useTabStyles';
@@ -223,6 +224,8 @@ export default function HomeScreen() {
       <View style={{ flex: 1, paddingTop: 130, backgroundColor: tabStyles.screen.backgroundColor }}>
         {activeTab === 'Local Pulse' ? (
           <LocalPulse />
+        ) : activeTab === 'Public Safety' ? (
+          <PublicSafety />
         ) : (
          <ScrollView 
            style={{ flex: 1, backgroundColor: tabStyles.content.backgroundColor }}

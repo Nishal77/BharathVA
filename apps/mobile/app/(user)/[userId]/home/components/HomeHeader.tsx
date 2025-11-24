@@ -31,7 +31,7 @@ export default function HomeHeader({
           right: 0,
           zIndex: 50,
           paddingTop: 48,
-          paddingBottom: 12,
+          paddingBottom: 0,
           paddingHorizontal: 24,
           borderBottomWidth: 1,
           borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
@@ -173,7 +173,7 @@ export default function HomeHeader({
             paddingRight: 16,
             alignItems: 'center',
             paddingTop: 12,
-            paddingBottom: 8,
+            paddingBottom: 4,
           }}
         >
           <View style={{ flexDirection: 'row', gap: 24 }}>

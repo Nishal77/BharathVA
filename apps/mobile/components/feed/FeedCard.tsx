@@ -27,6 +27,9 @@ interface FeedCardProps {
   userLiked?: boolean; // Whether the current user has liked this post
   bookmarks?: number;
   views?: number;
+  showStats?: boolean; // Whether to show the stats section with emojis
+  customStats?: React.ReactNode; // Custom stats component to replace default stats
+  customActions?: React.ReactNode; // Custom actions component to replace default actions
   onPress?: () => void;
   onReply?: () => void;
   onRetweet?: () => void;
@@ -55,6 +58,9 @@ export default function FeedCard({
   userLiked = false,
   bookmarks = 0,
   views = 0,
+  showStats = true,
+  customStats,
+  customActions,
   onPress,
   onReply,
   onRetweet,
@@ -100,30 +106,38 @@ export default function FeedCard({
           {/* Media Section - Always shows random image */}
           <FeedMediaSection media={media} />
 
-          <FeedActionSection
-            feedId={id}
-            onLike={onLike}
-            onReply={onReply}
-            onShare={onShare}
-            onBookmark={onBookmark}
-            onEmojiSelect={(emoji) => console.log('Emoji selected:', emoji)}
-            likes={likes > 0 ? likes : undefined}
-            likedByUserIds={likedByUserIds}
-            userLiked={userLiked}
-            comments={replies !== undefined ? replies : 0}
-            shares={retweets > 0 ? retweets : undefined}
-            onCommentAdded={() => {
-              // Refresh feed list when comment is added
-              if (onFeedPress) {
-                onFeedPress(id);
-              }
-            }}
-          />
+          {customActions ? (
+            customActions
+          ) : (
+            <FeedActionSection
+              feedId={id}
+              onLike={onLike}
+              onReply={onReply}
+              onShare={onShare}
+              onBookmark={onBookmark}
+              onEmojiSelect={(emoji) => console.log('Emoji selected:', emoji)}
+              likes={likes > 0 ? likes : undefined}
+              likedByUserIds={likedByUserIds}
+              userLiked={userLiked}
+              comments={replies !== undefined ? replies : 0}
+              shares={retweets > 0 ? retweets : undefined}
+              onCommentAdded={() => {
+                // Refresh feed list when comment is added
+                if (onFeedPress) {
+                  onFeedPress(id);
+                }
+              }}
+            />
+          )}
 
-          <FeedStatsSection
-            replies={replies}
-            likes={likes}
-          />
+          {customStats ? (
+            customStats
+          ) : showStats ? (
+            <FeedStatsSection
+              replies={replies}
+              likes={likes}
+            />
+          ) : null}
         </View>
       </View>
     </View>
