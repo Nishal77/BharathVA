@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, Text, View, useColorScheme, Dimensions } from 'react-native';
+import { Pressable, Text, View, useColorScheme, Dimensions, ActivityIndicator } from 'react-native';
+import { useFonts } from 'expo-font';
 import Svg, { Path, Line } from 'react-native-svg';
 
 interface PublicSafetyActionsProps {
@@ -31,6 +32,11 @@ export default function PublicSafetyActions({
 }: PublicSafetyActionsProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const [fontsLoaded] = useFonts({
+    'Chirp-Regular': require('../../../../../../assets/fonts/Chirp-Regular.ttf'),
+    'Chirp-Medium': require('../../../../../../assets/fonts/Chirp-Medium.ttf'),
+    'Chirp-Bold': require('../../../../../../assets/fonts/Chirp-Bold.ttf'),
+  });
 
   // Background colors for action buttons - matching FeedActionSection
   const likeBgColor = isDark ? '#4B1F1F' : '#FEE2E2';
@@ -44,12 +50,20 @@ export default function PublicSafetyActions({
 
   // Responsive dimensions - matching FeedActionSection
   const iconSize = Math.max(16 * scaleFactor, 16 * minScale);
-  const fontSize = Math.max(11 * scaleFactor, 11 * minScale);
+  const fontSize = Math.max(10 * scaleFactor, 10 * minScale); // Reduced from 11 to 10
   const buttonPaddingH = Math.max(8 * scaleFactor, 6 * minScale);
   const buttonPaddingV = Math.max(5 * scaleFactor, 4 * minScale);
   const iconMarginRight = Math.max(5 * scaleFactor, 4 * minScale);
   const buttonSpacing = Math.max(8 * scaleFactor, 6 * minScale);
   const borderRadius = Math.max(18 * scaleFactor, 16 * minScale);
+
+  if (!fontsLoaded) {
+    return (
+      <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 8 }}>
+        <ActivityIndicator size="small" />
+      </View>
+    );
+  }
 
   return (
     <View className="flex-row items-center justify-between mb-0" style={{ flexWrap: 'wrap' }}>
@@ -93,10 +107,11 @@ export default function PublicSafetyActions({
           </Svg>
           <Text
             style={{
+              fontFamily: 'Chirp-Medium',
               fontSize: fontSize,
-              fontWeight: '600',
               color: actionTextColor,
               includeFontPadding: false,
+              letterSpacing: 0.1,
             }}
           >
             {formatNumber(comments)}
@@ -146,12 +161,13 @@ export default function PublicSafetyActions({
           </Svg>
           <Text
             style={{
+              fontFamily: 'Chirp-Medium',
               fontSize: fontSize,
-              fontWeight: '600',
               color: isLiked 
                 ? '#EF4444' // Red when liked
                 : (isDark ? '#FCA5A5' : '#DC2626'), // Red tint when not liked
               includeFontPadding: false,
+              letterSpacing: 0.1,
             }}
           >
             {formatNumber(likes)}

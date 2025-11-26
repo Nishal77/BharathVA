@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { Text, View, useColorScheme, Dimensions } from 'react-native';
+import { Text, View, useColorScheme, Dimensions, ActivityIndicator } from 'react-native';
+import { useFonts } from 'expo-font';
 
 interface FeedStatsSectionProps {
   replies?: number;
@@ -34,6 +35,11 @@ export default function FeedStatsSection({
 }: FeedStatsSectionProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const [fontsLoaded] = useFonts({
+    'Chirp-Regular': require('../../assets/fonts/Chirp-Regular.ttf'),
+    'Chirp-Medium': require('../../assets/fonts/Chirp-Medium.ttf'),
+    'Chirp-Bold': require('../../assets/fonts/Chirp-Bold.ttf'),
+  });
   
   // Responsive sizing
   const baseWidth = 393;
@@ -76,7 +82,15 @@ export default function FeedStatsSection({
   const reactionTextColor = isDark ? '#E5E5E5' : '#1F1F1F';
   
   // Premium sizing for emoji reactions
-  const fontSize = Math.max(11 * scaleFactor, 10 * minScale);
+  const fontSize = Math.max(10 * scaleFactor, 9 * minScale); // Reduced from 11/10 to 10/9
+
+  if (!fontsLoaded) {
+    return (
+      <View style={{ paddingBottom: 12, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="small" />
+      </View>
+    );
+  }
   const emojiSize = Math.max(14 * scaleFactor, 13 * minScale); // Slightly larger for visibility
   const reactionPaddingH = Math.max(9 * scaleFactor, 8 * minScale); // More padding for premium look
   const reactionPaddingV = Math.max(5 * scaleFactor, 4.5 * minScale);
@@ -119,8 +133,8 @@ export default function FeedStatsSection({
               </Text>
               <Text
                 style={{
+                  fontFamily: 'Chirp-Medium',
                   fontSize: fontSize,
-                  fontWeight: '600',
                   color: reactionTextColor,
                   includeFontPadding: false,
                   marginLeft: emojiCountGap,
@@ -133,8 +147,8 @@ export default function FeedStatsSection({
           ))}
           <Text
             style={{
+              fontFamily: 'Chirp-Medium',
               fontSize: fontSize,
-              fontWeight: '600',
               color: reactionTextColor,
               includeFontPadding: false,
               marginLeft: 2,
@@ -145,8 +159,8 @@ export default function FeedStatsSection({
           </Text>
           <Text
             style={{
+              fontFamily: 'Chirp-Medium',
               fontSize: fontSize,
-              fontWeight: '600',
               color: reactionTextColor,
               includeFontPadding: false,
               marginLeft: 4,
@@ -160,9 +174,10 @@ export default function FeedStatsSection({
         {/* Views Section */}
         <Text 
           style={{ 
+            fontFamily: 'Chirp-Medium',
             fontSize: fontSize,
             color: secondaryTextColor,
-            fontWeight: '500',
+            letterSpacing: 0.1,
           }}
         >
           {formatNumber(randomViews)} {randomViews === 1 ? 'view' : 'views'}

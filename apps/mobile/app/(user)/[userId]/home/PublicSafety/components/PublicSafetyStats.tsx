@@ -1,5 +1,6 @@
 import React from 'react';
-import { Text, View, useColorScheme } from 'react-native';
+import { Text, View, useColorScheme, ActivityIndicator } from 'react-native';
+import { useFonts } from 'expo-font';
 
 interface PublicSafetyStatsProps {
   responses?: number;
@@ -22,8 +23,21 @@ export default function PublicSafetyStats({
 }: PublicSafetyStatsProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const [fontsLoaded] = useFonts({
+    'Chirp-Regular': require('../../../../../../assets/fonts/Chirp-Regular.ttf'),
+    'Chirp-Medium': require('../../../../../../assets/fonts/Chirp-Medium.ttf'),
+    'Chirp-Bold': require('../../../../../../assets/fonts/Chirp-Bold.ttf'),
+  });
 
   const textColor = isDark ? '#9CA3AF' : '#6B7280';
+
+  if (!fontsLoaded) {
+    return (
+      <View style={{ paddingTop: 8, paddingBottom: 12, alignItems: 'center' }}>
+        <ActivityIndicator size="small" />
+      </View>
+    );
+  }
 
   return (
     <View
@@ -45,9 +59,10 @@ export default function PublicSafetyStats({
         {responses > 0 && (
           <Text
             style={{
-              fontSize: 13,
-              fontWeight: '600',
+              fontFamily: 'Chirp-Medium',
+              fontSize: 12,
               color: textColor,
+              letterSpacing: 0.05,
             }}
           >
             {formatNumber(responses)} response{responses !== 1 ? 's' : ''}
@@ -68,9 +83,10 @@ export default function PublicSafetyStats({
             )}
             <Text
               style={{
-                fontSize: 13,
-                fontWeight: '600',
+                fontFamily: 'Chirp-Medium',
+                fontSize: 12,
                 color: textColor,
+                letterSpacing: 0.05,
               }}
             >
               {formatNumber(views)} views

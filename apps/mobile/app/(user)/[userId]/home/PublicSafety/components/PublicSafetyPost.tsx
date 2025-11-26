@@ -1,5 +1,6 @@
 import React from 'react';
-import { Pressable, Text, View, useColorScheme } from 'react-native';
+import { Pressable, Text, View, useColorScheme, ActivityIndicator } from 'react-native';
+import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 import { MessageCircle, Heart, Share2, MoreHorizontal } from 'lucide-react-native';
 
@@ -33,6 +34,11 @@ export default function PublicSafetyPost({
 }: PublicSafetyPostProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const [fontsLoaded] = useFonts({
+    'Chirp-Regular': require('../../../../../../assets/fonts/Chirp-Regular.ttf'),
+    'Chirp-Medium': require('../../../../../../assets/fonts/Chirp-Medium.ttf'),
+    'Chirp-Bold': require('../../../../../../assets/fonts/Chirp-Bold.ttf'),
+  });
 
   const bgColor = isDark ? '#000000' : '#FFFFFF';
   const textColor = isDark ? '#FFFFFF' : '#000000';
@@ -47,6 +53,14 @@ export default function PublicSafetyPost({
     }
     return `${views} views`;
   };
+
+  if (!fontsLoaded) {
+    return (
+      <View style={{ padding: 16, alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+        <ActivityIndicator size="small" />
+      </View>
+    );
+  }
 
   return (
     <View
@@ -93,7 +107,7 @@ export default function PublicSafetyPost({
                 alignItems: 'center',
               }}
             >
-              <Text style={{ color: textColor, fontSize: 18, fontWeight: '600' }}>
+              <Text style={{ fontFamily: 'Chirp-Bold', color: textColor, fontSize: 18 }}>
                 {post.policeAccountName.charAt(0)}
               </Text>
             </View>
@@ -105,27 +119,32 @@ export default function PublicSafetyPost({
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
             <Text
               style={{
+                fontFamily: 'Chirp-Bold',
                 fontSize: 15,
-                fontWeight: '700',
                 color: textColor,
                 marginRight: 6,
+                letterSpacing: -0.2,
               }}
             >
               {post.policeAccountName}
             </Text>
             <Text
               style={{
+                fontFamily: 'Chirp-Regular',
                 fontSize: 14,
                 color: secondaryTextColor,
                 marginRight: 4,
+                letterSpacing: 0.1,
               }}
             >
               @{post.policeAccountHandle}
             </Text>
             <Text
               style={{
+                fontFamily: 'Chirp-Regular',
                 fontSize: 14,
                 color: secondaryTextColor,
+                letterSpacing: 0.1,
               }}
             >
               · {post.timeAgo}
@@ -148,9 +167,11 @@ export default function PublicSafetyPost({
       <View style={{ marginBottom: 12 }}>
         <Text
           style={{
+            fontFamily: 'Chirp-Regular',
             fontSize: 15,
-            lineHeight: 20,
+            lineHeight: 22,
             color: textColor,
+            letterSpacing: 0.1,
           }}
         >
           {post.caption}
@@ -200,8 +221,10 @@ export default function PublicSafetyPost({
           {post.comments > 0 && (
             <Text
               style={{
+                fontFamily: 'Chirp-Regular',
                 fontSize: 14,
                 color: secondaryTextColor,
+                letterSpacing: 0.1,
               }}
             >
               {post.comments}
@@ -227,8 +250,10 @@ export default function PublicSafetyPost({
           {post.likes > 0 && (
             <Text
               style={{
+                fontFamily: 'Chirp-Regular',
                 fontSize: 14,
                 color: secondaryTextColor,
+                letterSpacing: 0.1,
               }}
             >
               {post.likes}
@@ -250,8 +275,10 @@ export default function PublicSafetyPost({
           {post.shares > 0 && (
             <Text
               style={{
+                fontFamily: 'Chirp-Regular',
                 fontSize: 14,
                 color: secondaryTextColor,
+                letterSpacing: 0.1,
               }}
             >
               {post.shares}
@@ -263,9 +290,11 @@ export default function PublicSafetyPost({
       {/* Views */}
       <Text
         style={{
+          fontFamily: 'Chirp-Regular',
           fontSize: 13,
           color: secondaryTextColor,
           marginTop: 4,
+          letterSpacing: 0.1,
         }}
       >
         {formatViews(post.views)}

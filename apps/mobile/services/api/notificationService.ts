@@ -54,6 +54,8 @@ export interface NotificationPageResponse {
 // Configuration
 const API_CONFIG = {
   timeout: getTimeout(),
+  retryAttempts: 3,
+  retryDelay: 1000,
   enableLogging: isLoggingEnabled(),
 };
 
@@ -101,10 +103,14 @@ const getAuthToken = async (): Promise<string | null> => {
   }
 };
 
-// API request wrapper
+// Sleep utility for retry delays
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// API request wrapper with retry logic
 const apiRequest = async <T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retryCount = 0
 ): Promise<ApiResponse<T>> => {
   const startTime = Date.now();
   const baseURL = getGatewayURL();
@@ -264,6 +270,14 @@ const apiRequest = async <T>(
         log(`API Response: ${response.status} (authentication failed - handled by caller)`);
       } else {
         logError(`API Error: ${response.status}`, errorText);
+      }
+      
+      // Retry on server errors (5xx) or network issues with exponential backoff
+      if ((response.status >= 500 || response.status === 0 || response.status === 503) && retryCount < API_CONFIG.retryAttempts) {
+        const delay = API_CONFIG.retryDelay * Math.pow(2, retryCount);
+        log(`🔄 Retrying request (attempt ${retryCount + 1}/${API_CONFIG.retryAttempts}) after ${delay}ms`);
+        await sleep(delay);
+        return apiRequest<T>(endpoint, options, retryCount + 1);
       }
       
       return {

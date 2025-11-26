@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Pressable, Text, View, useColorScheme, Dimensions } from 'react-native';
+import { Pressable, Text, View, useColorScheme, Dimensions, ActivityIndicator } from 'react-native';
+import { useFonts } from 'expo-font';
 import { Image } from 'expo-image';
 // Removed MessageCircle import - using custom SVG
 import { Svg, Path, Line } from 'react-native-svg';
@@ -51,6 +52,11 @@ export default function FeedActionSection({
 }: FeedActionSectionProps) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const [fontsLoaded] = useFonts({
+    'Chirp-Regular': require('../../assets/fonts/Chirp-Regular.ttf'),
+    'Chirp-Medium': require('../../assets/fonts/Chirp-Medium.ttf'),
+    'Chirp-Bold': require('../../assets/fonts/Chirp-Bold.ttf'),
+  });
   const [isSmileActive, setIsSmileActive] = useState(false);
   const [isBookmarkActive, setIsBookmarkActive] = useState(false);
   const [isSendActive, setIsSendActive] = useState(false);
@@ -76,6 +82,10 @@ export default function FeedActionSection({
   
   // Store authenticated user ID for fallback check
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  
+  // Real-time comment count state (starts with prop value)
+  const initialComments = comments !== undefined ? comments : 0;
+  const [displayComments, setDisplayComments] = useState(initialComments);
   
   // Track processed WebSocket events to prevent duplicate processing
   const processedEventsRef = useRef<Set<string>>(new Set());
@@ -194,10 +204,6 @@ export default function FeedActionSection({
       setIsHeartActive(shouldBeActive);
     }
   }, [initialUserLiked, feedId, currentUserId, localLikedByUserIds, isHeartActive]);
-  
-  // Real-time comment count state (starts with prop value)
-  const initialComments = comments !== undefined ? comments : 0;
-  const [displayComments, setDisplayComments] = useState(initialComments);
   
   // Ref to track if we've already processed a like/unlike event from current user
   // This prevents double-counting when user likes/unlikes (optimistic update + WebSocket)
@@ -429,7 +435,7 @@ export default function FeedActionSection({
   
   // Responsive dimensions
   const iconSize = Math.max(16 * scaleFactor, 16 * minScale); // Icon size: 16-19.2px
-  const fontSize = Math.max(11 * scaleFactor, 11 * minScale); // Font size: 11-13.2px
+  const fontSize = Math.max(10 * scaleFactor, 10 * minScale); // Font size: 10-12px (reduced)
   const buttonPaddingH = Math.max(8 * scaleFactor, 6 * minScale); // Horizontal padding: 6-9.6px
   const buttonPaddingV = Math.max(5 * scaleFactor, 4 * minScale); // Vertical padding: 4-6px
   const iconMarginRight = Math.max(5 * scaleFactor, 4 * minScale); // Icon-text spacing: 4-6px
@@ -740,6 +746,15 @@ export default function FeedActionSection({
     };
   }, [feedId, currentUserId, onCommentAdded]);
 
+  // Early return for fonts - must be after all hooks are called
+  if (!fontsLoaded) {
+    return (
+      <View style={{ paddingVertical: 8, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="small" />
+      </View>
+    );
+  }
+
   // Only show "Liked by" section if there are actual likes
   // Show if either displayLikes > 0 OR localLikedByUserIds has items
   const hasLikes = displayLikes > 0 || (localLikedByUserIds && localLikedByUserIds.length > 0);
@@ -780,11 +795,13 @@ export default function FeedActionSection({
         </View>
           )}
         <Text
-          className="text-sm ml-2"
+          className="ml-2"
           style={{
+            fontFamily: 'Chirp-Medium',
+            fontSize: 12,
             color: isDark ? '#E5E5E5' : '#1F1F1F',
-            fontWeight: '500',
             flexShrink: 1,
+            letterSpacing: 0.05,
           }}
           numberOfLines={1}
           ellipsizeMode="tail"
@@ -793,7 +810,7 @@ export default function FeedActionSection({
               'Liked by...'
             ) : likerUsername ? (
               <>
-                Liked by <Text style={{ fontWeight: '600' }}>{likerUsername}</Text>
+                Liked by <Text style={{ fontFamily: 'Chirp-Bold' }}>{likerUsername}</Text>
                 {displayLikes > 1 ? ' and others' : ''}
               </>
             ) : displayLikes > 0 ? (
@@ -852,10 +869,11 @@ export default function FeedActionSection({
             </Svg>
             <Text
               style={{
+                fontFamily: 'Chirp-Medium',
                 fontSize: fontSize,
-                fontWeight: '600',
                 color: actionTextColor,
                 includeFontPadding: false,
+                letterSpacing: 0.1,
               }}
             >
               {formatNumber(displayComments)}
@@ -907,12 +925,13 @@ export default function FeedActionSection({
             </Svg>
             <Text
               style={{
+                fontFamily: 'Chirp-Medium',
                 fontSize: fontSize,
-                fontWeight: '600',
                 color: isHeartActive 
                   ? '#EF4444' // Red when liked
                   : (isDark ? '#FCA5A5' : '#DC2626'), // Red tint when not liked
                 includeFontPadding: false,
+                letterSpacing: 0.1,
               }}
             >
               {formatNumber(displayLikes)}

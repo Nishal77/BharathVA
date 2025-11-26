@@ -22,6 +22,10 @@ module.exports = {
       },
       fontFamily: {
         mono: ['SpaceMono', 'monospace'],
+        'chirp-regular': ['Chirp-Regular', 'sans-serif'],
+        'chirp-medium': ['Chirp-Medium', 'sans-serif'],
+        'chirp-bold': ['Chirp-Bold', 'sans-serif'],
+        'chirp-heavy': ['Chirp Heavy', 'sans-serif'],
       },
     },
   },

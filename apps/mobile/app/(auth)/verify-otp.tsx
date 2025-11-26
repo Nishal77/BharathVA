@@ -73,7 +73,7 @@ export default function VerifyOTPScreen() {
     <View className="flex-1 bg-white">
       {/* Bottom Image - 30% Height */}
       <Image
-        source={require('../../assets/images/incrible.jpg')}
+        source={require('../../assets/images/TajMahal.jpeg')}
         style={{
           position: 'absolute',
           bottom: 0,

@@ -114,8 +114,9 @@ export default function LatestUpdates({
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [fontsLoaded] = useFonts({
-    'Satoshi-Regular': require('../../../../../../assets/fonts/Satoshi-Regular.otf'),
-    'Satoshi-Medium': require('../../../../../../assets/fonts/Satoshi-Medium.otf'),
+    'Chirp-Regular': require('../../../../../../assets/fonts/Chirp-Regular.ttf'),
+    'Chirp-Medium': require('../../../../../../assets/fonts/Chirp-Medium.ttf'),
+    'Chirp Heavy': require('../../../../../../assets/fonts/Chirp Heavy.ttf'),
   });
 
   const [locationState, setLocationState] = useState<LocationState>({
@@ -160,10 +161,10 @@ export default function LatestUpdates({
 
   return (
     <View style={{ padding: 20, paddingBottom: 12, paddingTop: 24 }}>
-      <View className="flex-row justify-between items-center mb-7">
+      <View className="flex-row justify-between items-center mb-8">
         <Text
-          style={{ fontFamily: 'Satoshi-Medium', fontWeight: '700' }}
-          className="text-2xl dark:text-white text-black tracking-tight"
+          style={{ fontFamily: 'Chirp Heavy', fontSize: 28, letterSpacing: -0.5 }}
+          className="dark:text-white text-black"
         >
           Latest Updates
         </Text>
@@ -173,8 +174,8 @@ export default function LatestUpdates({
             <ActivityIndicator size="small" color={locationColor} />
           ) : (
             <Text
-              style={{ fontFamily: 'Satoshi-Regular' }}
-              className="text-sm dark:text-white/80 text-gray-700 font-medium"
+              style={{ fontFamily: 'Chirp-Regular', fontSize: 14, letterSpacing: 0.2 }}
+              className="dark:text-white/80 text-gray-700"
             >
               {locationState.district}
             </Text>
@@ -185,7 +186,7 @@ export default function LatestUpdates({
       {items.map((item, index) => (
         <View key={item.id}>
           {index > 0 && (
-            <View className="h-[0.5px] bg-gray-200 dark:bg-white/10 mb-7" />
+            <View className="h-[0.5px] bg-gray-200 dark:bg-white/10 mb-8" />
           )}
           <Pressable
             onPress={() => onItemPress?.(item)}
@@ -193,27 +194,33 @@ export default function LatestUpdates({
               opacity: pressed ? 0.95 : 1,
               transform: [{ scale: pressed ? 0.99 : 1 }],
             })}
-            className="mb-7"
+            className="mb-8"
           >
             <Text
-              style={{ fontFamily: 'Satoshi-Medium', fontWeight: '700' }}
-              className="text-[17px] dark:text-white text-black leading-[26px] mb-4 tracking-tight"
+              style={{ 
+                fontFamily: 'Chirp-Medium', 
+                fontWeight: '700', 
+                fontSize: 18, 
+                lineHeight: 26, 
+                letterSpacing: -0.3 
+              }}
+              className="dark:text-white text-black mb-5"
               numberOfLines={3}
             >
               {item.title}
             </Text>
-            <View className="flex-row items-center gap-2">
-              <View className="flex-row" style={{ marginRight: 4 }}>
+            <View className="flex-row items-center gap-2.5">
+              <View className="flex-row" style={{ marginRight: 6 }}>
                 {[1, 2, 3].map((index) => (
                   <View
                     key={index}
                     style={{
-                      width: 20,
-                      height: 20,
-                      borderRadius: 10,
+                      width: 22,
+                      height: 22,
+                      borderRadius: 11,
                       borderWidth: 2,
                       borderColor: isDark ? '#000000' : '#FFFFFF',
-                      marginLeft: index > 1 ? -8 : 0,
+                      marginLeft: index > 1 ? -9 : 0,
                       zIndex: 3 - index,
                     }}
                   >
@@ -224,7 +231,7 @@ export default function LatestUpdates({
                       style={{
                         width: '100%',
                         height: '100%',
-                        borderRadius: 10,
+                        borderRadius: 9,
                       }}
                       contentFit="cover"
                     />
@@ -232,14 +239,14 @@ export default function LatestUpdates({
                 ))}
               </View>
               <Text
-                style={{ fontFamily: 'Satoshi-Regular', fontSize: 13 }}
+                style={{ fontFamily: 'Chirp-Regular', fontSize: 13, letterSpacing: 0.1 }}
                 className="dark:text-white/70 text-gray-600"
               >
                 {item.timeAgo.toLowerCase()}
               </Text>
               <View className="w-1 h-1 rounded-full bg-gray-400 dark:bg-white/30" />
               <Text
-                style={{ fontFamily: 'Satoshi-Regular', fontSize: 13 }}
+                style={{ fontFamily: 'Chirp-Regular', fontSize: 13, letterSpacing: 0.1 }}
                 className="dark:text-white/70 text-gray-600"
               >
                 {item.category.toLowerCase()}
@@ -248,7 +255,7 @@ export default function LatestUpdates({
                 <>
                   <View className="w-1 h-1 rounded-full bg-gray-400 dark:bg-white/30" />
                   <Text
-                    style={{ fontFamily: 'Satoshi-Regular', fontSize: 13 }}
+                    style={{ fontFamily: 'Chirp-Regular', fontSize: 13, letterSpacing: 0.1 }}
                     className="dark:text-white/70 text-gray-600"
                   >
                     {item.author}

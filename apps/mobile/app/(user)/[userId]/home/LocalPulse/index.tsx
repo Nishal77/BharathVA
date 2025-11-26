@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScrollView, useColorScheme, Dimensions } from 'react-native';
-import BreakingNews from './components/BreakingNews';
+import WeatherCard from './components/WeatherCard';
 import LatestUpdates from './components/LatestUpdates';
 
 const { width } = Dimensions.get('window');
@@ -81,7 +81,6 @@ export default function LocalPulse() {
 
   const bgColor = isDark ? '#000000' : '#FFFFFF';
 
-  const featuredItem = mockLocalPulseData.find(item => item.type === 'featured');
   const latestItems = mockLocalPulseData.filter(item => item.type === 'latest');
 
   return (
@@ -90,18 +89,9 @@ export default function LocalPulse() {
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{ paddingBottom: 100 }}
     >
-      {featuredItem && (
-        <BreakingNews
-          title={featuredItem.title}
-          category={featuredItem.category}
-          author={featuredItem.author}
-          readTime={featuredItem.readTime}
-          imageUrl={featuredItem.imageUrl}
-          isBookmarked={featuredItem.isBookmarked}
-          onPress={() => console.log('Breaking news pressed:', featuredItem.id)}
-          onBookmarkPress={() => console.log('Bookmark pressed:', featuredItem.id)}
-        />
-      )}
+      <WeatherCard
+        onPress={() => console.log('Weather card pressed')}
+      />
 
       <LatestUpdates
         items={latestItems}

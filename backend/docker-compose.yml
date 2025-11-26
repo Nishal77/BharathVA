@@ -167,6 +167,35 @@ services:
       retries: 3
       start_period: 60s
 
+  # LocalPulse Service
+  localpulse-service:
+    build:
+      context: .
+      dockerfile: localpulse-service/Dockerfile
+    container_name: bharathva-localpulse
+    ports:
+      - "8085:8085"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
+    env_file:
+      - ./localpulse-service/.env.local
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      gateway-service:
+        condition: service_healthy
+    networks:
+      - bharathva-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8085/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
 networks:
   bharathva-network:
     driver: bridge

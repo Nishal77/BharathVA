@@ -10,6 +10,13 @@ spring:
         locator:
           enabled: true
           lower-case-service-id: true
+      httpclient:
+        connect-timeout: 10000
+        response-timeout: 30s
+        pool:
+          type: ELASTIC
+          max-connections: 1000
+          max-idle-time: 30s
       routes:
         # Root path - redirect to Eureka
         - id: root-redirect
@@ -32,6 +39,16 @@ spring:
             - Path=/api/auth/**
           filters:
             - RewritePath=/api/auth/(?<segment>.*), /auth/$\{segment}
+            - name: Retry
+              args:
+                retries: 3
+                statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
+                methods: GET,POST,PUT,DELETE
+                backoff:
+                  firstBackoff: 50ms
+                  maxBackoff: 500ms
+                  factor: 2
+                  basedOnPreviousValue: false
         
         # Feed Service routes - must be before any static resource handlers
         - id: feed-service
@@ -40,6 +57,16 @@ spring:
             - Path=/api/feed/**
           filters:
             - StripPrefix=0
+            - name: Retry
+              args:
+                retries: 3
+                statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
+                methods: GET,POST,PUT,DELETE
+                backoff:
+                  firstBackoff: 50ms
+                  maxBackoff: 500ms
+                  factor: 2
+                  basedOnPreviousValue: false
         
         # WebSocket routes for real-time feed updates
         - id: websocket-feed
@@ -56,6 +83,24 @@ spring:
             - Path=/api/news/**
           filters:
             - StripPrefix=0
+        
+        # LocalPulse Service routes
+        - id: localpulse-service
+          uri: ${LOCALPULSE_SERVICE_URI:lb://LOCALPULSE-SERVICE}
+          predicates:
+            - Path=/api/localpulse/**
+          filters:
+            - StripPrefix=0
+            - name: Retry
+              args:
+                retries: 3
+                statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
+                methods: GET,POST,PUT,DELETE
+                backoff:
+                  firstBackoff: 50ms
+                  maxBackoff: 500ms
+                  factor: 2
+                  basedOnPreviousValue: false
         
         # Health check for Gateway itself
         - id: gateway-health
@@ -85,8 +130,13 @@ eureka:
       defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
     register-with-eureka: true
     fetch-registry: true
+    registry-fetch-interval-seconds: 5
+    initial-instance-info-replication-interval-seconds: 10
+    instance-info-replication-interval-seconds: 10
   instance:
     prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
 
 # Management endpoints
 management:

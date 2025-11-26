@@ -96,7 +96,7 @@ export default function Details({ email, onBack, onComplete }: DetailsProps) {
     <View className="flex-1" style={{ backgroundColor: bgColor }}>
       {/* Bottom Image - 30% Height */}
       <Image
-        source={require('../../../../assets/images/incrible.jpg')}
+        source={require('../../../../assets/images/TajMahal.jpeg')}
         style={{
           position: 'absolute',
           bottom: 0,

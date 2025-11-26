@@ -27,6 +27,7 @@
         <module>auth-service</module>
         <module>feed-service</module>
         <module>news-ai-service</module>
+        <module>localpulse-service</module>
     </modules>
 
     <properties>
