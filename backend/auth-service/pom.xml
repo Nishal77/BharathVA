@@ -22,7 +22,7 @@
     <properties>
         <java.version>17</java.version>
         <jjwt.version>0.11.5</jjwt.version>
-        <spring-cloud.version>2023.0.3</spring-cloud.version>
+        <spring-cloud.version>2023.0.0</spring-cloud.version>
         <lombok.version>1.18.30</lombok.version>
     </properties>
 
@@ -58,6 +58,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- Spring Boot Actuator (Required for Eureka health checks) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
         <!-- Eureka Client -->
@@ -144,11 +150,6 @@
         </dependency>
         <dependency>
             <groupId>org.mockito</groupId>
-            <artifactId>mockito-core</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.mockito</groupId>
             <artifactId>mockito-junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
@@ -179,6 +180,13 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>-Dnet.bytebuddy.experimental=true</argLine>
                 </configuration>
             </plugin>
         </plugins>

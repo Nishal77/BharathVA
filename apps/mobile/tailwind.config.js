@@ -21,11 +21,19 @@ module.exports = {
         },
       },
       fontFamily: {
+        // Space Mono
         mono: ['SpaceMono', 'monospace'],
+        'space-mono': ['SpaceMono', 'monospace'],
+        
+        // Chirp Font Family
         'chirp-regular': ['Chirp-Regular', 'sans-serif'],
         'chirp-medium': ['Chirp-Medium', 'sans-serif'],
         'chirp-bold': ['Chirp-Bold', 'sans-serif'],
         'chirp-heavy': ['Chirp Heavy', 'sans-serif'],
+        
+        // Additional fonts
+        'aclonica': ['Aclonica-Regular', 'sans-serif'],
+        'rockybilly': ['Rockybilly', 'sans-serif'],
       },
     },
   },

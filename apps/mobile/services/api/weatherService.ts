@@ -165,7 +165,12 @@ const apiRequest = async <T>(
         errorText = await response.text().catch(() => `HTTP ${response.status}`);
       }
 
-      logError(`API Error: ${response.status}`, errorText);
+      // Handle 404 (Not Found) as a warning, not an error - it's expected for invalid cities
+      if (response.status === 404) {
+        log(`⚠️ City not found: ${errorText}`);
+      } else {
+        logError(`API Error: ${response.status}`, errorText);
+      }
 
       // Retry on server errors (5xx) or network issues with exponential backoff
       if ((response.status >= 500 || response.status === 0 || response.status === 503) && retryCount < 3) {

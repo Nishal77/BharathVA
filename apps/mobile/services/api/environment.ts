@@ -16,13 +16,15 @@ interface ApiConfig {
 // Environment configurations
 const environments: Record<Environment, ApiConfig> = {
   development: {
-    baseUrl: 'http://192.168.0.49:8080/api/auth', // Gateway service for auth API calls
-    gatewayUrl: 'http://192.168.0.49:8080', // Gateway service for all API calls
-    feedServiceUrl: 'http://192.168.0.49:8082', // Direct feed-service URL
-    newsServiceUrl: 'http://192.168.0.49:8084', // News AI service URL
+    // Update this IP to match your development machine's IP address
+    // Run: ifconfig | grep "inet " | grep -v 127.0.0.1 to find your IP
+    baseUrl: 'http://192.168.0.203:8080/api/auth', // Gateway service for auth API calls
+    gatewayUrl: 'http://192.168.0.203:8080', // Gateway service for all API calls
+    feedServiceUrl: 'http://192.168.0.203:8082', // Direct feed-service URL
+    newsServiceUrl: 'http://192.168.0.203:8084', // News AI service URL
     // Connect directly to feed-service for WebSocket (more reliable than through gateway)
-    websocketUrl: 'http://192.168.0.49:8082/ws', // Direct connection to feed-service WebSocket
-    timeout: 30000,
+    websocketUrl: 'http://192.168.0.203:8082/ws', // Direct connection to feed-service WebSocket
+    timeout: 15000, // Increased to 15 seconds for slower connections
     enableLogging: true,
   },
   staging: {
@@ -31,7 +33,7 @@ const environments: Record<Environment, ApiConfig> = {
     feedServiceUrl: 'https://staging-api.bharathva.com',
     newsServiceUrl: 'https://staging-api.bharathva.com',
     websocketUrl: 'https://staging-api.bharathva.com/ws', // Through gateway in staging
-    timeout: 30000,
+    timeout: 10000,
     enableLogging: true,
   },
   production: {
@@ -40,7 +42,7 @@ const environments: Record<Environment, ApiConfig> = {
     feedServiceUrl: 'https://api.bharathva.com',
     newsServiceUrl: 'https://api.bharathva.com',
     websocketUrl: 'https://api.bharathva.com/ws', // Through gateway in production
-    timeout: 30000,
+    timeout: 10000,
     enableLogging: false,
   },
 };

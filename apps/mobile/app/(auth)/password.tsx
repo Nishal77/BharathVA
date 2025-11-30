@@ -102,11 +102,37 @@ export default function PasswordScreen() {
       }, 200);
       
     } catch (error) {
-      // Password doesn't match database or other error occurred
-      const errorMsg = error instanceof ApiError ? error.message : 'Login failed. Please try again.';
+      // Handle different error types with specific messages
+      let errorMsg = 'Login failed. Please try again.';
+      let passwordErrorMsg = 'Login failed';
       
-      // Show "Incorrect password" for any authentication failure
-      setPasswordError('Incorrect password');
+      if (error instanceof ApiError) {
+        errorMsg = error.message;
+        
+        // Check for timeout errors
+        if (errorMsg.toLowerCase().includes('timeout') || errorMsg.toLowerCase().includes('timed out')) {
+          passwordErrorMsg = 'Connection timeout';
+          // Keep the full diagnostic message if it contains troubleshooting steps
+          if (!errorMsg.includes('Please verify') && !errorMsg.includes('Backend')) {
+            errorMsg = 'Request timed out. Please check your connection and try again.';
+          }
+        } else if (errorMsg.toLowerCase().includes('network') || errorMsg.toLowerCase().includes('connection')) {
+          passwordErrorMsg = 'Connection error';
+          // Keep the full diagnostic message if it contains troubleshooting steps
+          if (!errorMsg.includes('Please verify') && !errorMsg.includes('Backend')) {
+            errorMsg = 'Network error. Please check your internet connection.';
+          }
+        } else if (errorMsg.toLowerCase().includes('incorrect') || errorMsg.toLowerCase().includes('invalid')) {
+          passwordErrorMsg = 'Incorrect password';
+        } else {
+          passwordErrorMsg = 'Login failed';
+        }
+      } else {
+        // Generic error
+        passwordErrorMsg = 'Login failed';
+      }
+      
+      setPasswordError(passwordErrorMsg);
       showToastMessage(errorMsg);
     } finally {
       setIsLoading(false);

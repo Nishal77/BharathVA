@@ -739,75 +739,231 @@ export const authService = {
    * Login with email and password
    */
   login: async (email: string, password: string): Promise<LoginResponse> => {
+    // Skip health check - it's causing delays and login should work even if health check fails
+    // The login endpoint itself will fail fast if backend is unreachable
+    
     // CRITICAL: Clear all caches before login to prevent stale data
     // This ensures we start with a clean slate and fetch fresh user data
-    try {
-      await clearAuthCaches();
-      await clearFeedCaches();
+    // Make cache clearing non-blocking - don't wait for it to complete
+    Promise.all([
+      clearAuthCaches().catch(() => {}),
+      clearFeedCaches().catch(() => {}),
+    ]).then(() => {
       clearUserProfileCache();
       if (API_CONFIG.ENABLE_LOGGING) {
         console.log('✅ [AuthService] Caches cleared before login');
       }
-    } catch (error) {
-      // Log but don't fail login if cache clearing fails
+    }).catch(() => {
       if (API_CONFIG.ENABLE_LOGGING) {
-        console.warn('⚠️ [AuthService] Some caches may not have been cleared:', error);
+        console.warn('⚠️ [AuthService] Some caches may not have been cleared');
       }
-    }
-    
-    const { deviceInfo, ipAddress } = await deviceInfoService.getFullDeviceInfo();
-    
-    const response = await apiCall<LoginResponse>(
-      ENDPOINTS.AUTH.LOGIN,
-      'POST',
-      { email, password },
-      false,
-      {
-        'X-Device-Info': deviceInfo,
-        'X-IP-Address': ipAddress,
-      }
-    );
-    
-    if (!response.success) {
-      throw new ApiError(response.message);
-    }
-
-
-    // CRITICAL: Delete old tokens before saving new ones
-    // This prevents stale tokens from causing authentication issues
-    await SecureStore.deleteItemAsync(TOKEN_KEYS.ACCESS_TOKEN);
-    await SecureStore.deleteItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
-    
-    // Save both access token and refresh token to SecureStore
-    await tokenManager.saveTokens(response.data.accessToken, response.data.refreshToken);
-    
-    // Also save refresh token to SecureStore explicitly
-    // This ensures we have the latest refresh token cached locally
-    try {
-      await SecureStore.setItemAsync(TOKEN_KEYS.REFRESH_TOKEN, response.data.refreshToken);
-    } catch (error) {
-      console.error('Failed to save refresh token to SecureStore', error);
-      throw error;
-    }
-    
-    // CRITICAL: Save user data immediately after login
-    // This ensures SecureStore userData matches the token's user ID
-    const userData = {
-      userId: response.data.userId,
-      email: response.data.email,
-      username: response.data.username,
-      fullName: response.data.fullName,
-    };
-    
-    await tokenManager.saveUserData(userData);
-    
-    console.log('✅ [AuthService] User data saved after login', {
-      userId: userData.userId,
-      email: userData.email,
-      username: userData.username
     });
     
-    return response.data;
+    // Get device info with timeout protection - don't block login if it fails
+    let deviceInfo = 'Unknown Device';
+    let ipAddress = 'Unknown';
+    
+    try {
+      const deviceInfoPromise = deviceInfoService.getFullDeviceInfo();
+      const deviceInfoTimeout = new Promise<{ deviceInfo: string; ipAddress: string }>((resolve) => 
+        setTimeout(() => resolve({ deviceInfo: 'Unknown Device', ipAddress: 'Unknown' }), 2000)
+      );
+      const deviceData = await Promise.race([deviceInfoPromise, deviceInfoTimeout]);
+      deviceInfo = deviceData.deviceInfo;
+      ipAddress = deviceData.ipAddress;
+    } catch (error) {
+      if (API_CONFIG.ENABLE_LOGGING) {
+        console.warn('⚠️ [AuthService] Device info fetch failed, using defaults:', error);
+      }
+    }
+    
+    // Retry logic for network failures
+    const MAX_RETRIES = 2;
+    let lastError: any = null;
+    
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const loginController = new AbortController();
+      const loginTimeout = attempt === 0 ? 15000 : 20000; // Longer timeout on retries
+      const loginTimeoutId = setTimeout(() => loginController.abort(), loginTimeout);
+      
+      try {
+        const url = `${API_CONFIG.BASE_URL}${ENDPOINTS.AUTH.LOGIN}`;
+        
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-Device-Info': deviceInfo,
+          'X-IP-Address': ipAddress,
+        };
+
+        // Normalize email (lowercase and trim)
+        const normalizedEmail = email.toLowerCase().trim();
+        
+        if (API_CONFIG.ENABLE_LOGGING) {
+          console.log(`🔐 [AuthService] Login attempt ${attempt + 1}/${MAX_RETRIES + 1}:`, {
+            url,
+            email: normalizedEmail,
+            emailLength: normalizedEmail.length,
+            passwordLength: password.length
+          });
+        }
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ email: normalizedEmail, password }),
+          signal: loginController.signal,
+        });
+
+        clearTimeout(loginTimeoutId);
+
+        let data;
+        try {
+          const textResponse = await response.text();
+          data = JSON.parse(textResponse);
+        } catch (parseError: any) {
+          if (API_CONFIG.ENABLE_LOGGING) {
+            console.error('❌ JSON Parse Error:', parseError);
+          }
+          throw new ApiError('Invalid response from server. Please try again.');
+        }
+
+        if (!response.ok) {
+          const errorMessage = data?.message || data?.error || `Login failed with status ${response.status}`;
+          if (API_CONFIG.ENABLE_LOGGING) {
+            console.error('❌ [AuthService] Login failed:', {
+              status: response.status,
+              statusText: response.statusText,
+              message: errorMessage,
+              data: data
+            });
+          }
+          // Don't retry on authentication errors
+          if (response.status === 401 || response.status === 400) {
+            throw new ApiError(errorMessage, response.status, data);
+          }
+          // Retry on server errors
+          throw new ApiError(errorMessage, response.status, data);
+        }
+
+        if (!data.success) {
+          const errorMessage = data?.message || data?.error || 'Login failed';
+          if (API_CONFIG.ENABLE_LOGGING) {
+            console.error('❌ [AuthService] Login response indicates failure:', data);
+          }
+          throw new ApiError(errorMessage);
+        }
+        
+        if (!data.data) {
+          if (API_CONFIG.ENABLE_LOGGING) {
+            console.error('❌ [AuthService] Login response missing data:', data);
+          }
+          throw new ApiError('Invalid response from server: missing login data');
+        }
+        
+        // CRITICAL: Delete old tokens before saving new ones
+        // This prevents stale tokens from causing authentication issues
+        await SecureStore.deleteItemAsync(TOKEN_KEYS.ACCESS_TOKEN);
+        await SecureStore.deleteItemAsync(TOKEN_KEYS.REFRESH_TOKEN);
+        
+        // Save both access token and refresh token to SecureStore
+        await tokenManager.saveTokens(data.data.accessToken, data.data.refreshToken);
+        
+        // Also save refresh token to SecureStore explicitly
+        // This ensures we have the latest refresh token cached locally
+        try {
+          await SecureStore.setItemAsync(TOKEN_KEYS.REFRESH_TOKEN, data.data.refreshToken);
+        } catch (error) {
+          console.error('Failed to save refresh token to SecureStore', error);
+          throw error;
+        }
+        
+        // CRITICAL: Save user data immediately after login
+        // This ensures SecureStore userData matches the token's user ID
+        const userData = {
+          userId: data.data.userId,
+          email: data.data.email,
+          username: data.data.username,
+          fullName: data.data.fullName,
+        };
+        
+        await tokenManager.saveUserData(userData);
+        
+        if (API_CONFIG.ENABLE_LOGGING) {
+          console.log('✅ [AuthService] Login successful:', {
+            userId: userData.userId,
+            email: userData.email,
+            username: userData.username
+          });
+        }
+        
+        return data.data;
+        
+      } catch (error: any) {
+        clearTimeout(loginTimeoutId);
+        lastError = error;
+        
+        // Don't retry on authentication errors (401, 400 with invalid credentials)
+        if (error instanceof ApiError && error.statusCode) {
+          if (error.statusCode === 401 || error.statusCode === 400) {
+            throw error; // Invalid credentials - don't retry
+          }
+        }
+        
+        // Don't retry on AbortError (timeout) if it's the last attempt
+        if (error.name === 'AbortError') {
+          if (attempt === MAX_RETRIES) {
+            const gatewayUrl = API_CONFIG.BASE_URL.replace('/api/auth', '');
+            throw new ApiError(`Connection timeout. Please verify:
+1. Backend services are running at ${gatewayUrl}
+2. Your device is on the same network (${gatewayUrl.split('//')[1]?.split(':')[0]})
+3. Firewall is not blocking port 8080
+4. Try: curl ${gatewayUrl}/api/auth/register/health`);
+          }
+          // Retry on timeout
+          if (API_CONFIG.ENABLE_LOGGING) {
+            console.warn(`⚠️ [AuthService] Login timeout on attempt ${attempt + 1}, retrying...`);
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1))); // Exponential backoff
+          continue;
+        }
+        
+        // Retry on network errors
+        if (error.message && (
+          error.message.includes('Network request failed') ||
+          error.message.includes('fetch') ||
+          error.message.includes('Failed to fetch') ||
+          error.message.includes('NetworkError')
+        )) {
+          if (attempt === MAX_RETRIES) {
+            const gatewayUrl = API_CONFIG.BASE_URL.replace('/api/auth', '');
+            throw new ApiError(`Network connection failed. Please verify:
+1. Backend services are running: ${gatewayUrl}
+2. Your device is on the same network
+3. IP address is correct: ${gatewayUrl.split('//')[1]?.split(':')[0]}
+4. Firewall is not blocking connections`);
+          }
+          // Retry with exponential backoff
+          if (API_CONFIG.ENABLE_LOGGING) {
+            console.warn(`⚠️ [AuthService] Network error on attempt ${attempt + 1}, retrying...`);
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1))); // Exponential backoff
+          continue;
+        }
+        
+        // For other errors, throw immediately (don't retry)
+        if (error instanceof ApiError) {
+          throw error;
+        }
+        
+        throw new ApiError(
+          error.message || 'Login failed. Please check your credentials and try again.'
+        );
+      }
+    }
+    
+    // If we get here, all retries failed
+    throw lastError || new ApiError('Login failed after multiple attempts. Please try again.');
   },
 
   /**

@@ -45,6 +45,56 @@
           "locationAlwaysAndWhenInUsePermission": "Allow BharathVA to use your location to show local updates."
         }
       ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/Chirp-Regular.ttf",
+            "./assets/fonts/Chirp-Medium.ttf",
+            "./assets/fonts/Chirp-Bold.ttf",
+            "./assets/fonts/Chirp Heavy.ttf",
+            "./assets/fonts/SpaceMono-Regular.ttf",
+            "./assets/fonts/Aclonica-Regular.ttf",
+            "./assets/fonts/Rockybilly.ttf"
+          ],
+          "android": {
+            "fonts": [
+              {
+                "fontFamily": "Chirp",
+                "fontDefinitions": [
+                  {
+                    "path": "./assets/fonts/Chirp-Regular.ttf",
+                    "weight": 400
+                  },
+                  {
+                    "path": "./assets/fonts/Chirp-Medium.ttf",
+                    "weight": 500
+                  },
+                  {
+                    "path": "./assets/fonts/Chirp-Bold.ttf",
+                    "weight": 700
+                  },
+                  {
+                    "path": "./assets/fonts/Chirp Heavy.ttf",
+                    "weight": 900
+                  }
+                ]
+              }
+            ]
+          },
+          "ios": {
+            "fonts": [
+              "./assets/fonts/Chirp-Regular.ttf",
+              "./assets/fonts/Chirp-Medium.ttf",
+              "./assets/fonts/Chirp-Bold.ttf",
+              "./assets/fonts/Chirp Heavy.ttf",
+              "./assets/fonts/SpaceMono-Regular.ttf",
+              "./assets/fonts/Aclonica-Regular.ttf",
+              "./assets/fonts/Rockybilly.ttf"
+            ]
+          }
+        }
+      ],
       "expo-video",
       "expo-web-browser"
     ],

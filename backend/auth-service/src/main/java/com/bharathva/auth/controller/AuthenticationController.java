@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -39,6 +40,9 @@ public class AuthenticationController {
             @RequestHeader(value = "X-Device-Info", required = false) String xDeviceInfo,
             @RequestHeader(value = "X-IP-Address", required = false) String xIpAddress,
             jakarta.servlet.http.HttpServletRequest request) {
+        long requestStart = System.currentTimeMillis();
+        log.info("Login request received for email: {}", loginRequest.getEmail());
+        
         try {
             String ipAddress = xIpAddress != null && !xIpAddress.isEmpty() 
                 ? xIpAddress 
@@ -48,7 +52,12 @@ public class AuthenticationController {
                 ? xDeviceInfo 
                 : userAgent;
             
+            log.debug("Processing login with IP: {}, Device: {}", ipAddress, deviceInfo);
+            
             LoginResponse loginResponse = authenticationService.login(loginRequest, ipAddress, deviceInfo);
+            
+            long requestTime = System.currentTimeMillis() - requestStart;
+            log.info("Login request completed successfully in {}ms", requestTime);
             
             return ResponseEntity.ok(new ApiResponse<>(
                     true,
@@ -56,18 +65,60 @@ public class AuthenticationController {
                     loginResponse,
                     LocalDateTime.now()
             ));
-        } catch (RuntimeException e) {
+        } catch (com.bharathva.auth.exception.InvalidCredentialsException e) {
+            long requestTime = System.currentTimeMillis() - requestStart;
+            log.warn("Login failed (credentials) in {}ms: {}", requestTime, e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(
                     false,
                     e.getMessage(),
                     null,
                     LocalDateTime.now()
             ));
+        } catch (DataAccessException e) {
+            long requestTime = System.currentTimeMillis() - requestStart;
+            log.error("Database connection error during login (after {}ms): {}", requestTime, e.getMessage(), e);
+            String errorMessage = "Database connection failed. Please try again later.";
+            if (e.getMessage() != null) {
+                if (e.getMessage().contains("timeout") || e.getMessage().contains("Connection timed out")) {
+                    errorMessage = "Database connection timeout. The database may be slow or unreachable.";
+                } else if (e.getMessage().contains("Connection refused")) {
+                    errorMessage = "Database connection refused. Please check database configuration.";
+                }
+            }
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(new ApiResponse<>(
+                    false,
+                    errorMessage,
+                    null,
+                    LocalDateTime.now()
+            ));
+        } catch (RuntimeException e) {
+            long requestTime = System.currentTimeMillis() - requestStart;
+            log.warn("Login failed (runtime) in {}ms: {}", requestTime, e.getMessage());
+            // Check if it's an InvalidCredentialsException wrapped in RuntimeException
+            if (e.getCause() instanceof com.bharathva.auth.exception.InvalidCredentialsException) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(
+                        false,
+                        e.getCause().getMessage(),
+                        null,
+                        LocalDateTime.now()
+                ));
+            }
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ApiResponse<>(
+                    false,
+                    e.getMessage() != null ? e.getMessage() : "Login failed. Please check your credentials.",
+                    null,
+                    LocalDateTime.now()
+            ));
         } catch (Exception e) {
-            log.error("Login failed: {}", e.getMessage());
+            long requestTime = System.currentTimeMillis() - requestStart;
+            log.error("Login failed (unexpected) after {}ms: {}", requestTime, e.getMessage(), e);
+            String errorMessage = "An unexpected error occurred during login";
+            if (e.getMessage() != null && (e.getMessage().contains("timeout") || e.getMessage().contains("Connection"))) {
+                errorMessage = "Connection timeout. Please check your network connection and try again.";
+            }
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiResponse<>(
                     false,
-                    "An unexpected error occurred during login",
+                    errorMessage,
                     null,
                     LocalDateTime.now()
             ));

@@ -13,6 +13,7 @@ export default function UserIdLayout() {
       }}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false, header: () => null }} />
+      <Stack.Screen name="home" options={{ headerShown: false, header: () => null }} />
       <Stack.Screen name="profile" options={{ headerShown: false, header: () => null }} />
       <Stack.Screen name="settings" options={{ headerShown: false, header: () => null }} />
       <Stack.Screen name="explore" options={{ headerShown: false, header: () => null }} />

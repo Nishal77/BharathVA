@@ -45,47 +45,88 @@ public class AuthenticationService {
     // Authenticate user and create session
     @Transactional
     public LoginResponse login(LoginRequest loginRequest, String ipAddress, String deviceInfo) {
-        User user = userRepository.findByEmail(loginRequest.getEmail())
-                .orElseThrow(() -> new InvalidCredentialsException("Incorrect email or password"));
-
-        if (!user.getIsEmailVerified()) {
-            throw new InvalidCredentialsException("Please verify your email before logging in");
-        }
-
-        if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPasswordHash())) {
-            throw new InvalidCredentialsException("Incorrect email or password");
-        }
-
-        // Clear all existing sessions for this user before creating new one
-        // This ensures only one active session per user and prevents token confusion
-        userSessionRepository.deleteAllByUserId(user.getId());
-        log.info("Cleared existing sessions for user: {}", user.getEmail());
-
-        String accessToken = jwtService.generateAccessToken(user.getId(), user.getEmail(), user.getUsername());
-        String refreshToken = jwtService.generateRefreshToken();
-
-        LocalDateTime refreshExpiresAt = LocalDateTime.now()
-                .plusSeconds(jwtService.getRefreshExpirationMillis() / 1000);
-
-        UserSession session = new UserSession(user, refreshToken, refreshExpiresAt, ipAddress, deviceInfo);
-        UserSession savedSession = userSessionRepository.save(session);
+        long startTime = System.currentTimeMillis();
+        log.info("Login attempt started for email: {}", loginRequest.getEmail());
         
-        entityManager.flush();
-        entityManager.refresh(savedSession);
+        try {
+            // Step 1: Normalize email (lowercase and trim) for consistent lookup
+            String normalizedEmail = loginRequest.getEmail() != null 
+                ? loginRequest.getEmail().toLowerCase().trim() 
+                : null;
+            
+            if (normalizedEmail == null || normalizedEmail.isEmpty()) {
+                log.warn("Login failed: Empty email provided");
+                throw new InvalidCredentialsException("Email is required");
+            }
+            
+            // Step 2: Find user by email (database query)
+            long queryStart = System.currentTimeMillis();
+            User user = userRepository.findByEmail(normalizedEmail)
+                    .orElseThrow(() -> {
+                        log.warn("Login failed: User not found for email: {}", normalizedEmail);
+                        return new InvalidCredentialsException("Incorrect email or password");
+                    });
+            log.debug("User lookup completed in {}ms for email: {}", System.currentTimeMillis() - queryStart, normalizedEmail);
 
-        log.info("Login successful for user: {}", user.getEmail());
+            // Step 3: Check email verification
+            if (!user.getIsEmailVerified()) {
+                log.warn("Login failed: Email not verified for user: {}", user.getEmail());
+                throw new InvalidCredentialsException("Please verify your email before logging in");
+            }
 
-        return new LoginResponse(
-                accessToken,
-                refreshToken,
-                user.getId(),
-                user.getEmail(),
-                user.getUsername(),
-                user.getFullName(),
-                jwtService.getAccessExpirationMillis(),
-                jwtService.getRefreshExpirationMillis(),
-                "Login successful"
-        );
+            // Step 4: Verify password
+            long passwordStart = System.currentTimeMillis();
+            if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPasswordHash())) {
+                log.warn("Login failed: Invalid password for user: {}", user.getEmail());
+                throw new InvalidCredentialsException("Incorrect email or password");
+            }
+            log.debug("Password verification completed in {}ms", System.currentTimeMillis() - passwordStart);
+
+            // Step 5: Clear existing sessions (non-blocking - don't wait if it's slow)
+            try {
+                userSessionRepository.deleteAllByUserId(user.getId());
+                log.debug("Cleared existing sessions for user: {}", user.getEmail());
+            } catch (Exception e) {
+                log.warn("Failed to clear existing sessions for user: {}, continuing anyway: {}", user.getEmail(), e.getMessage());
+                // Continue with login even if session cleanup fails
+            }
+
+            // Step 6: Generate tokens (fast, no database)
+            String accessToken = jwtService.generateAccessToken(user.getId(), user.getEmail(), user.getUsername());
+            String refreshToken = jwtService.generateRefreshToken();
+
+            LocalDateTime refreshExpiresAt = LocalDateTime.now()
+                    .plusSeconds(jwtService.getRefreshExpirationMillis() / 1000);
+
+            // Step 7: Create and save session (single database write)
+            long sessionStart = System.currentTimeMillis();
+            UserSession session = new UserSession(user, refreshToken, refreshExpiresAt, ipAddress, deviceInfo);
+            userSessionRepository.save(session);
+            // Remove unnecessary flush and refresh - save() already persists the entity
+            log.debug("Session saved in {}ms", System.currentTimeMillis() - sessionStart);
+
+            long totalTime = System.currentTimeMillis() - startTime;
+            log.info("Login successful for user: {} in {}ms", user.getEmail(), totalTime);
+
+            return new LoginResponse(
+                    accessToken,
+                    refreshToken,
+                    user.getId(),
+                    user.getEmail(),
+                    user.getUsername(),
+                    user.getFullName(),
+                    jwtService.getAccessExpirationMillis(),
+                    jwtService.getRefreshExpirationMillis(),
+                    "Login successful"
+            );
+        } catch (InvalidCredentialsException e) {
+            // Re-throw authentication errors
+            throw e;
+        } catch (Exception e) {
+            long totalTime = System.currentTimeMillis() - startTime;
+            log.error("Login failed after {}ms: {}", totalTime, e.getMessage(), e);
+            throw new RuntimeException("Login failed: " + e.getMessage(), e);
+        }
     }
 
     /**

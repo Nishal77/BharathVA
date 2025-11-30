@@ -30,7 +30,7 @@ EXPOSE 8081
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=5 \
-  CMD wget --quiet --tries=1 --spider http://localhost:8081/auth/register/health || exit 1
+  CMD wget --quiet --tries=1 --spider http://localhost:8081/actuator/health || exit 1
 
 # Environment variables (can be overridden)
 ENV JAVA_OPTS="-Xmx512m -Xms256m"

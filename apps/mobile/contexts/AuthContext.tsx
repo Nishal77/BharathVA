@@ -55,12 +55,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, segments, isLoading, router]);
 
   const checkAuthStatus = async () => {
-    // Add timeout to prevent hanging on auth check
+    // Add timeout to prevent hanging on auth check (reduced to 8 seconds)
     const authCheckTimeout = setTimeout(() => {
       console.warn('⚠️ [AuthContext] Auth check timeout - forcing logout');
       setUser(null);
       setIsLoading(false);
-    }, 10000); // 10 second timeout for entire auth check
+    }, 8000);
 
     try {
       const accessToken = await tokenManager.getAccessToken();
@@ -98,13 +98,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Validate token with timeout
+      // Validate token with timeout (reduced to 3 seconds for faster failure)
       const validatePromise = authService.validateToken();
       const validateTimeout = new Promise<boolean>((resolve) => 
         setTimeout(() => {
           console.warn('⚠️ [AuthContext] Token validation timeout - backend unreachable');
           resolve(false);
-        }, 5000)
+        }, 3000)
       );
       
       const isValid = await Promise.race([validatePromise, validateTimeout]);
@@ -116,13 +116,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         console.log('ℹ️ [AuthContext] Token validation failed - attempting refresh');
         try {
-          // Refresh token with timeout
+          // Refresh token with timeout (reduced to 5 seconds for faster failure)
           const refreshPromise = authService.refreshAccessToken();
           const refreshTimeout = new Promise<boolean>((resolve) => 
             setTimeout(() => {
               console.warn('⚠️ [AuthContext] Token refresh timeout - backend unreachable');
               resolve(false);
-            }, 8000)
+            }, 5000)
           );
           
           const refreshed = await Promise.race([refreshPromise, refreshTimeout]);

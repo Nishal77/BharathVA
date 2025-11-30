@@ -7,6 +7,7 @@ import { useEffect, useCallback } from 'react';
 import { StatusBar, View, Text, ActivityIndicator } from 'react-native';
 import { ThemeProvider as AppThemeProvider, useTheme } from '../contexts/ThemeContext';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import { getAllFonts } from '../config/fonts';
 import '../global.css';
 
 export {
@@ -24,7 +25,7 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    ...getAllFonts(),
     ...FontAwesome.font,
   });
 

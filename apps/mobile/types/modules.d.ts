@@ -64,6 +64,7 @@ declare module 'lucide-react-native' {
   export const Send: ComponentType<LucideProps>;
   export const Settings: ComponentType<LucideProps>;
   export const Share: ComponentType<LucideProps>;
+  export const Shield: ComponentType<LucideProps>;
   export const Star: ComponentType<LucideProps>;
   export const Trash2: ComponentType<LucideProps>;
   export const User: ComponentType<LucideProps>;

@@ -15,6 +15,7 @@ import {
 import HomeHeader from '../home/components/HomeHeader';
 import LocalPulse from '../home/LocalPulse';
 import PublicSafety from '../home/PublicSafety';
+import Communities from '../home/Communities';
 import MessagesScreen from '../../../../components/messages/MessagesScreen';
 import FeedCard from '../../../../components/feed/FeedCard';
 import { useTabStyles } from '../../../../hooks/useTabStyles';
@@ -226,6 +227,8 @@ export default function HomeScreen() {
           <LocalPulse />
         ) : activeTab === 'Public Safety' ? (
           <PublicSafety />
+        ) : activeTab === 'Communities' ? (
+          <Communities />
         ) : (
          <ScrollView 
            style={{ flex: 1, backgroundColor: tabStyles.content.backgroundColor }}

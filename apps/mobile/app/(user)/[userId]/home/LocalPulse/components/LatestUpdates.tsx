@@ -1,9 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Pressable, Text, View, ActivityIndicator, useColorScheme } from 'react-native';
-import { useFonts } from 'expo-font';
+import { Pressable, Text, View, useColorScheme, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
-import Svg, { Path } from 'react-native-svg';
 
 interface LatestUpdateItem {
   id: string;
@@ -21,31 +19,6 @@ interface LatestUpdatesProps {
   onItemPress?: (item: LatestUpdateItem) => void;
   onBookmarkPress?: (item: LatestUpdateItem) => void;
   onSeeMorePress?: () => void;
-}
-
-const LocationIcon = ({ size = 20, color = '#000000' }: { size?: number; color?: string }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <Path
-      d="M12.56 20.82a.96.96 0 0 1-1.12 0C6.611 17.378 1.486 10.298 6.667 5.182A7.6 7.6 0 0 1 12 3c2 0 3.919.785 5.333 2.181 5.181 5.116.056 12.196-4.773 15.64"
-      stroke={color}
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <Path
-      d="M12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4"
-      stroke={color}
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </Svg>
-);
-
-interface LocationState {
-  district: string;
-  isLoading: boolean;
-  error: string | null;
 }
 
 const getDistrictFromCoordinates = async (latitude: number, longitude: number): Promise<string> => {
@@ -67,14 +40,7 @@ const getDistrictFromCoordinates = async (latitude: number, longitude: number): 
     const address = data.address;
 
     if (address) {
-      // Prioritize district fields only, avoid city/town/county place names
-      const district = 
-        address.district || 
-        address.state_district || 
-        address.municipality ||
-        null;
-
-      // If no district found, return '---'
+      const district = address.district || address.state_district || address.municipality || null;
       return district || '---';
     }
 
@@ -97,8 +63,7 @@ const fetchUserDistrict = async (): Promise<string> => {
     });
 
     const { latitude, longitude } = location.coords;
-    const district = await getDistrictFromCoordinates(latitude, longitude);
-    return district;
+    return await getDistrictFromCoordinates(latitude, longitude);
   } catch (error) {
     console.error('Error getting location:', error);
     return '---';
@@ -111,76 +76,52 @@ export default function LatestUpdates({
   onBookmarkPress,
   onSeeMorePress,
 }: LatestUpdatesProps) {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const [fontsLoaded] = useFonts({
-    'Chirp-Regular': require('../../../../../../assets/fonts/Chirp-Regular.ttf'),
-    'Chirp-Medium': require('../../../../../../assets/fonts/Chirp-Medium.ttf'),
-    'Chirp Heavy': require('../../../../../../assets/fonts/Chirp Heavy.ttf'),
-  });
-
-  const [locationState, setLocationState] = useState<LocationState>({
-    district: '---',
-    isLoading: true,
-    error: null,
-  });
+  const isDark = useColorScheme() === 'dark';
+  const [district, setDistrict] = useState<string>('---');
 
   const loadDistrict = useCallback(async () => {
-    setLocationState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
-      const district = await fetchUserDistrict();
-      setLocationState({
-        district,
-        isLoading: false,
-        error: null,
-      });
+      const userDistrict = await fetchUserDistrict();
+      setDistrict(userDistrict);
     } catch (error) {
-      setLocationState({
-        district: '---',
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+      setDistrict('---');
     }
   }, []);
 
   useEffect(() => {
-    if (fontsLoaded) {
-      loadDistrict();
-    }
-  }, [fontsLoaded, loadDistrict]);
+    loadDistrict();
+  }, [loadDistrict]);
 
-  const locationColor = isDark ? '#FFFFFF' : '#000000';
+  const headingText = district && district !== '---' 
+    ? `What's Happening in ${district}` 
+    : 'Latest Updates';
 
-  if (!fontsLoaded) {
-    return (
-      <View className="px-4 pt-2 items-center justify-center py-8">
-        <ActivityIndicator size="small" />
-      </View>
-    );
-  }
+  const { width: screenWidth } = Dimensions.get('window');
+  const baseFontSize = 22;
+  const minFontSize = 18;
+  const maxFontSize = 26;
+  const scaleFactor = Math.min(Math.max(screenWidth / 375, 0.85), 1.15);
+  const fontSize = Math.max(minFontSize, Math.min(maxFontSize, baseFontSize * scaleFactor));
+  const letterSpacing = fontSize < 22 ? -0.7 : -0.9;
 
   return (
     <View style={{ padding: 20, paddingBottom: 12, paddingTop: 24 }}>
       <View className="flex-row justify-between items-center mb-8">
         <Text
-          style={{ fontFamily: 'Chirp Heavy', fontSize: 28, letterSpacing: -0.5 }}
-          className="dark:text-white text-black"
+          className="dark:text-white text-black font-semibold"
+          style={{ 
+            fontSize, 
+            letterSpacing,
+            lineHeight: fontSize * 1.1,
+            fontWeight: '900',
+            includeFontPadding: false,
+          }}
+          numberOfLines={2}
+          adjustsFontSizeToFit={true}
+          minimumFontScale={0.85}
         >
-          Latest Updates
+          {headingText}
         </Text>
-        <View className="flex-row items-center gap-2">
-          <LocationIcon size={18} color={locationColor} />
-          {locationState.isLoading ? (
-            <ActivityIndicator size="small" color={locationColor} />
-          ) : (
-            <Text
-              style={{ fontFamily: 'Chirp-Regular', fontSize: 14, letterSpacing: 0.2 }}
-              className="dark:text-white/80 text-gray-700"
-            >
-              {locationState.district}
-            </Text>
-          )}
-        </View>
       </View>
 
       {items.map((item, index) => (
@@ -197,14 +138,13 @@ export default function LatestUpdates({
             className="mb-8"
           >
             <Text
+              className="font-chirp-medium dark:text-white text-black mb-5"
               style={{ 
-                fontFamily: 'Chirp-Medium', 
                 fontWeight: '700', 
                 fontSize: 18, 
                 lineHeight: 26, 
                 letterSpacing: -0.3 
               }}
-              className="dark:text-white text-black mb-5"
               numberOfLines={3}
             >
               {item.title}
@@ -215,12 +155,12 @@ export default function LatestUpdates({
                   <View
                     key={index}
                     style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: 11,
+                      width: 26,
+                      height: 26,
+                      borderRadius: 13,
                       borderWidth: 2,
                       borderColor: isDark ? '#000000' : '#FFFFFF',
-                      marginLeft: index > 1 ? -9 : 0,
+                      marginLeft: index > 1 ? -10 : 0,
                       zIndex: 3 - index,
                     }}
                   >
@@ -231,7 +171,7 @@ export default function LatestUpdates({
                       style={{
                         width: '100%',
                         height: '100%',
-                        borderRadius: 9,
+                        borderRadius: 11,
                       }}
                       contentFit="cover"
                     />
@@ -239,15 +179,15 @@ export default function LatestUpdates({
                 ))}
               </View>
               <Text
-                style={{ fontFamily: 'Chirp-Regular', fontSize: 13, letterSpacing: 0.1 }}
-                className="dark:text-white/70 text-gray-600"
+                className="font-chirp-regular dark:text-white/70 text-gray-600"
+                style={{ fontSize: 13, letterSpacing: 0.1 }}
               >
                 {item.timeAgo.toLowerCase()}
               </Text>
               <View className="w-1 h-1 rounded-full bg-gray-400 dark:bg-white/30" />
               <Text
-                style={{ fontFamily: 'Chirp-Regular', fontSize: 13, letterSpacing: 0.1 }}
-                className="dark:text-white/70 text-gray-600"
+                className="font-chirp-regular dark:text-white/70 text-gray-600"
+                style={{ fontSize: 13, letterSpacing: 0.1 }}
               >
                 {item.category.toLowerCase()}
               </Text>
@@ -255,8 +195,8 @@ export default function LatestUpdates({
                 <>
                   <View className="w-1 h-1 rounded-full bg-gray-400 dark:bg-white/30" />
                   <Text
-                    style={{ fontFamily: 'Chirp-Regular', fontSize: 13, letterSpacing: 0.1 }}
-                    className="dark:text-white/70 text-gray-600"
+                    className="font-chirp-regular dark:text-white/70 text-gray-600"
+                    style={{ fontSize: 13, letterSpacing: 0.1 }}
                   >
                     {item.author}
                   </Text>

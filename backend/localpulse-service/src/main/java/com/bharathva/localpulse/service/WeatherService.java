@@ -404,12 +404,30 @@ public class WeatherService {
                longitude >= 68.0 && longitude <= 97.0;
     }
 
+    /**
+     * Determines humidity level based on percentage value.
+     * Provides consistent categorization for UI display.
+     * 
+     * @param humidity Humidity percentage (0-100)
+     * @return Human-readable humidity level
+     */
     private String getHumidityLevel(Integer humidity) {
-        if (humidity == null) return "Unknown";
-        if (humidity < 30) return "Low";
-        if (humidity < 60) return "Moderate";
-        if (humidity < 80) return "High";
-        return "Very High";
+        if (humidity == null) {
+            return "Unknown";
+        }
+        
+        // Standard humidity level categorization
+        if (humidity < 30) {
+            return "Low";
+        } else if (humidity < 50) {
+            return "Moderate";
+        } else if (humidity < 70) {
+            return "Comfortable";
+        } else if (humidity < 85) {
+            return "High";
+        } else {
+            return "Very High";
+        }
     }
 
     private String getVisibilityDescription(Integer visibility) {

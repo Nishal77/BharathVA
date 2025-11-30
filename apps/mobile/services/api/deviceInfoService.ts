@@ -1,5 +1,6 @@
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
+import { API_CONFIG } from './config';
 
 export interface DeviceInfo {
   deviceInfo: string;
@@ -15,12 +16,18 @@ class DeviceInfoService {
     }
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      
       const response = await fetch('https://api.ipify.org?format=json', {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
         },
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error('Failed to fetch IP address');
@@ -29,8 +36,12 @@ class DeviceInfoService {
       const data = await response.json();
       this.cachedIp = data.ip;
       return data.ip;
-    } catch (error) {
-      console.error('Error fetching IP address:', error);
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.warn('IP address fetch timeout, using fallback');
+      } else {
+        console.error('Error fetching IP address:', error);
+      }
       return 'Unknown';
     }
   }
@@ -75,16 +86,24 @@ class DeviceInfoService {
   }
 
   async getFullDeviceInfo(): Promise<DeviceInfo> {
-    console.log('COLLECTING DEVICE INFORMATION');
+    if (API_CONFIG?.ENABLE_LOGGING) {
+      console.log('COLLECTING DEVICE INFORMATION');
+    }
     
-    const [deviceInfo, ipAddress] = await Promise.all([
-      this.getDeviceInfo(),
-      this.getPublicIpAddress(),
-    ]);
+    const deviceInfo = await this.getDeviceInfo();
+    
+    const ipAddressPromise = this.getPublicIpAddress();
+    const ipTimeoutPromise = new Promise<string>((resolve) => 
+      setTimeout(() => resolve('Unknown'), 3000)
+    );
+    
+    const ipAddress = await Promise.race([ipAddressPromise, ipTimeoutPromise]);
 
-    console.log('Device Info Collected:');
-    console.log('Device:', deviceInfo);
-    console.log('IP Address:', ipAddress);
+    if (API_CONFIG?.ENABLE_LOGGING) {
+      console.log('Device Info Collected:');
+      console.log('Device:', deviceInfo);
+      console.log('IP Address:', ipAddress);
+    }
 
     return {
       deviceInfo,

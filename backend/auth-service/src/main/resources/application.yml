@@ -1,5 +1,6 @@
 server:
-  port: ${SERVER_PORT}
+  port: ${SERVER_PORT:8081}
+  address: 0.0.0.0
 
 spring:
   application:
@@ -13,21 +14,24 @@ spring:
       file-size-threshold: 2KB
   
   datasource:
-    url: ${DB_URL:jdbc:postgresql://ep-summer-bar-a1bv6p9u-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require}
+    url: ${DB_URL:jdbc:postgresql://ep-summer-bar-a1bv6p9u-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&ssl=true&sslfactory=org.postgresql.ssl.DefaultJavaSSLFactory}
     username: ${DB_USERNAME:neondb_owner}
     password: ${DB_PASSWORD:npg_Dtqy63pieawz}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 20
-      minimum-idle: 10
-      connection-timeout: 20000
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 10000
+      validation-timeout: 5000
       idle-timeout: 300000
       max-lifetime: 1800000
       keepalive-time: 30000
       leak-detection-threshold: 60000
       pool-name: BharathVA-Auth-Pool
       connection-init-sql: SELECT 1
+      connection-test-query: SELECT 1
       auto-commit: true
+      register-mbeans: true
   
   jpa:
     hibernate:
@@ -46,10 +50,10 @@ spring:
     locations: classpath:db/migration
   
   mail:
-    host: ${SMTP_HOST}
-    port: ${SMTP_PORT}
-    username: ${SMTP_USERNAME}
-    password: ${SMTP_PASSWORD}
+    host: ${SMTP_HOST:smtp.gmail.com}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
     properties:
       mail:
         smtp:
@@ -85,12 +89,39 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE}
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://discovery-service:8761/eureka/}
     register-with-eureka: true
     fetch-registry: true
+    healthcheck:
+      enabled: true
   instance:
-    prefer-ip-address: true
-    instance-id: ${spring.application.name}:${random.value}
+    prefer-ip-address: ${EUREKA_INSTANCE_PREFERIPADDRESS:true}
+    instance-id: ${EUREKA_INSTANCE_INSTANCEID:${spring.application.name}:${random.value}}
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:auth-service}
+    lease-renewal-interval-in-seconds: ${EUREKA_INSTANCE_LEASE_RENEWAL_INTERVAL:10}
+    lease-expiration-duration-in-seconds: ${EUREKA_INSTANCE_LEASE_EXPIRATION:30}
+    health-check-url-path: /actuator/health
+    status-page-url-path: /actuator/info
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health,info,metrics}
+  endpoint:
+    health:
+      show-details: ${MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS:always}
+      probes:
+        enabled: true
+  health:
+    db:
+      enabled: ${MANAGEMENT_HEALTH_DB_ENABLED:true}
+    defaults:
+      enabled: ${MANAGEMENT_HEALTH_DEFAULTS_ENABLED:true}
+    diskspace:
+      enabled: true
+    ping:
+      enabled: true
 
 jwt:
   secret: ${JWT_SECRET:m7n1lhkmwGNryojEND4kks2nzZypr2S0pGoOAcTqfFIEjXOUByV5BewPKNr0ULNlb7frcStl4MHZO0fNI6g}
@@ -98,11 +129,18 @@ jwt:
   refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
 
 otp:
-  expiry-minutes: 10
-  length: 6
+  expiry-minutes: ${OTP_EXPIRY_MINUTES:10}
+  length: ${OTP_LENGTH:6}
 
 cloudinary:
-  cloud_name: dqmryiyhz
-  api_key: 397473723639954
-  api_secret: FM-U9FOM6wm1KWDjS_vc39dngCg
+  cloud_name: ${CLOUDINARY_CLOUD_NAME:dqmryiyhz}
+  api_key: ${CLOUDINARY_API_KEY:397473723639954}
+  api_secret: ${CLOUDINARY_API_SECRET:FM-U9FOM6wm1KWDjS_vc39dngCg}
+
+logging:
+  level:
+    com.bharathva.auth: ${LOGGING_LEVEL_COM_BHARATHVA_AUTH:INFO}
+    root: ${LOGGING_LEVEL_ROOT:INFO}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
 

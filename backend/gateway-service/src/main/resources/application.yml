@@ -1,5 +1,6 @@
 server:
   port: ${SERVER_PORT:8080}
+  address: 0.0.0.0
 
 spring:
   application:
@@ -12,7 +13,7 @@ spring:
           lower-case-service-id: true
       httpclient:
         connect-timeout: 10000
-        response-timeout: 30s
+        response-timeout: 20s
         pool:
           type: ELASTIC
           max-connections: 1000
