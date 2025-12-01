@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ScrollView, useColorScheme } from 'react-native';
+import { ScrollView, useColorScheme, Pressable, View, Platform } from 'react-native';
+import Svg, { Line } from 'react-native-svg';
 import UICard from './components/UICard';
 
 interface PublicSafetyPostData {
@@ -148,40 +149,103 @@ export default function PublicSafety() {
     console.log('Share pressed for post:', postId);
   };
 
+  const handleCompose = () => {
+    console.log('Compose button pressed');
+  };
+
   const bgColor = isDark ? '#000000' : '#FFFFFF';
+  const buttonBottom = Platform.OS === 'ios' ? 108 : 80;
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: bgColor }}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingBottom: 100, paddingTop: 32 }}
-    >
-      {posts.map((post) => (
-        <UICard
-          key={post.id}
-          post={{
-            id: post.id,
-            name: post.name,
-            username: post.username,
-            avatar: post.avatar,
-            location: post.location,
-            timeAgo: post.timeAgo,
-            caption: post.caption,
-            imageUrl: post.imageUrl,
-            imageUrls: post.imageUrls,
-            likes: post.likes,
-            comments: post.comments,
-            shares: post.shares,
-            views: post.views,
-            isLiked: post.isLiked,
-            responseAvatars: post.responseAvatars,
-          }}
-          onLike={() => handleLike(post.id)}
-          onComment={() => handleComment(post.id)}
-          onShare={() => handleShare(post.id)}
-        />
-      ))}
-    </ScrollView>
+    <View style={{ flex: 1, backgroundColor: bgColor }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 140, paddingTop: 32 }}
+      >
+        {posts.map((post) => (
+          <UICard
+            key={post.id}
+            post={{
+              id: post.id,
+              name: post.name,
+              username: post.username,
+              avatar: post.avatar,
+              location: post.location,
+              timeAgo: post.timeAgo,
+              caption: post.caption,
+              imageUrl: post.imageUrl,
+              imageUrls: post.imageUrls,
+              likes: post.likes,
+              comments: post.comments,
+              shares: post.shares,
+              views: post.views,
+              isLiked: post.isLiked,
+              responseAvatars: post.responseAvatars,
+            }}
+            onLike={() => handleLike(post.id)}
+            onComment={() => handleComment(post.id)}
+            onShare={() => handleShare(post.id)}
+          />
+        ))}
+      </ScrollView>
+
+      {/* Floating Action Button - Compose */}
+      <View
+        className="absolute right-5 w-14 h-14 z-[10000]"
+        style={{
+          bottom: buttonBottom,
+        }}
+        pointerEvents="box-none"
+      >
+        <Pressable
+          onPress={handleCompose}
+          className="w-14 h-14 rounded-full bg-black items-center justify-center p-1"
+          style={({ pressed }) => ({
+            shadowColor: '#000000',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.5,
+            shadowRadius: 20,
+            elevation: 20,
+            opacity: pressed ? 0.9 : 1,
+            transform: [{ scale: pressed ? 0.95 : 1 }],
+          })}
+          accessibilityLabel="Compose new post"
+          accessibilityRole="button"
+        >
+          <View className="w-full h-full items-center justify-center">
+            <Svg
+              width={24}
+              height={24}
+              viewBox="0 0 12 12"
+            >
+              <Line
+                x1="10.75"
+                y1="6"
+                x2="1.25"
+                y2="6"
+                fill="none"
+                stroke="#FFFFFF"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.5"
+              />
+              <Line
+                x1="6"
+                y1="10.75"
+                x2="6"
+                y2="1.25"
+                fill="none"
+                stroke="#FFFFFF"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.5"
+              />
+            </Svg>
+          </View>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { ScrollView, useColorScheme, Dimensions } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import ContentSlider from './components/ContentSlider';
 import LatestUpdates from './components/LatestUpdates';
-import UpdateDetailModal from './components/UpdateDetailModal';
 
 const { width } = Dimensions.get('window');
 
@@ -79,55 +79,70 @@ const mockLocalPulseData: LocalPulseItem[] = [
 export default function LocalPulse() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const userId = params.userId as string;
 
   const bgColor = isDark ? '#000000' : '#FFFFFF';
 
   const latestItems = mockLocalPulseData.filter(item => item.type === 'latest');
 
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<{
-    title: string;
-    category: string;
-    author: string;
-    timeAgo: string;
-    imageUrl?: string;
-  } | null>(null);
-
   const handleUpdatePress = (item: { id: string; title: string; category: string; author: string; timeAgo: string; imageUrl?: string }) => {
-    setSelectedItem({
-      title: item.title,
-      category: item.category,
-      author: item.author,
-      timeAgo: item.timeAgo,
-      imageUrl: item.imageUrl,
+    router.push({
+      pathname: `/(user)/[userId]/home/LocalPulse/[newsId]` as any,
+      params: {
+        userId,
+        newsId: item.id,
+        title: item.title,
+        category: item.category,
+        author: item.author,
+        timeAgo: item.timeAgo,
+        imageUrl: item.imageUrl || '',
+      },
     });
-    setModalVisible(true);
   };
 
-  const handleCloseModal = () => {
-    setModalVisible(false);
-    setTimeout(() => {
-      setSelectedItem(null);
-    }, 300);
+  const handleBreakingNewsPress = (item: any) => {
+    router.push({
+      pathname: `/(user)/[userId]/home/LocalPulse/[newsId]` as any,
+      params: {
+        userId,
+        newsId: item.id,
+        title: item.title,
+        description: item.description || '',
+        category: item.category || 'Breaking News',
+        imageUrl: item.imageUrl || '',
+        timeAgo: item.timeAgo || 'Just now',
+      },
+    });
   };
 
   // Prepare breaking news items for the slider
   const breakingNewsItems = mockLocalPulseData
     .filter(item => item.type === 'featured' || item.category === 'Alert' || item.category === 'Flood')
-    .map((item, index) => ({
-      id: item.id,
-      title: item.title,
-      category: item.category,
-      imageUrl: item.imageUrl || 'https://images.unsplash.com/photo-1527482797697-8795b05a13fe?w=800&h=600&fit=crop&auto=format',
-      timeAgo: item.timeAgo,
-      likes: Math.floor(Math.random() * 10) + 1,
-      replies: Math.floor(Math.random() * 20) + 5,
-      authorAvatars: [
-        `https://i.pravatar.cc/150?img=${index * 3 + 10}`,
-        `https://i.pravatar.cc/150?img=${index * 3 + 11}`,
-        `https://i.pravatar.cc/150?img=${index * 3 + 12}`,
-      ],
-    }));
+    .map((item, index) => {
+      const descriptions: Record<string, string> = {
+        '1': 'Severe weather warning issued for downtown region. Residents advised to avoid low-lying areas and stay indoors. Emergency services are on standby. Monitor official channels for updates.',
+        '3': 'Heavy rainfall has caused significant flooding in low-lying areas. Multiple roads are impassable. Avoid travel unless absolutely necessary. Emergency shelters have been set up in community centers.',
+        '4': 'A major accident on Western Express Highway has resulted in traffic diversions. Commuters are advised to use alternative routes. Traffic police are managing the situation.',
+      };
+      
+      return {
+        id: item.id,
+        title: item.title,
+        description: descriptions[item.id] || `${item.title}. Stay informed and follow official guidance for your safety.`,
+        category: item.category,
+        imageUrl: item.imageUrl || 'https://images.unsplash.com/photo-1527482797697-8795b05a13fe?w=800&h=600&fit=crop&auto=format',
+        timeAgo: item.timeAgo,
+        likes: Math.floor(Math.random() * 10) + 1,
+        replies: Math.floor(Math.random() * 20) + 5,
+        authorAvatars: [
+          `https://i.pravatar.cc/150?img=${index * 3 + 10}`,
+          `https://i.pravatar.cc/150?img=${index * 3 + 11}`,
+          `https://i.pravatar.cc/150?img=${index * 3 + 12}`,
+        ],
+      };
+    });
 
   // Prepare local alerts items for the slider
   const localAlertsItems = [
@@ -187,7 +202,7 @@ export default function LocalPulse() {
         breakingNewsItems={breakingNewsItems}
         localAlertsItems={localAlertsItems}
         onWeatherPress={() => console.log('Weather card pressed')}
-        onBreakingNewsPress={(item) => console.log('Breaking news pressed:', item.id)}
+        onBreakingNewsPress={handleBreakingNewsPress}
         onLocalAlertsPress={(item) => console.log('Local alert pressed:', item.id)}
       />
 
@@ -197,18 +212,6 @@ export default function LocalPulse() {
         onBookmarkPress={(item) => console.log('Bookmark pressed:', item.id)}
         onSeeMorePress={() => console.log('See more pressed')}
       />
-
-      {selectedItem && (
-        <UpdateDetailModal
-          visible={modalVisible}
-          onClose={handleCloseModal}
-          title={selectedItem.title}
-          category={selectedItem.category}
-          author={selectedItem.author}
-          timeAgo={selectedItem.timeAgo}
-          imageUrl={selectedItem.imageUrl}
-        />
-      )}
     </ScrollView>
   );
 }

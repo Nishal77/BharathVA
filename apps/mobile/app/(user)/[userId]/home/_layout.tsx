@@ -24,6 +24,17 @@ export default function HomeLayout() {
           gestureDirection: 'vertical',
         }} 
       />
+      <Stack.Screen 
+        name="LocalPulse/[newsId]" 
+        options={{ 
+          headerShown: false, 
+          header: () => null,
+          presentation: 'card',
+          animation: 'slide_from_right',
+          gestureEnabled: true,
+          gestureDirection: 'horizontal',
+        }} 
+      />
     </Stack>
   );
 }

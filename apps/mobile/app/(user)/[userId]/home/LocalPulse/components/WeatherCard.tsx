@@ -6,14 +6,51 @@ import { Svg, Path, Circle } from 'react-native-svg';
 import { weatherService, WeatherData } from '../../../../../../services/api/weatherService';
 
 // Get screen dimensions for responsive design
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const isSmallDevice = SCREEN_WIDTH < 375;
-const isMediumDevice = SCREEN_WIDTH >= 375 && SCREEN_WIDTH < 414;
-const isLargeDevice = SCREEN_WIDTH >= 414;
+const getScreenDimensions = () => Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = getScreenDimensions();
 
-// Responsive scaling functions
-const scale = (size: number) => (SCREEN_WIDTH / 375) * size;
-const moderateScale = (size: number, factor = 0.5) => size + (scale(size) - size) * factor;
+// Calculate device category based on both width and height
+const getDeviceCategory = () => {
+  const width = SCREEN_WIDTH;
+  const height = SCREEN_HEIGHT;
+  const aspectRatio = width / height;
+  const diagonal = Math.sqrt(width * width + height * height);
+  
+  // Consider both width and aspect ratio for better categorization
+  if (width < 375 || diagonal < 600) {
+    return 'small';
+  } else if (width >= 375 && width < 414 && diagonal < 800) {
+    return 'medium';
+  } else {
+    return 'large';
+  }
+};
+
+const deviceCategory = getDeviceCategory();
+const isSmallDevice = deviceCategory === 'small';
+const isMediumDevice = deviceCategory === 'medium';
+const isLargeDevice = deviceCategory === 'large';
+
+// Enhanced responsive scaling functions that consider both dimensions
+const scale = (size: number, baseWidth: number = 375) => {
+  const widthScale = SCREEN_WIDTH / baseWidth;
+  const heightScale = SCREEN_HEIGHT / 667; // iPhone 8 height as base
+  // Use the smaller scale to prevent overflow
+  const scaleFactor = Math.min(widthScale, heightScale, 1.2); // Cap at 1.2x
+  return size * scaleFactor;
+};
+
+const moderateScale = (size: number, factor = 0.5, baseWidth: number = 375) => {
+  const scaled = scale(size, baseWidth);
+  return size + (scaled - size) * factor;
+};
+
+// Font scaling that ensures readability
+const scaleFont = (size: number) => {
+  const baseSize = 375;
+  const scaleFactor = Math.min(SCREEN_WIDTH / baseSize, SCREEN_HEIGHT / 667, 1.15);
+  return Math.max(size * scaleFactor, size * 0.85); // Never go below 85% of original
+};
 
 interface WeatherCardProps {
   onPress?: () => void;
@@ -90,6 +127,66 @@ export default function WeatherCard({ onPress }: WeatherCardProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [district, setDistrict] = useState<string>('Unknown');
+  const [dimensions, setDimensions] = useState(Dimensions.get('window'));
+
+  // Handle dimension changes (rotation, split screen, etc.)
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setDimensions(window);
+    });
+    return () => subscription?.remove();
+  }, []);
+
+  // Calculate responsive values based on current dimensions (used in all states)
+  const calculateResponsiveValues = () => {
+    const currentWidth = dimensions.width;
+    const currentHeight = dimensions.height;
+    const currentAspectRatio = currentWidth / currentHeight;
+    const currentDiagonal = Math.sqrt(currentWidth * currentWidth + currentHeight * currentHeight);
+    
+    const getCurrentDeviceCategory = () => {
+      if (currentWidth < 375 || currentDiagonal < 600) {
+        return 'small';
+      } else if (currentWidth >= 375 && currentWidth < 414 && currentDiagonal < 800) {
+        return 'medium';
+      } else {
+        return 'large';
+      }
+    };
+
+    const currentDeviceCategory = getCurrentDeviceCategory();
+    const currentIsSmallDevice = currentDeviceCategory === 'small';
+    const currentIsMediumDevice = currentDeviceCategory === 'medium';
+
+    const currentScale = (size: number, baseWidth: number = 375) => {
+      const widthScale = currentWidth / baseWidth;
+      const heightScale = currentHeight / 667;
+      const scaleFactor = Math.min(widthScale, heightScale, 1.2);
+      return size * scaleFactor;
+    };
+
+    const currentModerateScale = (size: number, factor = 0.5, baseWidth: number = 375) => {
+      const scaled = currentScale(size, baseWidth);
+      return size + (scaled - size) * factor;
+    };
+
+    const currentScaleFont = (size: number) => {
+      const baseSize = 375;
+      const scaleFactor = Math.min(currentWidth / baseSize, currentHeight / 667, 1.15);
+      return Math.max(size * scaleFactor, size * 0.85);
+    };
+
+    return {
+      currentIsSmallDevice,
+      currentIsMediumDevice,
+      cardPadding: Math.round(currentModerateScale(currentIsSmallDevice ? 16 : 20)),
+      cardMinHeight: Math.round(currentModerateScale(currentIsSmallDevice ? 180 : currentIsMediumDevice ? 200 : 220, 0.5)),
+      currentModerateScale,
+      currentScaleFont,
+    };
+  };
+
+  const responsiveValues = calculateResponsiveValues();
 
   const loadDistrict = useCallback(async () => {
     try {
@@ -254,27 +351,23 @@ export default function WeatherCard({ onPress }: WeatherCardProps) {
     }
   };
 
-  // Responsive loading/error state heights
-  const stateMinHeight = isSmallDevice ? 240 : isMediumDevice ? 260 : 280;
-
   if (!fontsLoaded) {
     return (
       <View className="px-4 pt-10 pb-1.5">
         <View
+          className="rounded-3xl overflow-hidden"
           style={{
-            borderRadius: 20,
-            overflow: 'hidden',
-            backgroundColor: isDark ? '#1A1A1A' : '#FFFFFF',
+            backgroundColor: isDark ? '#0F0F0F' : '#FAFAFA',
             shadowColor: '#000000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: isDark ? 0.3 : 0.08,
-            shadowRadius: 12,
-            elevation: 4,
-            minHeight: stateMinHeight,
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: isDark ? 0.5 : 0.12,
+            shadowRadius: 24,
+            elevation: 12,
+            minHeight: responsiveValues.cardMinHeight,
             alignItems: 'center',
             justifyContent: 'center',
-            borderWidth: 1.5,
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.12)',
+            borderWidth: 1,
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
           }}
         >
           <ActivityIndicator size="small" color="#3B82F6" />
@@ -287,33 +380,32 @@ export default function WeatherCard({ onPress }: WeatherCardProps) {
     return (
       <View className="px-4 pt-10 pb-1.5">
         <View
+          className="rounded-3xl overflow-hidden"
           style={{
-            borderRadius: 20,
-            overflow: 'hidden',
-            backgroundColor: isDark ? '#1A1A1A' : '#FFFFFF',
+            backgroundColor: isDark ? '#0F0F0F' : '#FAFAFA',
             shadowColor: '#000000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: isDark ? 0.3 : 0.08,
-            shadowRadius: 12,
-            elevation: 4,
-            minHeight: stateMinHeight,
-            borderWidth: 1.5,
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.12)',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: isDark ? 0.5 : 0.12,
+            shadowRadius: 24,
+            elevation: 12,
+            minHeight: responsiveValues.cardMinHeight,
+            borderWidth: 1,
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
           }}
         >
-          <View className="items-center justify-center flex-1" style={{ minHeight: stateMinHeight, paddingHorizontal: isSmallDevice ? 16 : 20, paddingVertical: isSmallDevice ? 18 : 20 }}>
+          <View className="items-center justify-center flex-1" style={{ minHeight: responsiveValues.cardMinHeight, paddingHorizontal: responsiveValues.cardPadding, paddingVertical: Math.round(responsiveValues.currentModerateScale(18, 0.7)) }}>
             <View className="items-center">
               <ActivityIndicator 
                 size="small" 
                 color="#3B82F6" 
-                style={{ marginBottom: 10 }}
+                style={{ marginBottom: 12 }}
               />
               <Text
                 style={{ 
                   fontFamily: 'Chirp-Medium', 
-                  fontSize: isSmallDevice ? 12 : 14, 
-                  letterSpacing: 0.1,
-                  color: isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.5)',
+                  fontSize: Math.round(responsiveValues.currentScaleFont(12)), 
+                  letterSpacing: 0.15,
+                  color: isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
                 }}
               >
                 Loading...
@@ -329,32 +421,31 @@ export default function WeatherCard({ onPress }: WeatherCardProps) {
     return (
       <View className="px-4 pt-10 pb-1.5">
         <View
+          className="rounded-3xl overflow-hidden"
           style={{
-            borderRadius: 20,
-            overflow: 'hidden',
-            backgroundColor: isDark ? '#1A1A1A' : '#FFFFFF',
+            backgroundColor: isDark ? '#0F0F0F' : '#FAFAFA',
             shadowColor: '#000000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: isDark ? 0.3 : 0.08,
-            shadowRadius: 12,
-            elevation: 4,
-            minHeight: stateMinHeight,
-            paddingHorizontal: isSmallDevice ? 16 : 20,
-            paddingTop: isSmallDevice ? 18 : 20,
-            paddingBottom: isSmallDevice ? 18 : 20,
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: isDark ? 0.5 : 0.12,
+            shadowRadius: 24,
+            elevation: 12,
+            minHeight: responsiveValues.cardMinHeight,
+            paddingHorizontal: responsiveValues.cardPadding,
+            paddingTop: Math.round(responsiveValues.currentModerateScale(18, 0.7)),
+            paddingBottom: Math.round(responsiveValues.currentModerateScale(18, 0.7)),
             alignItems: 'center',
             justifyContent: 'center',
-            borderWidth: 1.5,
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.12)',
+            borderWidth: 1,
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
           }}
         >
           <Text
             style={{ 
               fontFamily: 'Chirp-Medium', 
-              fontSize: isSmallDevice ? 12 : 14, 
-              letterSpacing: 0.1, 
-              lineHeight: isSmallDevice ? 18 : 20,
-              color: isDark ? 'rgba(255, 255, 255, 0.6)' : 'rgba(0, 0, 0, 0.5)',
+              fontSize: Math.round(responsiveValues.currentScaleFont(12)), 
+              letterSpacing: 0.15, 
+              lineHeight: Math.round(responsiveValues.currentScaleFont(12)) * 1.5,
+              color: isDark ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)',
               textAlign: 'center',
             }}
           >
@@ -610,19 +701,28 @@ export default function WeatherCard({ onPress }: WeatherCardProps) {
     return 'Weather conditions are normal - stay updated for any changes';
   };
 
-  // Responsive values based on screen width
-  const descriptionWidth = isSmallDevice ? SCREEN_WIDTH * 0.36 : isMediumDevice ? SCREEN_WIDTH * 0.40 : SCREEN_WIDTH * 0.42;
-  const tempFontSize = isSmallDevice ? 48 : isMediumDevice ? 56 : 64;
-  const locationFontSize = isSmallDevice ? 12 : isMediumDevice ? 13 : 15;
-  const descFontSize = isSmallDevice ? 10 : isMediumDevice ? 11 : 12;
-  const conditionFontSize = isSmallDevice ? 10 : isMediumDevice ? 11 : 13;
-  const metricCardWidth = isSmallDevice ? 50 : isMediumDevice ? 56 : 62;
-  const metricIconSize = isSmallDevice ? 11 : isMediumDevice ? 12 : 14;
-  const metricContainerSize = isSmallDevice ? 22 : isMediumDevice ? 24 : 28;
-  const metricLabelSize = isSmallDevice ? 7 : isMediumDevice ? 8 : 9;
-  const metricValueSize = isSmallDevice ? 9 : isMediumDevice ? 10 : 12;
-  const cardPadding = isSmallDevice ? 16 : 20;
-  const cardMinHeight = isSmallDevice ? 240 : isMediumDevice ? 260 : 280;
+  // Responsive values based on both screen width and height (using current dimensions) - Reduced to match BreakingNews
+  const currentWidth = dimensions.width;
+  const descriptionWidth = responsiveValues.currentIsSmallDevice ? currentWidth * 0.36 : responsiveValues.currentIsMediumDevice ? currentWidth * 0.40 : currentWidth * 0.42;
+  
+  // Font sizes with proper scaling - Reduced to match BreakingNews proportions
+  const tempFontSize = Math.round(responsiveValues.currentScaleFont(responsiveValues.currentIsSmallDevice ? 36 : responsiveValues.currentIsMediumDevice ? 42 : 48));
+  const locationFontSize = Math.round(responsiveValues.currentScaleFont(responsiveValues.currentIsSmallDevice ? 12 : responsiveValues.currentIsMediumDevice ? 13 : 14));
+  const descFontSize = Math.round(responsiveValues.currentScaleFont(responsiveValues.currentIsSmallDevice ? 10 : responsiveValues.currentIsMediumDevice ? 11 : 12));
+  const conditionFontSize = Math.round(responsiveValues.currentScaleFont(responsiveValues.currentIsSmallDevice ? 9 : responsiveValues.currentIsMediumDevice ? 10 : 11));
+  
+  // Metric card dimensions with scaling - Reduced to match BreakingNews compact size
+  const metricCardWidth = Math.round(responsiveValues.currentModerateScale(responsiveValues.currentIsSmallDevice ? 42 : responsiveValues.currentIsMediumDevice ? 48 : 54));
+  const metricIconSize = Math.round(responsiveValues.currentScaleFont(responsiveValues.currentIsSmallDevice ? 9 : responsiveValues.currentIsMediumDevice ? 10 : 12));
+  const metricContainerSize = Math.round(responsiveValues.currentModerateScale(responsiveValues.currentIsSmallDevice ? 18 : responsiveValues.currentIsMediumDevice ? 20 : 22));
+  const metricLabelSize = Math.round(responsiveValues.currentScaleFont(responsiveValues.currentIsSmallDevice ? 6 : responsiveValues.currentIsMediumDevice ? 7 : 8));
+  const metricValueSize = Math.round(responsiveValues.currentScaleFont(responsiveValues.currentIsSmallDevice ? 8 : responsiveValues.currentIsMediumDevice ? 9 : 10));
+  
+  // Additional responsive spacing - Minimal for modern compact design
+  const topSpacing = Math.round(responsiveValues.currentModerateScale(responsiveValues.currentIsSmallDevice ? 0 : 1));
+  const bottomSpacing = Math.round(responsiveValues.currentModerateScale(responsiveValues.currentIsSmallDevice ? 2 : 3));
+  const iconContainerSize = Math.round(responsiveValues.currentModerateScale(responsiveValues.currentIsSmallDevice ? 16 : 18));
+  const weatherIconSize = Math.round(responsiveValues.currentModerateScale(responsiveValues.currentIsSmallDevice ? 20 : responsiveValues.currentIsMediumDevice ? 22 : 24));
 
   return (
     <View className="px-4 pt-10 pb-1.5">
@@ -635,113 +735,153 @@ export default function WeatherCard({ onPress }: WeatherCardProps) {
         })}
       >
         <View
+          className="rounded-3xl overflow-hidden"
           style={{
-            borderRadius: 20,
-            overflow: 'hidden',
-            backgroundColor: isDark ? '#1A1A1A' : '#FFFFFF',
+            backgroundColor: isDark ? '#0F0F0F' : '#FAFAFA',
             shadowColor: '#000000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: isDark ? 0.3 : 0.08,
-            shadowRadius: 12,
-            elevation: 4,
-            borderWidth: 1.5,
-            borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.12)',
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: isDark ? 0.5 : 0.12,
+            shadowRadius: 24,
+            elevation: 12,
+            borderWidth: 1,
+            borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
           }}
       >
+          {/* Premium Gradient Overlay */}
           <View 
+            className="absolute inset-0"
             style={{ 
-              paddingHorizontal: cardPadding,
-              paddingTop: isSmallDevice ? 18 : 20,
-              paddingBottom: isSmallDevice ? 18 : 20,
-              minHeight: cardMinHeight, 
+              backgroundColor: isDark 
+                ? 'rgba(59, 130, 246, 0.03)' 
+                : 'rgba(59, 130, 246, 0.02)',
+            }}
+          />
+          
+          <View 
+            className="relative"
+            style={{ 
+              paddingHorizontal: responsiveValues.cardPadding,
+              paddingTop: responsiveValues.currentIsSmallDevice ? 16 : 18,
+              paddingBottom: responsiveValues.currentIsSmallDevice ? 10 : 12,
+              minHeight: responsiveValues.cardMinHeight, 
               justifyContent: 'space-between' 
             }}
           >
           {/* Content Container */}
           <View>
-            {/* TOP ROW - Location on Left, Description on Right */}
-            <View className="flex-row items-start justify-between" style={{ marginBottom: isSmallDevice ? 6 : 10 }}>
-              {/* Left: Location */}
-              <View className="flex-row items-center" style={{ gap: 4 }}>
+            {/* TOP ROW - District on Left, Description on Right */}
+            <View className="flex-row items-center justify-between" style={{ marginBottom: Math.round(responsiveValues.currentModerateScale(1, 0.3)) }}>
+              {/* Left: District */}
+              <View className="flex-row items-center" style={{ gap: Math.round(responsiveValues.currentModerateScale(4, 0.6)) }}>
                 <Text
-                  className={isDark ? 'text-white' : 'text-[#111111]'}
+                  className={isDark ? 'text-white' : 'text-[#0A0A0A]'}
                   style={{
                     fontFamily: 'Chirp-Bold',
                     fontSize: locationFontSize,
-                    letterSpacing: -0.3,
+                    letterSpacing: -0.2,
                   }}
                   numberOfLines={1}
                 >
                   {district !== 'Unknown' ? district : (weatherData.location.district !== 'Unknown' ? weatherData.location.district : weatherData.location.city)}
                 </Text>
-                <Svg
-                  width={isSmallDevice ? 8 : 11}
-                  height={isSmallDevice ? 8 : 11}
+                <View
+                  className="rounded-full items-center justify-center"
+                  style={{
+                    width: iconContainerSize,
+                    height: iconContainerSize,
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+                  }}
+                >
+                  <Svg
+                    width={Math.round(iconContainerSize * 0.5)}
+                    height={Math.round(iconContainerSize * 0.5)}
                   viewBox="0 0 24 24"
                 >
                   <Path
                     d="M12 19V5M12 5L5 12M12 5L19 12"
-                    stroke={isDark ? 'rgba(255, 255, 255, 0.75)' : 'rgba(0, 0, 0, 0.7)'}
-                    strokeWidth={2.5}
+                      stroke={isDark ? 'rgba(255, 255, 255, 0.8)' : 'rgba(0, 0, 0, 0.6)'}
+                    strokeWidth={2}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     fill="none"
                   />
                 </Svg>
+                </View>
               </View>
 
-              {/* Right: Weather Forecast Description - Wider width, left aligned text */}
+              {/* Right: Weather Forecast Description */}
               <View style={{ 
                 flex: 1, 
-                maxWidth: isSmallDevice ? '55%' : '58%',
-                marginLeft: isSmallDevice ? 8 : 12,
+                maxWidth: responsiveValues.currentIsSmallDevice ? '55%' : '58%',
+                marginLeft: Math.round(responsiveValues.currentModerateScale(6, 0.7)),
               }}>
                 <Text
-                  className={isDark ? 'text-white/55' : 'text-black/50'}
+                  className={isDark ? 'text-white/60' : 'text-black/55'}
                   style={{
                     fontFamily: 'Chirp-Regular',
-                    fontSize: isSmallDevice ? 11 : isMediumDevice ? 12 : 13,
-                    lineHeight: isSmallDevice ? 16 : isMediumDevice ? 18 : 20,
+                    fontSize: descFontSize,
+                    lineHeight: descFontSize * 1.3,
                     letterSpacing: 0.15,
                     textAlign: 'left',
                   }}
-                  numberOfLines={isSmallDevice ? 3 : 4}
+                  numberOfLines={responsiveValues.currentIsSmallDevice ? 3 : 4}
                 >
                   {getWeatherForecastDescription(condition, temp, humidity, aqi.value)}
                 </Text>
               </View>
             </View>
 
-            {/* Temperature - Responsive Large Display */}
+            {/* Temperature - Directly Below District with Minimal Spacing */}
+            <View className="flex-row items-baseline" style={{ marginBottom: bottomSpacing }}>
             <Text
-              className={isDark ? 'text-white' : 'text-[#111111]'}
+                className={isDark ? 'text-white' : 'text-[#0A0A0A]'}
               style={{
                 fontFamily: 'Chirp-Bold',
                 fontSize: tempFontSize,
-                letterSpacing: isSmallDevice ? -2 : -3,
+                  letterSpacing: responsiveValues.currentIsSmallDevice ? -2 : -3,
                 lineHeight: tempFontSize * 1.05,
-                marginBottom: isSmallDevice ? 4 : 8,
-              }}
-            >
-              {temp}°
+                }}
+              >
+                {temp}
+              </Text>
+              <Text
+                className={isDark ? 'text-white/70' : 'text-black/60'}
+                style={{
+                  fontFamily: 'Chirp-Bold',
+                  fontSize: Math.round(tempFontSize * 0.4),
+                  letterSpacing: -1,
+                  marginLeft: 2,
+                }}
+              >
+                °
             </Text>
+            </View>
           </View>
 
           {/* BOTTOM ROW - Weather Info on Left, Metric Cards on Right */}
           <View className="flex-row items-end justify-between">
             {/* Left: Weather Condition + High/Low */}
-            <View style={{ flex: 1, maxWidth: isSmallDevice ? '38%' : '42%' }}>
+            <View style={{ flex: 1, maxWidth: responsiveValues.currentIsSmallDevice ? '38%' : '42%' }}>
               {/* Weather Condition with Icon */}
-              <View className="flex-row items-center" style={{ gap: isSmallDevice ? 4 : 6, marginBottom: isSmallDevice ? 2 : 4 }}>
-                <Text style={{ fontSize: isSmallDevice ? 14 : isMediumDevice ? 16 : 20 }}>
+              <View className="flex-row items-center" style={{ gap: Math.round(responsiveValues.currentModerateScale(3, 0.5)), marginBottom: Math.round(responsiveValues.currentModerateScale(2, 0.4)) }}>
+                <View
+                  className="rounded-lg items-center justify-center"
+                  style={{
+                    width: weatherIconSize,
+                    height: weatherIconSize,
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+                  }}
+                >
+                  <Text style={{ fontSize: Math.round(weatherIconSize * 0.65) }}>
                   {getWeatherIcon()}
                 </Text>
+                </View>
                 <Text
-                  className={isDark ? 'text-white/90' : 'text-black/90'}
+                  className={isDark ? 'text-white/95' : 'text-black/90'}
                   style={{
                     fontFamily: 'Chirp-Medium',
                     fontSize: conditionFontSize,
-                    letterSpacing: 0.1,
+                    letterSpacing: 0.15,
                     textTransform: 'capitalize',
                   }}
                   numberOfLines={1}
@@ -751,31 +891,31 @@ export default function WeatherCard({ onPress }: WeatherCardProps) {
               </View>
 
               {/* High/Low Temperatures */}
-              <View className="flex-row items-center" style={{ gap: isSmallDevice ? 8 : 14 }}>
-                <View className="flex-row items-center" style={{ gap: 2 }}>
+              <View className="flex-row items-center" style={{ gap: Math.round(responsiveValues.currentModerateScale(6, 0.5)) }}>
+                <View className="flex-row items-center" style={{ gap: Math.round(responsiveValues.currentModerateScale(3)) }}>
                   <Text
-                    className={isDark ? 'text-white/65' : 'text-black/60'}
-                    style={{ fontFamily: 'Chirp-Medium', fontSize: isSmallDevice ? 10 : 12 }}
+                    className={isDark ? 'text-white/70' : 'text-black/65'}
+                    style={{ fontFamily: 'Chirp-Medium', fontSize: Math.round(responsiveValues.currentScaleFont(11)) }}
                   >
                     ↑
                   </Text>
                   <Text
-                    className={isDark ? 'text-white/65' : 'text-black/60'}
-                    style={{ fontFamily: 'Chirp-Medium', fontSize: isSmallDevice ? 10 : 12 }}
+                    className={isDark ? 'text-white/80' : 'text-black/75'}
+                    style={{ fontFamily: 'Chirp-Bold', fontSize: Math.round(responsiveValues.currentScaleFont(11)) }}
                   >
                     {Math.round(weatherData.temperature.max)}°
                   </Text>
                 </View>
-                <View className="flex-row items-center" style={{ gap: 2 }}>
+                <View className="flex-row items-center" style={{ gap: Math.round(responsiveValues.currentModerateScale(3)) }}>
                   <Text
-                    className={isDark ? 'text-white/65' : 'text-black/60'}
-                    style={{ fontFamily: 'Chirp-Medium', fontSize: isSmallDevice ? 10 : 12 }}
+                    className={isDark ? 'text-white/70' : 'text-black/65'}
+                    style={{ fontFamily: 'Chirp-Medium', fontSize: Math.round(responsiveValues.currentScaleFont(11)) }}
                   >
                     ↓
                   </Text>
                   <Text
-                    className={isDark ? 'text-white/65' : 'text-black/60'}
-                    style={{ fontFamily: 'Chirp-Medium', fontSize: isSmallDevice ? 10 : 12 }}
+                    className={isDark ? 'text-white/80' : 'text-black/75'}
+                    style={{ fontFamily: 'Chirp-Bold', fontSize: Math.round(responsiveValues.currentScaleFont(11)) }}
                   >
                     {Math.round(weatherData.temperature.min)}°
                   </Text>
@@ -784,31 +924,38 @@ export default function WeatherCard({ onPress }: WeatherCardProps) {
             </View>
 
             {/* Right: Metric Cards - Humidity, AQI, UV - Responsive */}
-            <View className="flex-row" style={{ gap: isSmallDevice ? 4 : 8 }}>
+            <View className="flex-row" style={{ gap: Math.round(responsiveValues.currentModerateScale(3, 0.5)) }}>
               {/* Humidity Card */}
               <View
-                className="rounded-xl"
+                className="rounded-2xl overflow-hidden"
                 style={{
-                  backgroundColor: isDark ? '#1F1F1F' : '#1F2937',
+                  backgroundColor: isDark ? '#1A1A1A' : '#2D3748',
                   minWidth: metricCardWidth,
-                  paddingVertical: isSmallDevice ? 10 : 14,
-                  paddingHorizontal: isSmallDevice ? 6 : 10,
+                  paddingVertical: Math.round(responsiveValues.currentModerateScale(8, 0.6)),
+                  paddingHorizontal: Math.round(responsiveValues.currentModerateScale(6, 0.6)),
+                  shadowColor: '#3B82F6',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: isDark ? 0.2 : 0.15,
+                  shadowRadius: 8,
+                  elevation: 4,
+                  borderWidth: 1,
+                  borderColor: isDark ? 'rgba(96, 165, 250, 0.2)' : 'rgba(96, 165, 250, 0.15)',
                 }}
               >
-                <View className="items-center" style={{ marginBottom: isSmallDevice ? 4 : 6 }}>
+                <View className="items-center" style={{ marginBottom: Math.round(responsiveValues.currentModerateScale(2, 0.4)) }}>
                   <View
                     className="rounded-full items-center justify-center"
                     style={{
                       width: metricContainerSize,
                       height: metricContainerSize,
-                      backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.15)',
+                      backgroundColor: 'rgba(96, 165, 250, 0.2)',
                     }}
                   >
                     <Svg width={metricIconSize} height={metricIconSize} viewBox="0 0 24 24">
                       <Path
                         d="M12 2C12 2 5 8.5 5 14C5 17.87 8.13 21 12 21C15.87 21 19 17.87 19 14C19 8.5 12 2 12 2Z"
                         stroke="#60A5FA"
-                        strokeWidth={2}
+                        strokeWidth={2.5}
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         fill="none"
@@ -817,14 +964,14 @@ export default function WeatherCard({ onPress }: WeatherCardProps) {
                   </View>
                 </View>
                 <Text
-                  className="text-white/70 text-center"
-                  style={{ fontFamily: 'Chirp-Regular', fontSize: metricLabelSize, letterSpacing: 0.1 }}
+                  className="text-white/75 text-center"
+                  style={{ fontFamily: 'Chirp-Medium', fontSize: metricLabelSize, letterSpacing: 0.15 }}
                 >
                   Humidity
                 </Text>
                 <Text
                   className="text-white text-center"
-                  style={{ fontFamily: 'Chirp-Bold', fontSize: metricValueSize, letterSpacing: 0.1, marginTop: 1 }}
+                  style={{ fontFamily: 'Chirp-Bold', fontSize: metricValueSize, letterSpacing: 0.15, marginTop: 1 }}
                 >
                   {humidity}%
                 </Text>
@@ -832,32 +979,39 @@ export default function WeatherCard({ onPress }: WeatherCardProps) {
 
               {/* AQI Card */}
               <View
-                className="rounded-xl"
+                className="rounded-2xl overflow-hidden"
                 style={{
                   backgroundColor: isDark 
-                    ? `rgba(${aqi.value <= 2 ? '34, 197, 94' : aqi.value <= 3 ? '245, 158, 11' : '239, 68, 68'}, 0.12)` 
-                    : aqi.value <= 2 ? '#DCFCE7' : aqi.value <= 3 ? '#FEF3C7' : '#FEE2E2',
+                    ? `rgba(${aqi.value <= 2 ? '34, 197, 94' : aqi.value <= 3 ? '245, 158, 11' : '239, 68, 68'}, 0.15)` 
+                    : aqi.value <= 2 ? '#D1FAE5' : aqi.value <= 3 ? '#FEF3C7' : '#FEE2E2',
                   minWidth: metricCardWidth,
-                  paddingVertical: isSmallDevice ? 10 : 14,
-                  paddingHorizontal: isSmallDevice ? 6 : 10,
+                  paddingVertical: Math.round(responsiveValues.currentModerateScale(8, 0.6)),
+                  paddingHorizontal: Math.round(responsiveValues.currentModerateScale(6, 0.6)),
+                  shadowColor: aqi.value <= 2 ? '#22C55E' : aqi.value <= 3 ? '#F59E0B' : '#EF4444',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: isDark ? 0.25 : 0.2,
+                  shadowRadius: 8,
+                  elevation: 4,
+                  borderWidth: 1,
+                  borderColor: isDark 
+                    ? `rgba(${aqi.value <= 2 ? '34, 197, 94' : aqi.value <= 3 ? '245, 158, 11' : '239, 68, 68'}, 0.3)` 
+                    : `rgba(${aqi.value <= 2 ? '34, 197, 94' : aqi.value <= 3 ? '245, 158, 11' : '239, 68, 68'}, 0.25)`,
                 }}
               >
-                <View className="items-center" style={{ marginBottom: isSmallDevice ? 4 : 6 }}>
+                <View className="items-center" style={{ marginBottom: Math.round(responsiveValues.currentModerateScale(2, 0.4)) }}>
                   <View
                     className="rounded-full items-center justify-center"
                     style={{
                       width: metricContainerSize,
                       height: metricContainerSize,
-                      backgroundColor: isDark 
-                        ? `rgba(${aqi.value <= 2 ? '34, 197, 94' : aqi.value <= 3 ? '245, 158, 11' : '239, 68, 68'}, 0.2)` 
-                        : `rgba(${aqi.value <= 2 ? '34, 197, 94' : aqi.value <= 3 ? '245, 158, 11' : '239, 68, 68'}, 0.15)`,
+                      backgroundColor: `rgba(${aqi.value <= 2 ? '34, 197, 94' : aqi.value <= 3 ? '245, 158, 11' : '239, 68, 68'}, 0.25)`,
                     }}
                   >
                     <Svg width={metricIconSize} height={metricIconSize} viewBox="0 0 24 24">
                       <Path
                         d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2Z"
                         stroke={aqi.value <= 2 ? '#22C55E' : aqi.value <= 3 ? '#F59E0B' : '#EF4444'}
-                        strokeWidth={2}
+                        strokeWidth={2.5}
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         fill="none"
@@ -865,7 +1019,7 @@ export default function WeatherCard({ onPress }: WeatherCardProps) {
                       <Path
                         d="M12 8V12L14 14"
                         stroke={aqi.value <= 2 ? '#22C55E' : aqi.value <= 3 ? '#F59E0B' : '#EF4444'}
-                        strokeWidth={2}
+                        strokeWidth={2.5}
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         fill="none"
@@ -876,11 +1030,11 @@ export default function WeatherCard({ onPress }: WeatherCardProps) {
                 <Text
                   className="text-center"
                   style={{
-                    fontFamily: 'Chirp-Regular',
+                    fontFamily: 'Chirp-Medium',
                     fontSize: metricLabelSize, 
-                    letterSpacing: 0.1,
+                    letterSpacing: 0.15,
                     color: isDark 
-                      ? (aqi.value <= 2 ? 'rgba(34, 197, 94, 0.85)' : aqi.value <= 3 ? 'rgba(245, 158, 11, 0.85)' : 'rgba(239, 68, 68, 0.85)')
+                      ? (aqi.value <= 2 ? 'rgba(34, 197, 94, 0.9)' : aqi.value <= 3 ? 'rgba(245, 158, 11, 0.9)' : 'rgba(239, 68, 68, 0.9)')
                       : (aqi.value <= 2 ? '#16A34A' : aqi.value <= 3 ? '#D97706' : '#DC2626'),
                   }}
                 >
@@ -891,7 +1045,7 @@ export default function WeatherCard({ onPress }: WeatherCardProps) {
                   style={{
                     fontFamily: 'Chirp-Bold', 
                     fontSize: metricValueSize, 
-                    letterSpacing: 0.1,
+                    letterSpacing: 0.15,
                     marginTop: 1,
                     color: aqi.value <= 2 ? '#22C55E' : aqi.value <= 3 ? '#F59E0B' : '#EF4444',
                   }}
@@ -902,25 +1056,32 @@ export default function WeatherCard({ onPress }: WeatherCardProps) {
 
               {/* UV Card */}
               <View
-                className="rounded-xl"
+                className="rounded-2xl overflow-hidden"
                 style={{
                   backgroundColor: isDark 
-                    ? `rgba(${uvIndex <= 2 ? '34, 197, 94' : uvIndex <= 5 ? '245, 158, 11' : '239, 68, 68'}, 0.12)` 
-                    : uvIndex <= 2 ? '#DCFCE7' : uvIndex <= 5 ? '#FEF3C7' : '#FEE2E2',
+                    ? `rgba(${uvIndex <= 2 ? '34, 197, 94' : uvIndex <= 5 ? '245, 158, 11' : '239, 68, 68'}, 0.15)` 
+                    : uvIndex <= 2 ? '#D1FAE5' : uvIndex <= 5 ? '#FEF3C7' : '#FEE2E2',
                   minWidth: metricCardWidth,
-                  paddingVertical: isSmallDevice ? 10 : 14,
-                  paddingHorizontal: isSmallDevice ? 6 : 10,
+                  paddingVertical: Math.round(responsiveValues.currentModerateScale(8, 0.6)),
+                  paddingHorizontal: Math.round(responsiveValues.currentModerateScale(6, 0.6)),
+                  shadowColor: uvIndex <= 2 ? '#22C55E' : uvIndex <= 5 ? '#F59E0B' : '#EF4444',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: isDark ? 0.25 : 0.2,
+                  shadowRadius: 8,
+                  elevation: 4,
+                  borderWidth: 1,
+                  borderColor: isDark 
+                    ? `rgba(${uvIndex <= 2 ? '34, 197, 94' : uvIndex <= 5 ? '245, 158, 11' : '239, 68, 68'}, 0.3)` 
+                    : `rgba(${uvIndex <= 2 ? '34, 197, 94' : uvIndex <= 5 ? '245, 158, 11' : '239, 68, 68'}, 0.25)`,
                 }}
               >
-                <View className="items-center" style={{ marginBottom: isSmallDevice ? 4 : 6 }}>
+                <View className="items-center" style={{ marginBottom: Math.round(responsiveValues.currentModerateScale(2, 0.4)) }}>
                   <View
                     className="rounded-full items-center justify-center"
                     style={{
                       width: metricContainerSize,
                       height: metricContainerSize,
-                      backgroundColor: isDark 
-                        ? `rgba(${uvIndex <= 2 ? '34, 197, 94' : uvIndex <= 5 ? '245, 158, 11' : '239, 68, 68'}, 0.2)` 
-                        : `rgba(${uvIndex <= 2 ? '34, 197, 94' : uvIndex <= 5 ? '245, 158, 11' : '239, 68, 68'}, 0.15)`,
+                      backgroundColor: `rgba(${uvIndex <= 2 ? '34, 197, 94' : uvIndex <= 5 ? '245, 158, 11' : '239, 68, 68'}, 0.25)`,
                     }}
                   >
                     <Svg width={metricIconSize} height={metricIconSize} viewBox="0 0 24 24">
@@ -929,13 +1090,13 @@ export default function WeatherCard({ onPress }: WeatherCardProps) {
                         cy="12" 
                         r="4" 
                         stroke={uvIndex <= 2 ? '#22C55E' : uvIndex <= 5 ? '#F59E0B' : '#EF4444'}
-                        strokeWidth={2}
+                        strokeWidth={2.5}
                         fill="none"
                       />
                       <Path
                         d="M12 2V4M12 20V22M4 12H2M6.31 6.31L4.9 4.9M17.69 6.31L19.1 4.9M6.31 17.69L4.9 19.1M17.69 17.69L19.1 19.1M22 12H20"
                         stroke={uvIndex <= 2 ? '#22C55E' : uvIndex <= 5 ? '#F59E0B' : '#EF4444'}
-                        strokeWidth={2}
+                        strokeWidth={2.5}
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         fill="none"
@@ -946,11 +1107,11 @@ export default function WeatherCard({ onPress }: WeatherCardProps) {
                 <Text
                   className="text-center"
                   style={{
-                    fontFamily: 'Chirp-Regular', 
+                    fontFamily: 'Chirp-Medium', 
                     fontSize: metricLabelSize, 
-                    letterSpacing: 0.1,
+                    letterSpacing: 0.15,
                     color: isDark 
-                      ? (uvIndex <= 2 ? 'rgba(34, 197, 94, 0.85)' : uvIndex <= 5 ? 'rgba(245, 158, 11, 0.85)' : 'rgba(239, 68, 68, 0.85)')
+                      ? (uvIndex <= 2 ? 'rgba(34, 197, 94, 0.9)' : uvIndex <= 5 ? 'rgba(245, 158, 11, 0.9)' : 'rgba(239, 68, 68, 0.9)')
                       : (uvIndex <= 2 ? '#16A34A' : uvIndex <= 5 ? '#D97706' : '#DC2626'),
                   }}
                 >
@@ -961,7 +1122,7 @@ export default function WeatherCard({ onPress }: WeatherCardProps) {
                   style={{
                     fontFamily: 'Chirp-Bold', 
                     fontSize: metricValueSize, 
-                    letterSpacing: 0.1, 
+                    letterSpacing: 0.15, 
                     marginTop: 1,
                     color: uvIndex <= 2 ? '#22C55E' : uvIndex <= 5 ? '#F59E0B' : '#EF4444',
                   }}
