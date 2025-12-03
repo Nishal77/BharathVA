@@ -169,3 +169,4 @@ curl http://localhost:8081/auth/register/health
 - Ensure `JWT_SECRET` is at least 64 characters
 - Use a cryptographically secure random string
 
+

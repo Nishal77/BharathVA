@@ -14,18 +14,18 @@ export default function HomeLayout() {
     >
       <Stack.Screen name="LocalPulse/index" options={{ headerShown: false, header: () => null }} />
       <Stack.Screen 
-        name="LocalPulse/[updateId]" 
+        name="LocalPulse/[newsId]" 
         options={{ 
           headerShown: false, 
           header: () => null,
-          presentation: 'modal',
-          animation: 'slide_from_bottom',
+          presentation: 'card',
+          animation: 'slide_from_right',
           gestureEnabled: true,
-          gestureDirection: 'vertical',
+          gestureDirection: 'horizontal',
         }} 
       />
       <Stack.Screen 
-        name="LocalPulse/[newsId]" 
+        name="LocalPulse/location-suggestion" 
         options={{ 
           headerShown: false, 
           header: () => null,

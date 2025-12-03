@@ -35,7 +35,7 @@ spring:
         
         # Auth Service routes - must be before feed-service to avoid conflicts
         - id: auth-service
-          uri: lb://AUTH-SERVICE
+          uri: lb://auth-service
           predicates:
             - Path=/api/auth/**
           filters:
@@ -87,7 +87,7 @@ spring:
         
         # LocalPulse Service routes
         - id: localpulse-service
-          uri: ${LOCALPULSE_SERVICE_URI:lb://LOCALPULSE-SERVICE}
+          uri: ${LOCALPULSE_SERVICE_URI:lb://localpulse-service}
           predicates:
             - Path=/api/localpulse/**
           filters:

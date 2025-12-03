@@ -58,18 +58,32 @@ interface WeatherCardProps {
 
 // Get district from coordinates using Nominatim API (same as LatestUpdates)
 const getDistrictFromCoordinates = async (latitude: number, longitude: number): Promise<string> => {
+  // Validate coordinates are within India bounds
+  const isIndiaLocation = latitude >= 6.0 && latitude <= 37.0 && longitude >= 68.0 && longitude <= 97.0;
+  
+  if (!isIndiaLocation) {
+    console.warn('[WeatherCard] Coordinates outside India bounds, skipping district fetch');
+    return 'Unknown';
+  }
+
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+
     const response = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`,
       {
         headers: {
           'User-Agent': 'BharathVA-Mobile-App',
         },
+        signal: controller.signal,
       }
     );
 
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
-      throw new Error('Reverse geocoding failed');
+      return 'Unknown';
     }
 
     const data = await response.json();
@@ -88,8 +102,15 @@ const getDistrictFromCoordinates = async (latitude: number, longitude: number): 
     }
 
     return 'Unknown';
-  } catch (error) {
-    console.error('Error fetching district:', error);
+  } catch (error: any) {
+    // Network errors are expected, use warn instead of error
+    if (error.name === 'AbortError') {
+      console.warn('[WeatherCard] District fetch timed out');
+    } else if (error.message?.includes('Network request failed')) {
+      console.warn('[WeatherCard] Network unavailable for district fetch');
+    } else {
+      console.warn('[WeatherCard] Error fetching district:', error.message || error);
+    }
     return 'Unknown';
   }
 };
@@ -103,13 +124,24 @@ const fetchUserDistrict = async (): Promise<string> => {
 
     const location = await Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.Balanced,
+      maximumAge: 60000,
+      timeout: 10000,
     });
 
     const { latitude, longitude } = location.coords;
+    
+    // Validate coordinates are within India bounds
+    const isIndiaLocation = latitude >= 6.0 && latitude <= 37.0 && longitude >= 68.0 && longitude <= 97.0;
+    
+    if (!isIndiaLocation) {
+      console.warn('[WeatherCard] Location outside India bounds');
+      return 'Unknown';
+    }
+
     const district = await getDistrictFromCoordinates(latitude, longitude);
     return district;
-  } catch (error) {
-    console.error('Error getting location:', error);
+  } catch (error: any) {
+    console.warn('[WeatherCard] Error getting location:', error.message || error);
     return 'Unknown';
   }
 };

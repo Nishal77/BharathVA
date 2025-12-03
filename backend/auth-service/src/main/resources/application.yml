@@ -95,13 +95,15 @@ eureka:
     healthcheck:
       enabled: true
   instance:
-    prefer-ip-address: ${EUREKA_INSTANCE_PREFERIPADDRESS:true}
-    instance-id: ${EUREKA_INSTANCE_INSTANCEID:${spring.application.name}:${random.value}}
+    prefer-ip-address: ${EUREKA_INSTANCE_PREFERIPADDRESS:false}
+    instance-id: ${EUREKA_INSTANCE_INSTANCEID:${spring.application.name}:${server.port}}
     hostname: ${EUREKA_INSTANCE_HOSTNAME:auth-service}
     lease-renewal-interval-in-seconds: ${EUREKA_INSTANCE_LEASE_RENEWAL_INTERVAL:10}
     lease-expiration-duration-in-seconds: ${EUREKA_INSTANCE_LEASE_EXPIRATION:30}
     health-check-url-path: /actuator/health
     status-page-url-path: /actuator/info
+    non-secure-port-enabled: true
+    secure-port-enabled: false
 
 management:
   endpoints:

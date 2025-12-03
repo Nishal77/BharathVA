@@ -1,0 +1,422 @@
+{
+	"info": {
+		"name": "BharathVA LocalPulse API",
+		"description": "API collection for testing Traffic and Weather Alerts",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Traffic Alerts",
+			"item": [
+				{
+					"name": "Get Traffic Alerts - Udupi (Your Location)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "http://192.168.0.203:8080/api/localpulse/traffic/alerts?latitude=13.2743&longitude=74.7597&radius=60",
+							"protocol": "http",
+							"host": [
+								"192.168.0.203"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"localpulse",
+								"traffic",
+								"alerts"
+							],
+							"query": [
+								{
+									"key": "latitude",
+									"value": "13.2743",
+									"description": "Udupi latitude"
+								},
+								{
+									"key": "longitude",
+									"value": "74.7597",
+									"description": "Udupi longitude"
+								},
+								{
+									"key": "radius",
+									"value": "60",
+									"description": "Search radius in km (max 60km)"
+								}
+							]
+						},
+						"description": "Get traffic alerts for Udupi area (your current location) within 60km radius"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Traffic Alerts - Bangalore (Test with incidents)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "http://192.168.0.203:8080/api/localpulse/traffic/alerts?latitude=12.9716&longitude=77.5946&radius=60",
+							"protocol": "http",
+							"host": [
+								"192.168.0.203"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"localpulse",
+								"traffic",
+								"alerts"
+							],
+							"query": [
+								{
+									"key": "latitude",
+									"value": "12.9716",
+									"description": "Bangalore latitude"
+								},
+								{
+									"key": "longitude",
+									"value": "77.5946",
+									"description": "Bangalore longitude"
+								},
+								{
+									"key": "radius",
+									"value": "60",
+									"description": "Search radius in km"
+								}
+							]
+						},
+						"description": "Get traffic alerts for Bangalore (known to have incidents) - Use this to test if API is working"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Traffic Alerts - Mumbai",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "http://192.168.0.203:8080/api/localpulse/traffic/alerts?latitude=19.0760&longitude=72.8777&radius=60",
+							"protocol": "http",
+							"host": [
+								"192.168.0.203"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"localpulse",
+								"traffic",
+								"alerts"
+							],
+							"query": [
+								{
+									"key": "latitude",
+									"value": "19.0760"
+								},
+								{
+									"key": "longitude",
+									"value": "72.8777"
+								},
+								{
+									"key": "radius",
+									"value": "60"
+								}
+							]
+						},
+						"description": "Get traffic alerts for Mumbai"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Traffic Alerts - Invalid Coordinates (Test Error)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "http://192.168.0.203:8080/api/localpulse/traffic/alerts?latitude=37.785834&longitude=-122.406417&radius=60",
+							"protocol": "http",
+							"host": [
+								"192.168.0.203"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"localpulse",
+								"traffic",
+								"alerts"
+							],
+							"query": [
+								{
+									"key": "latitude",
+									"value": "37.785834",
+									"description": "San Francisco (outside India)"
+								},
+								{
+									"key": "longitude",
+									"value": "-122.406417",
+									"description": "San Francisco (outside India)"
+								},
+								{
+									"key": "radius",
+									"value": "60"
+								}
+							]
+						},
+						"description": "Test error handling for coordinates outside India bounds"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Weather Alerts",
+			"item": [
+				{
+					"name": "Get Weather Alerts - Udupi (Your Location)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "http://192.168.0.203:8080/api/localpulse/weather-alerts?latitude=13.2743&longitude=74.7597&radius=60",
+							"protocol": "http",
+							"host": [
+								"192.168.0.203"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"localpulse",
+								"weather-alerts"
+							],
+							"query": [
+								{
+									"key": "latitude",
+									"value": "13.2743",
+									"description": "Udupi latitude"
+								},
+								{
+									"key": "longitude",
+									"value": "74.7597",
+									"description": "Udupi longitude"
+								},
+								{
+									"key": "radius",
+									"value": "60",
+									"description": "Search radius in km (default 60km)"
+								}
+							]
+						},
+						"description": "Get weather alerts for Udupi area (your current location) within 60km radius"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Weather Alerts - Bangalore",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "http://192.168.0.203:8080/api/localpulse/weather-alerts?latitude=12.9716&longitude=77.5946&radius=60",
+							"protocol": "http",
+							"host": [
+								"192.168.0.203"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"localpulse",
+								"weather-alerts"
+							],
+							"query": [
+								{
+									"key": "latitude",
+									"value": "12.9716"
+								},
+								{
+									"key": "longitude",
+									"value": "77.5946"
+								},
+								{
+									"key": "radius",
+									"value": "60"
+								}
+							]
+						},
+						"description": "Get weather alerts for Bangalore"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Weather Alerts - Mumbai",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "http://192.168.0.203:8080/api/localpulse/weather-alerts?latitude=19.0760&longitude=72.8777&radius=60",
+							"protocol": "http",
+							"host": [
+								"192.168.0.203"
+							],
+							"port": "8080",
+							"path": [
+								"api",
+								"localpulse",
+								"weather-alerts"
+							],
+							"query": [
+								{
+									"key": "latitude",
+									"value": "19.0760"
+								},
+								{
+									"key": "longitude",
+									"value": "72.8777"
+								},
+								{
+									"key": "radius",
+									"value": "60"
+								}
+							]
+						},
+						"description": "Get weather alerts for Mumbai"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Direct Service (Bypass Gateway)",
+			"item": [
+				{
+					"name": "Traffic Alerts - Direct to Service",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "http://192.168.0.203:8085/api/localpulse/traffic/alerts?latitude=12.9716&longitude=77.5946&radius=60",
+							"protocol": "http",
+							"host": [
+								"192.168.0.203"
+							],
+							"port": "8085",
+							"path": [
+								"api",
+								"localpulse",
+								"traffic",
+								"alerts"
+							],
+							"query": [
+								{
+									"key": "latitude",
+									"value": "12.9716"
+								},
+								{
+									"key": "longitude",
+									"value": "77.5946"
+								},
+								{
+									"key": "radius",
+									"value": "60"
+								}
+							]
+						},
+						"description": "Direct call to localpulse-service (port 8085) bypassing gateway - Use for debugging"
+					},
+					"response": []
+				},
+				{
+					"name": "Weather Alerts - Direct to Service",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "http://192.168.0.203:8085/api/localpulse/weather-alerts?latitude=13.2743&longitude=74.7597&radius=60",
+							"protocol": "http",
+							"host": [
+								"192.168.0.203"
+							],
+							"port": "8085",
+							"path": [
+								"api",
+								"localpulse",
+								"weather-alerts"
+							],
+							"query": [
+								{
+									"key": "latitude",
+									"value": "13.2743"
+								},
+								{
+									"key": "longitude",
+									"value": "74.7597"
+								},
+								{
+									"key": "radius",
+									"value": "60"
+								}
+							]
+						},
+						"description": "Direct call to localpulse-service (port 8085) bypassing gateway - Use for debugging"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://192.168.0.203:8080",
+			"type": "string"
+		},
+		{
+			"key": "service_url",
+			"value": "http://192.168.0.203:8085",
+			"type": "string"
+		}
+	]
+}
+

@@ -45,3 +45,4 @@ export type FontFamilyName = keyof typeof FontNames;
  */
 export const getAllFonts = () => FontConfig;
 
+

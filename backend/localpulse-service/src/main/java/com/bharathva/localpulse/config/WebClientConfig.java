@@ -24,6 +24,9 @@ public class WebClientConfig {
     @Value("${openweather.api.timeout.read:10000}")
     private int readTimeout;
 
+    @Value("${mapmyindia.api.base-url}")
+    private String mapMyIndiaBaseUrl;
+
     @Bean
     public WebClient openWeatherWebClient() {
         HttpClient httpClient = HttpClient.create()
@@ -37,6 +40,19 @@ public class WebClientConfig {
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(16 * 1024 * 1024))
                 .build();
+    }
+    
+    @Bean
+    public WebClient.Builder webClientBuilder() {
+        HttpClient httpClient = HttpClient.create()
+                .responseTimeout(Duration.ofMillis(readTimeout))
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeout);
+
+        return WebClient.builder()
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .defaultHeader(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE)
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(16 * 1024 * 1024));
     }
 }
 

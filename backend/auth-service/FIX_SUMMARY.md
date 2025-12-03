@@ -127,3 +127,4 @@ curl http://localhost:8081/actuator/health
 curl http://localhost:8761/eureka/apps/AUTH-SERVICE
 ```
 
+

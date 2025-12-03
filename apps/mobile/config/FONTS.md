@@ -96,3 +96,4 @@ If you need dynamic font sizes or other custom styling:
 - Fonts are available immediately after app loads
 - Use Tailwind classes for consistency across the app
 
+

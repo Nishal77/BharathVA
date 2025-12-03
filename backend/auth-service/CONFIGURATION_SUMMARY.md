@@ -185,3 +185,4 @@ mvn spring-boot:run
 3. Test the service to ensure all configurations are working
 4. Never commit `.env.local` or `.env` to version control
 
+

@@ -109,3 +109,4 @@ cd backend/auth-service
 
 Your configuration is now complete and validated!
 
+

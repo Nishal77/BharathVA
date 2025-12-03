@@ -97,9 +97,34 @@ openweather:
       enabled: true
       ttl-minutes: 10
 
+mapmyindia:
+  api:
+    key: ${MAPINDIA_KEY:}
+    base-url: https://apis.mapmyindia.com/advancedmaps/v1
+    traffic-base-url: https://traffic.mapmyindia.com/v1
+    timeout:
+      connect: 5000
+      read: 15000
+    cache:
+      enabled: true
+      ttl-minutes: 5
+
+here:
+  api:
+    key: ${HERE_API:}
+    base-url: https://data.traffic.hereapi.com/v7
+    timeout:
+      connect: 5000
+      read: 15000
+
 weather:
   default:
     country-code: IN
     units: metric
     language: en
+
+tomorrow:
+  api:
+    key: ${TOMORROW_API:}
+    base-url: https://api.tomorrow.io/v4
 

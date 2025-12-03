@@ -142,3 +142,4 @@ psql 'postgresql://neondb_owner:npg_Dtqy63pieawz@ep-summer-bar-a1bv6p9u-pooler.a
 cat backend/auth-service/src/main/resources/application.yml | grep datasource
 ```
 
+

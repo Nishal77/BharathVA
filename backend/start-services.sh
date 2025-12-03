@@ -156,3 +156,4 @@ echo -e "${YELLOW}To stop services:${NC}"
 echo -e "  $DOCKER_COMPOSE down"
 echo ""
 
+

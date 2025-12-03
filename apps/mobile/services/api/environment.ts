@@ -8,6 +8,7 @@ interface ApiConfig {
   gatewayUrl: string;
   feedServiceUrl: string; // Direct feed-service URL for WebSocket
   newsServiceUrl: string; // News AI service URL
+  localpulseServiceUrl: string; // Direct localpulse-service URL for traffic and weather
   websocketUrl: string; // WebSocket URL (can be direct to feed-service or through gateway)
   timeout: number;
   enableLogging: boolean;
@@ -22,6 +23,7 @@ const environments: Record<Environment, ApiConfig> = {
     gatewayUrl: 'http://192.168.0.203:8080', // Gateway service for all API calls
     feedServiceUrl: 'http://192.168.0.203:8082', // Direct feed-service URL
     newsServiceUrl: 'http://192.168.0.203:8084', // News AI service URL
+    localpulseServiceUrl: 'http://192.168.0.203:8085', // Direct localpulse-service URL for traffic and weather
     // Connect directly to feed-service for WebSocket (more reliable than through gateway)
     websocketUrl: 'http://192.168.0.203:8082/ws', // Direct connection to feed-service WebSocket
     timeout: 15000, // Increased to 15 seconds for slower connections
@@ -32,6 +34,7 @@ const environments: Record<Environment, ApiConfig> = {
     gatewayUrl: 'https://staging-api.bharathva.com',
     feedServiceUrl: 'https://staging-api.bharathva.com',
     newsServiceUrl: 'https://staging-api.bharathva.com',
+    localpulseServiceUrl: 'https://staging-api.bharathva.com', // Through gateway in staging
     websocketUrl: 'https://staging-api.bharathva.com/ws', // Through gateway in staging
     timeout: 10000,
     enableLogging: true,
@@ -41,6 +44,7 @@ const environments: Record<Environment, ApiConfig> = {
     gatewayUrl: 'https://api.bharathva.com',
     feedServiceUrl: 'https://api.bharathva.com',
     newsServiceUrl: 'https://api.bharathva.com',
+    localpulseServiceUrl: 'https://api.bharathva.com', // Through gateway in production
     websocketUrl: 'https://api.bharathva.com/ws', // Through gateway in production
     timeout: 10000,
     enableLogging: false,
@@ -97,6 +101,11 @@ export const getFeedServiceURL = (): string => {
 // Helper function to get news service URL
 export const getNewsServiceURL = (): string => {
   return getApiConfig().newsServiceUrl;
+};
+
+// Helper function to get localpulse service URL
+export const getLocalPulseServiceURL = (): string => {
+  return getApiConfig().localpulseServiceUrl;
 };
 
 // Export current environment for debugging

@@ -61,3 +61,4 @@ echo "1. Restart your mobile app"
 echo "2. Test connection: curl http://${DETECTED_IP}:8080/api/auth/register/health"
 echo ""
 
+
