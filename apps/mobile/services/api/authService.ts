@@ -812,31 +812,30 @@ export const authService = {
       }
     });
     
-    // Get device info with timeout protection - don't block login if it fails
+    // Get device info with fast timeout - don't block login
     let deviceInfo = 'Unknown Device';
     let ipAddress = 'Unknown';
     
+    // Use Promise.race with very short timeout for fast login
     try {
       const deviceInfoPromise = deviceInfoService.getFullDeviceInfo();
       const deviceInfoTimeout = new Promise<{ deviceInfo: string; ipAddress: string }>((resolve) => 
-        setTimeout(() => resolve({ deviceInfo: 'Unknown Device', ipAddress: 'Unknown' }), 2000)
+        setTimeout(() => resolve({ deviceInfo: 'Unknown Device', ipAddress: 'Unknown' }), 500)
       );
       const deviceData = await Promise.race([deviceInfoPromise, deviceInfoTimeout]);
       deviceInfo = deviceData.deviceInfo;
       ipAddress = deviceData.ipAddress;
     } catch (error) {
-      if (API_CONFIG.ENABLE_LOGGING) {
-        console.warn('⚠️ [AuthService] Device info fetch failed, using defaults:', error);
-      }
+      // Silently fail - device info is optional for login speed
     }
     
-    // Retry logic for network failures
-    const MAX_RETRIES = 2;
+    // Fast login with minimal retries (Instagram/Twitter-like)
+    const MAX_RETRIES = 1; // Only 1 retry for network errors
     let lastError: any = null;
     
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       const loginController = new AbortController();
-      const loginTimeout = attempt === 0 ? 15000 : 20000; // Longer timeout on retries
+      const loginTimeout = 5000; // Fast 5s timeout for all attempts
       const loginTimeoutId = setTimeout(() => loginController.abort(), loginTimeout);
       
       try {
@@ -967,17 +966,14 @@ export const authService = {
         if (error.name === 'AbortError') {
           if (attempt === MAX_RETRIES) {
             const gatewayUrl = API_CONFIG.BASE_URL.replace('/api/auth', '');
-            throw new ApiError(`Connection timeout. Please verify:
-1. Backend services are running at ${gatewayUrl}
-2. Your device is on the same network (${gatewayUrl.split('//')[1]?.split(':')[0]})
-3. Firewall is not blocking port 8080
-4. Try: curl ${gatewayUrl}/api/auth/register/health`);
+            const { getNetworkErrorMessage } = await import('../../utils/networkConnectivity');
+            throw new ApiError(getNetworkErrorMessage(gatewayUrl));
           }
-          // Retry on timeout
+          // Retry on timeout with minimal delay
           if (API_CONFIG.ENABLE_LOGGING) {
             console.warn(`⚠️ [AuthService] Login timeout on attempt ${attempt + 1}, retrying...`);
           }
-          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1))); // Exponential backoff
+          await new Promise(resolve => setTimeout(resolve, 300)); // Fast retry (300ms)
           continue;
         }
         
@@ -990,17 +986,14 @@ export const authService = {
         )) {
           if (attempt === MAX_RETRIES) {
             const gatewayUrl = API_CONFIG.BASE_URL.replace('/api/auth', '');
-            throw new ApiError(`Network connection failed. Please verify:
-1. Backend services are running: ${gatewayUrl}
-2. Your device is on the same network
-3. IP address is correct: ${gatewayUrl.split('//')[1]?.split(':')[0]}
-4. Firewall is not blocking connections`);
+            const { getNetworkErrorMessage } = await import('../../utils/networkConnectivity');
+            throw new ApiError(getNetworkErrorMessage(gatewayUrl));
           }
-          // Retry with exponential backoff
+          // Retry with minimal delay for fast login
           if (API_CONFIG.ENABLE_LOGGING) {
             console.warn(`⚠️ [AuthService] Network error on attempt ${attempt + 1}, retrying...`);
           }
-          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1))); // Exponential backoff
+          await new Promise(resolve => setTimeout(resolve, 300)); // Fast retry (300ms)
           continue;
         }
         

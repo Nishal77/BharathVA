@@ -46,10 +46,11 @@ const logError = (message: string, error?: any) => {
   }
 };
 
-// Token management
+// Token management - Use tokenManager for consistency
 const getAuthToken = async (): Promise<string | null> => {
   try {
-    const token = await SecureStore.getItemAsync('accessToken');
+    // Use tokenManager for consistent token handling and automatic refresh
+    const token = await tokenManager.getAccessToken();
     if (!token) {
       logError('No authentication token found');
       return null;

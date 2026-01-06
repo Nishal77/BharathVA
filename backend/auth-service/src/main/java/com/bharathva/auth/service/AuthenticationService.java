@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 public class AuthenticationService {
@@ -82,13 +83,20 @@ public class AuthenticationService {
             }
             log.debug("Password verification completed in {}ms", System.currentTimeMillis() - passwordStart);
 
-            // Step 5: Clear existing sessions (non-blocking - don't wait if it's slow)
+            // Step 5: Clear existing sessions asynchronously (non-blocking for fast login)
+            // Use @Async or fire-and-forget to avoid blocking login
             try {
-                userSessionRepository.deleteAllByUserId(user.getId());
-                log.debug("Cleared existing sessions for user: {}", user.getEmail());
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        userSessionRepository.deleteAllByUserId(user.getId());
+                        log.debug("Cleared existing sessions for user: {}", user.getEmail());
+                    } catch (Exception e) {
+                        log.warn("Failed to clear existing sessions: {}", e.getMessage());
+                    }
+                });
             } catch (Exception e) {
-                log.warn("Failed to clear existing sessions for user: {}, continuing anyway: {}", user.getEmail(), e.getMessage());
-                // Continue with login even if session cleanup fails
+                log.warn("Failed to schedule session cleanup: {}", e.getMessage());
+                // Continue with login - session cleanup is not critical
             }
 
             // Step 6: Generate tokens (fast, no database)

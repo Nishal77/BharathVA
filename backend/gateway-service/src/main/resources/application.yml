@@ -12,8 +12,8 @@ spring:
           enabled: true
           lower-case-service-id: true
       httpclient:
-        connect-timeout: 10000
-        response-timeout: 20s
+        connect-timeout: 5000
+        response-timeout: 10s
         pool:
           type: ELASTIC
           max-connections: 1000

@@ -62,3 +62,5 @@ echo "2. Test connection: curl http://${DETECTED_IP}:8080/api/auth/register/heal
 echo ""
 
 
+
+
